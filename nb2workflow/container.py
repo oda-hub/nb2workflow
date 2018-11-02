@@ -26,7 +26,7 @@ def build_image(repo_source,from_image,tag_image):
     dockerfile=[]
 
     dockerfile.append("FROM {}".format(from_image))
-    dockerfile.append("RUN pip install git+https://github.com/volodymyrss/nb2workflow.git")
+    dockerfile.append("RUN git clone https://github.com/volodymyrss/nb2workflow.git /nb2workflow; cd /nb2workflow; pip install -r requirements.txt; pip install .")
     dockerfile.append("ADD ./{} /repo".format(rel_repo_path))
     dockerfile.append("RUN pip install -r /repo/requirements.txt".format(rel_repo_path))
 
@@ -45,7 +45,7 @@ def main():
 
     parser = argparse.ArgumentParser(description='Process some integers.')
     parser.add_argument('repo', metavar='repo', type=str)
-    parser.add_argument('--run', metavar='FROM IMAGE', type=bool, default=False)
+    parser.add_argument('--run', action='store_true')
     parser.add_argument('--from-image', metavar='FROM IMAGE', type=str, default="python:2.7")
     parser.add_argument('--tag-image', metavar='TAG', type=str, default="")
     #parser.add_argument('--host', metavar='host', type=str, default="127.0.0.1")
@@ -66,4 +66,9 @@ def main():
 
     if args.run:
         cli=docker.from_env()
-        cli.run()
+        cli.containers.run(
+            tag_image,
+            user=os.getuid(),
+            ports={ 9191:9191 },
+            command="nb2service /repo/ --host 0.0.0.0", 
+        )

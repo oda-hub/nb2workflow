@@ -1,6 +1,7 @@
+flask
 flask-cache
-papermill
 pytest-flask
+papermill
 ipykernel
 nbconvert
 docker

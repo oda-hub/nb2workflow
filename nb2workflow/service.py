@@ -5,6 +5,7 @@ from flask.json import JSONEncoder
 from flask_cache import Cache
 
 import os
+import glob
 
 from nb2workflow.nbadapter import NotebookAdapter
 
@@ -74,8 +75,20 @@ def main():
 
     args = parser.parse_args()
     
-    if os.path.isfile(args.notebook):
+    if os.path.isdir(args.notebook):
+        notebooks=[ fn for fn in glob.glob(args.notebook+"/*ipynb") if "output" not in fn ]
+
+        if len(notebooks)==0:
+            raise Exception("no notebooks found in the directory:",args.notebook)
+
+        if len(notebooks)>1:
+            raise Exception("currently unable to handle many notebooks",notebooks)
+
+        app.notebook_adapter=NotebookAdapter(notebooks[0])
+
+    elif os.path.isfile(args.notebook):
         app.notebook_adapter=NotebookAdapter(args.notebook)
+
     else:
         raise Exception("requested notebook not found:",args.notebook)
 
