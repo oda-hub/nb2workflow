@@ -22,7 +22,6 @@ class CustomJSONEncoder(JSONEncoder):
 
 def create_app():
     app=Flask(__name__)
-    app.notebook_adapter=NotebookAdapter(os.environ.get("TEST_NOTEBOOK"))
     app.json_encoder = CustomJSONEncoder
     return app
 
@@ -75,7 +74,12 @@ def main():
 
     args = parser.parse_args()
     
-    app.notebook_adapter=NotebookAdapter(args.notebook)
+    if os.path.isdir(args.notebook):
+        pass
+    elif os.path.isfile(args.notebook):
+        app.notebook_adapter=NotebookAdapter(args.notebook)
+    else:
+        raise Exception("requested notebook not found:",args.notebook)
 
     app.run(host=args.host,port=args.port)
 

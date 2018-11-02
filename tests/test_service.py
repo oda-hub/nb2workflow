@@ -5,12 +5,14 @@ import pytest
 import base64
 
 import nb2workflow.service
+import nb2workflow.nbadapter
 from flask import url_for
 
 
 @pytest.fixture
 def app():
     app = nb2workflow.service.app
+    app.notebook_adapter=nb2workflow.nbadapter.NotebookAdapter(os.environ.get("TEST_NOTEBOOK"))
     print("creating app")
     return app
 

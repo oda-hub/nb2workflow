@@ -9,6 +9,8 @@ def owlify_type(python_type):
 class NotebookAdapter:
     def __init__(self,notebook_fn):
         self.notebook_fn=notebook_fn
+        print("notebook adapter for",notebook_fn)
+        print(self.extract_parameters())
 
     @property
     def output_notebook_fn(self):
