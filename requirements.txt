@@ -3,3 +3,4 @@ papermill
 pytest-flask
 ipykernel
 nbconvert
+docker

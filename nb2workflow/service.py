@@ -74,9 +74,7 @@ def main():
 
     args = parser.parse_args()
     
-    if os.path.isdir(args.notebook):
-        pass
-    elif os.path.isfile(args.notebook):
+    if os.path.isfile(args.notebook):
         app.notebook_adapter=NotebookAdapter(args.notebook)
     else:
         raise Exception("requested notebook not found:",args.notebook)
