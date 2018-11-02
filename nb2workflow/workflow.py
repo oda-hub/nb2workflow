@@ -33,17 +33,22 @@ def create_app():
 
 app = create_app()
 
-@app.route('/api/get',methods=['GET'])
+
+@app.route('/api/v1.0/get',methods=['GET'])
 def workflow():
-    print("cmd:",cmd)
+    issues = []
 
-    output=subprocess.check_output(cmd,stderr=subprocess.STDOUT)
+    interpreted_parameters = app.notebook_adapter.interpret_parameters(request.args)
+    issues += interpreted_parameters['issues']
 
-    lc=pd.read_csv(lc_fn)
+    if len(issues)>0:
+        return make_response(jsonify(issues=issues), 400)
+    else:
+        app.notebook_adapter.execute(interpreted_parameters['request_parameters'])
 
-    return jsonify(output=output,data=lc.to_json())
+        return jsonify(app.notebook_adapter.extract_output())
 
-@app.route('/api/options',methods=['GET'])
+@app.route('/api/v1.0/parameters',methods=['GET'])
 def workflow_parameters():
     return jsonify(dict(
                     output=None,parameters=app.notebook_adapter.extract_parameters()
@@ -53,9 +58,6 @@ def workflow_parameters():
 def healthcheck():
     issues=[]
 
- #   if not os.path.exists(os.environ.get('POLAR_AUX')):
- #       issues.append("no POLAR_AUX directory")
-
     if len(issues)==0:
         return "all is ok!"
     else:
@@ -63,6 +65,4 @@ def healthcheck():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0',port=9191)
-
-
 
