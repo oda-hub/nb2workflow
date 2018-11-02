@@ -63,10 +63,15 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(description='Process some integers.')
-    parser.add_argument('host', metavar='host', type=str, default="127.0.0.1")
-    parser.add_argument('port', metavar='port', type=int, default="")
+    parser.add_argument('notebook', metavar='notebook', type=str)
+    parser.add_argument('--host', metavar='host', type=str, default="127.0.0.1")
+    parser.add_argument('--port', metavar='port', type=int, default=9191)
 
-    app.run(host='0.0.0.0',port=191)
+    args = parser.parse_args()
+    
+    app.notebook_adapter=NotebookAdapter(args.notebook)
+
+    app.run(host=args.host,port=args.port)
 
 if __name__ == '__main__':
     main()
