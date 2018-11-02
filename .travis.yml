@@ -10,6 +10,7 @@ before_install:
 - pip install codecov
 - pip install pytest-cov
 - pip install codacy-coverage
+- git clone https://github.com/volodymyrss/nbworkflow-test.git tests/testrepo
 install:
 - pip install -r requirements.txt
 - pip install -r tests/testrepo/requirements.txt

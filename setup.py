@@ -12,6 +12,7 @@ setup(name='nb2workflow',
       entry_points={
           'console_scripts': [
             'nb2service = nb2workflow.service:main',
+            'nb2worker = nb2workflow.container:main',
             ]
       },
      )
