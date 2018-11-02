@@ -15,7 +15,7 @@ install:
 - pip install -r tests/testrepo/requirements.txt
 - pip install .
 script:
-- PYTHONPATH=./ TEST_NOTEBOOK=$PWD/tests/workflow-notebook.ipynb py.test . --cov=./
+- PYTHONPATH=./ TEST_NOTEBOOK=$PWD/tests/testrepo/workflow-notebook.ipynb py.test . --cov=./
 after_success:
 - coverage xml
 - python-codacy-coverage -r coverage.xml
