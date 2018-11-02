@@ -11,7 +11,7 @@ before_install:
 - pip install pytest-cov
 - pip install codacy-coverage
 install:
-- pip install -r requirements.txt
+- pip install -r requirements.txt tests/testrepo/requirements.txt
 - pip install .
 script:
 - PYTHONPATH=./ TEST_NOTEBOOK=$PWD/tests/workflow-notebook.ipynb py.test . --cov=./
