@@ -1,3 +1,5 @@
 flask-cache
 papermill
 pytest-flask
+ipykernel
+nbconvert

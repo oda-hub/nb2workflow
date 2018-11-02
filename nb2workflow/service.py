@@ -29,8 +29,11 @@ def create_app():
 app = create_app()
 
 
-@app.route('/api/v1.0/get',methods=['GET'])
-def workflow():
+@app.route('/api/v1.0/get/<str:target>',methods=['GET'])
+def workflow(target):
+    if target!="default":
+        return make_response(jsonify("currently only support default target"), 400)
+
     issues = []
 
     interpreted_parameters = app.notebook_adapter.interpret_parameters(request.args)
@@ -43,11 +46,14 @@ def workflow():
 
         return jsonify(app.notebook_adapter.extract_output())
 
-@app.route('/api/v1.0/parameters',methods=['GET'])
-def workflow_parameters():
+# list input -> output function signatures and identities
+
+@app.route('/api/v1.0/options',methods=['GET'])
+def workflow_options():
     return jsonify(dict(
-                    output=None,parameters=app.notebook_adapter.extract_parameters()
-                ))
+                    default=dict(
+                        output=None,parameters=app.notebook_adapter.extract_parameters())
+                  ))
 
 @app.route('/health')
 def healthcheck():
