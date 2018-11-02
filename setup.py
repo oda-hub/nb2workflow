@@ -8,4 +8,10 @@ setup(name='nb2workflow',
       license='MIT',
       packages=['nb2workflow'],
       zip_safe=False,
+
+      entry_points={
+          'console_scripts': [
+            'nb2service = nb2workflow.workflow:main',
+            ]
+      },
      )

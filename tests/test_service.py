@@ -4,13 +4,13 @@ import os
 import pytest
 import base64
 
-import nb2workflow.workflow
+import nb2workflow.service
 from flask import url_for
 
 
 @pytest.fixture
 def app():
-    app = nb2workflow.workflow.app
+    app = nb2workflow.service.app
     print("creating app")
     return app
 
