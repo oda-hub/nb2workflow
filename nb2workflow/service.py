@@ -58,6 +58,16 @@ def healthcheck():
     else:
         return make_response(jsonify(issues=issues), 500)
 
+
+def main():
+    import argparse
+
+    parser = argparse.ArgumentParser(description='Process some integers.')
+    parser.add_argument('host', metavar='host', type=str, default="127.0.0.1")
+    parser.add_argument('port', metavar='port', type=int, default="")
+
+    app.run(host='0.0.0.0',port=191)
+
 if __name__ == '__main__':
-    app.run(host='0.0.0.0',port=9191)
+    main()
 
