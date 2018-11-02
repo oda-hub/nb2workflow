@@ -17,21 +17,21 @@ def app():
 test_notebook=os.environ.get('TEST_NOTEBOOK')
 
 def test_service(client):
-    r=client.get('/api/v1.0/parameters')
+    r=client.get('/api/v1.0/options')
     
-    service_signature=r.json
+    service_signature=r.json['default']
     print(service_signature)
 
     assert len(service_signature['parameters'])==3
 
-    r=client.get('/api/v1.0/get',query_string=dict(eminFAKE=20.))
+    r=client.get('/api/v1.0/get/default',query_string=dict(eminFAKE=20.))
     assert r.status_code == 400
     
     print(r.json['issues'])
     assert len(r.json['issues'])==1
 
 
-    r=client.get('/api/v1.0/get',query_string=dict(emin=20.))
+    r=client.get('/api/v1.0/get/default',query_string=dict(emin=20.))
     assert r.status_code == 200
 
     print(r.json)

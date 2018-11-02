@@ -29,7 +29,7 @@ def create_app():
 app = create_app()
 
 
-@app.route('/api/v1.0/get/<str:target>',methods=['GET'])
+@app.route('/api/v1.0/get/<string:target>',methods=['GET'])
 def workflow(target):
     if target!="default":
         return make_response(jsonify("currently only support default target"), 400)
