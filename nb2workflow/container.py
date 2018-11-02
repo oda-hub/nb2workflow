@@ -3,6 +3,7 @@ import argparse
 import docker
 import shutil
 import tempfile
+import checksumdir
  
 def build_python(dockefile):
     dockerfile.append("RUN yum install -y python")
@@ -15,20 +16,24 @@ def import_repo(repo_source,target):
     else:
         raise NotImplemented
 
+    return checksumdir.dirhash(target)
+
 def build_image(repo_source,from_image,tag_image):
     tempdir=tempfile.mkdtemp()
 
     rel_repo_path="repo"
     repo_path=os.path.join(tempdir,rel_repo_path)
 
-    import_repo(repo_source,repo_path)
+    repo_hash=import_repo(repo_source,repo_path)
     
     dockerfile=[]
 
     dockerfile.append("FROM {}".format(from_image))
-    dockerfile.append("RUN git clone https://github.com/volodymyrss/nb2workflow.git /nb2workflow; cd /nb2workflow; pip install -r requirements.txt; pip install .")
+    dockerfile.append("RUN git clone https://github.com/volodymyrss/nb2workflow.git /nb2workflow; cd /nb2workflow; git reset --hard 0d8b4cc; pip install -r requirements.txt; pip install .")
     dockerfile.append("ADD ./{} /repo".format(rel_repo_path))
     dockerfile.append("RUN pip install -r /repo/requirements.txt".format(rel_repo_path))
+    dockerfile.append("RUN touch /repo-hash-{}".format(repo_hash))
+    dockerfile.append("WORKDIR /workdir")
 
     open(os.path.join(tempdir,"Dockerfile"),"w").write(("\n".join(dockerfile))+"\n")
 
@@ -46,6 +51,7 @@ def main():
     parser = argparse.ArgumentParser(description='Process some integers.')
     parser.add_argument('repo', metavar='repo', type=str)
     parser.add_argument('--run', action='store_true')
+    parser.add_argument('--name', metavar='TAG', type=str, default="nb2worker")
     parser.add_argument('--from-image', metavar='FROM IMAGE', type=str, default="python:2.7")
     parser.add_argument('--tag-image', metavar='TAG', type=str, default="")
     #parser.add_argument('--host', metavar='host', type=str, default="127.0.0.1")
@@ -71,4 +77,7 @@ def main():
             user=os.getuid(),
             ports={ 9191:9191 },
             command="nb2service /repo/ --host 0.0.0.0", 
+            name=args.name,
+            volumes={os.getcwd():{"bind":"/workdir","mode":"rw"}},
+            auto_remove=True,
         )

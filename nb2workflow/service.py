@@ -2,7 +2,8 @@ from __future__ import print_function
 
 from flask import Flask, make_response, jsonify, request
 from flask.json import JSONEncoder
-from flask_cache import Cache
+from flask.ext.cache import Cache
+
 
 import os
 import glob
@@ -24,6 +25,7 @@ class CustomJSONEncoder(JSONEncoder):
 def create_app():
     app=Flask(__name__)
     app.json_encoder = CustomJSONEncoder
+    cache = Cache(app,config={'CACHE_TYPE': 'simple'})
     return app
 
 app = create_app()

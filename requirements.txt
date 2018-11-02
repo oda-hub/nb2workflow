@@ -1,7 +1,8 @@
 flask
-flask-cache
 pytest-flask
 papermill
 ipykernel
 nbconvert
 docker
+checksumdir
+Flask-Cache
