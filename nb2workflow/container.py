@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 import os
 import argparse
 import docker
@@ -29,10 +31,9 @@ def build_image(repo_source,from_image,tag_image):
     dockerfile=[]
 
     dockerfile.append("FROM {}".format(from_image))
-    dockerfile.append("RUN git clone https://github.com/volodymyrss/nb2workflow.git /nb2workflow; cd /nb2workflow; git reset --hard 0d8b4cc; pip install -r requirements.txt; pip install .")
+    dockerfile.append("RUN git clone https://github.com/volodymyrss/nb2workflow.git /nb2workflow; cd /nb2workflow; git reset --hard 0d8b4cc; pip install -r requirements.txt; pip install .") # arg it
     dockerfile.append("ADD ./{} /repo".format(rel_repo_path))
-    dockerfile.append("RUN pip install -r /repo/requirements.txt".format(rel_repo_path))
-    dockerfile.append("RUN touch /repo-hash-{}".format(repo_hash))
+    dockerfile.append("RUN touch /repo-hash-{}; pip install -r /repo/requirements.txt".format(repo_hash,rel_repo_path))
     dockerfile.append("WORKDIR /workdir")
 
     open(os.path.join(tempdir,"Dockerfile"),"w").write(("\n".join(dockerfile))+"\n")
@@ -54,8 +55,8 @@ def main():
     parser.add_argument('--name', metavar='TAG', type=str, default="nb2worker")
     parser.add_argument('--from-image', metavar='FROM IMAGE', type=str, default="python:2.7")
     parser.add_argument('--tag-image', metavar='TAG', type=str, default="")
-    #parser.add_argument('--host', metavar='host', type=str, default="127.0.0.1")
-    #parser.add_argument('--port', metavar='port', type=int, default=9191)
+    parser.add_argument('--host', metavar='host', type=str, default="127.0.0.1")
+    parser.add_argument('--port', metavar='port', type=int, default=9191)
 
     args = parser.parse_args()
 
@@ -70,14 +71,22 @@ def main():
     if build_result is None:
         raise Exception("failed to build")
 
+    print("built:",build_result)
+    #print("\n".join(list(build_result[1])))
+
     if args.run:
+        
+        print("running",tag_image,"service on",args.port)
         cli=docker.from_env()
         cli.containers.run(
             tag_image,
             user=os.getuid(),
-            ports={ 9191:9191 },
+            ports={ 9191: (args.host, args.port) },
             command="nb2service /repo/ --host 0.0.0.0", 
             name=args.name,
             volumes={os.getcwd():{"bind":"/workdir","mode":"rw"}},
             auto_remove=True,
         )
+
+if __name__=="__main__":
+    main()

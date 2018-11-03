@@ -2,7 +2,7 @@ from __future__ import print_function
 
 from flask import Flask, make_response, jsonify, request
 from flask.json import JSONEncoder
-from flask.ext.cache import Cache
+from flask_cache import Cache
 
 
 import os
