@@ -16,7 +16,7 @@ def import_repo(repo_source,target):
     if os.path.isdir(repo_source):
         shutil.copytree(repo_source, target)
     else:
-        raise NotImplemented
+        raise NotImplementedError
 
     return checksumdir.dirhash(target)
 
@@ -33,7 +33,7 @@ def build_image(repo_source,from_image,tag_image):
     dockerfile.append("FROM {}".format(from_image))
     dockerfile.append("RUN git clone https://github.com/volodymyrss/nb2workflow.git /nb2workflow; cd /nb2workflow; git reset --hard 0d8b4cc; pip install -r requirements.txt; pip install .") # arg it
     dockerfile.append("ADD ./{} /repo".format(rel_repo_path))
-    dockerfile.append("RUN touch /repo-hash-{}; pip install -r /repo/requirements.txt".format(repo_hash,rel_repo_path))
+    dockerfile.append("RUN touch /repo-hash-{}; pip install -r /repo/requirements.txt".format(repo_hash))
     dockerfile.append("WORKDIR /workdir")
 
     open(os.path.join(tempdir,"Dockerfile"),"w").write(("\n".join(dockerfile))+"\n")
