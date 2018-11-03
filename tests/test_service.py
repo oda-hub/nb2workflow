@@ -24,7 +24,7 @@ def test_service(client):
     service_signature=r.json['default']
     print(service_signature)
 
-    assert len(service_signature['parameters'])==3
+    assert len(service_signature['parameters'])==4
 
     r=client.get('/api/v1.0/get/default',query_string=dict(eminFAKE=20.))
     assert r.status_code == 400

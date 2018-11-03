@@ -5,6 +5,9 @@ from ast import literal_eval
 def owlify_type(python_type):
     return "http://odahub.io/ontology/types/"+python_type.__name__
     
+def cast_parameter(x,par):
+    print("cast",x,par)
+    return par['python_type'](x)
 
 class NotebookAdapter:
     def __init__(self,notebook_fn):
@@ -43,10 +46,10 @@ class NotebookAdapter:
         unexpected_parameters=[]
         for arg in parameters:
             print("request arg",parameters[arg])
-            if arg not in expected_parameters:
-                unexpected_parameters.append(arg)
+            if arg in expected_parameters:
+                request_parameters[arg]=cast_parameter(parameters.get(arg),expected_parameters.get(arg))
             else:
-                request_parameters[arg]=parameters.get(arg)
+                unexpected_parameters.append(arg)
 
         issues=[]
 

@@ -5,4 +5,5 @@ ipykernel
 nbconvert
 docker
 checksumdir
-Flask-Cache
+Flask-Caching
+
