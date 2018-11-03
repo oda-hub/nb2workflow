@@ -7,6 +7,7 @@ dist: trusty
 #- mysql
 before_install:
 - sudo apt-get -qq update
+- sudo apt-get install -y wget
 - pip install codecov
 - pip install pytest-cov
 - pip install codacy-coverage
