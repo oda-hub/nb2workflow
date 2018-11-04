@@ -11,7 +11,7 @@ import glob
 from nb2workflow.nbadapter import NotebookAdapter
 
 class CustomJSONEncoder(JSONEncoder):
-    def default(self, obj):
+    def default(self, obj, *args, **kwargs):
         try:
             if isinstance(obj, type):
                 return dict(type_object=repr(obj))
