@@ -31,6 +31,7 @@ def create_app():
 app = create_app()
 
 
+@cache.cached(timeout=50)
 @app.route('/api/v1.0/get/<string:target>',methods=['GET'])
 def workflow(target):
     if target!="default":
