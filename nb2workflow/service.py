@@ -30,6 +30,8 @@ def create_app():
 
 app = create_app()
 
+cache = Cache(app,config={'CACHE_TYPE': 'simple'})
+
 
 @cache.cached(timeout=50)
 @app.route('/api/v1.0/get/<string:target>',methods=['GET'])
