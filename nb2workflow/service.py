@@ -22,19 +22,20 @@ class CustomJSONEncoder(JSONEncoder):
             return list(iterable)
         return JSONEncoder.default(self, obj)
 
+cache = Cache(config={'CACHE_TYPE': 'simple'})
+
 def create_app():
     app=Flask(__name__)
     app.json_encoder = CustomJSONEncoder
-    cache = Cache(app,config={'CACHE_TYPE': 'simple'})
+    cache.init_app(app, config={'CACHE_TYPE': 'simple'})
     return app
 
 app = create_app()
 
-cache = Cache(app,config={'CACHE_TYPE': 'simple'})
 
 
-@cache.cached(timeout=50)
 @app.route('/api/v1.0/get/<string:target>',methods=['GET'])
+@cache.cached(timeout=50)
 def workflow(target):
     if target!="default":
         return make_response(jsonify("currently only support default target"), 400)
