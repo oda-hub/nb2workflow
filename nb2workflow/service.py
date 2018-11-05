@@ -33,7 +33,6 @@ def create_app():
 app = create_app()
 
 
-
 @app.route('/api/v1.0/get/<string:target>',methods=['GET'])
 @cache.cached(timeout=50)
 def workflow(target):
@@ -80,6 +79,9 @@ def main():
     parser.add_argument('--port', metavar='port', type=int, default=9191)
 
     args = parser.parse_args()
+
+    def short_name(ipnb_fn):
+        return os.path.basename(ipynb).replace(".ipynb","")
     
     if os.path.isdir(args.notebook):
         notebooks=[ fn for fn in glob.glob(args.notebook+"/*ipynb") if "output" not in fn ]
@@ -87,13 +89,12 @@ def main():
         if len(notebooks)==0:
             raise Exception("no notebooks found in the directory:",args.notebook)
 
-        if len(notebooks)>1:
-            raise Exception("currently unable to handle many notebooks",notebooks)
-
-        app.notebook_adapter=NotebookAdapter(notebooks[0])
+        app.notebook_adapters=dict([
+                (short_name(notebook),NotebookAdapter(notebook)) for notebook in notebooks
+            ])
 
     elif os.path.isfile(args.notebook):
-        app.notebook_adapter=NotebookAdapter(args.notebook)
+        app.notebook_adapters={short_name(args.notebook),NotebookAdapter(args.notebook)}
 
     else:
         raise Exception("requested notebook not found:",args.notebook)

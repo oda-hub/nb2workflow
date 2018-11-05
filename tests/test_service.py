@@ -16,8 +16,6 @@ def app():
     print("creating app")
     return app
 
-test_notebook=os.environ.get('TEST_NOTEBOOK')
-
 def test_service(client):
     r=client.get('/api/v1.0/options')
     
