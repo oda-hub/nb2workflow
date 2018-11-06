@@ -36,4 +36,4 @@ def test_service(client):
 
     print(r.json)
 
-    open("output.png","w").write(base64.b64decode(r.json['spectrum']['content']))
+    open("output.png","w").write(base64.b64decode(r.json['spectrum_png_content']))

@@ -34,7 +34,7 @@ app = create_app()
 
 
 @app.route('/api/v1.0/get/<string:target>',methods=['GET'])
-@cache.cached(timeout=3600)
+#@cache.cached(timeout=3600)
 def workflow(target):
     issues = []
 

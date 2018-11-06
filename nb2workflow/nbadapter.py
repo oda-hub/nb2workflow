@@ -28,7 +28,45 @@ def understand_comment_references(comment):
     return dict(
         owl_type = owl_type,
     )
-        
+
+
+def parse_nbline(line):
+    if line.strip()=="":
+        return None
+    elif line.strip().startswith("#"):
+        logger.debug("found detached comment: \"%s\"",line)
+        return None
+    else:
+        if "#" in line:
+            assignment_line,comment=line.split("#",1)
+        else:
+            assignment_line=line
+            comment=""
+            
+        if "=" in assignment_line:
+            name, value_str=assignment_line.split("=", 1)
+            name = name.strip()
+        else:
+            name = assignment_line
+            value_str=None
+
+        try:
+            value=literal_eval(value_str.strip())
+            python_type = type(value)
+        except Exception as e:
+            value = value_str
+            python_type = str
+
+        comment=comment
+
+        return dict(
+                    name = name,
+                    value = value,
+                    python_type = python_type,
+                    comment = comment,
+                    owl_type = understand_comment_references(comment).get('owl_type',None),
+                )
+
 
 class InputParameter:
     def __init__(self):
@@ -36,33 +74,25 @@ class InputParameter:
 
     @classmethod
     def from_nbline(cls,line):
-        if line.strip()=="":
-            return None
-        elif line.strip().startswith("#"):
-            logger.debug("found detached comment: \"%s\"",line)
-            return None
+        r = parse_nbline(line)
+        if r is None:
+            return r
         else:
-            obj=cls()
+            obj = cls()
             obj.raw_line=line
 
-            if "#" in line:
-                assignment_line,comment=line.split("#",1)
-            else:
-                assignment_line=line
-                comment=""
-                
-            name, default_str=assignment_line.split("=")
-            obj.name = name.strip()
-
-            obj.default_value=literal_eval(default_str.strip())
-            obj.python_type = type(obj.default_value)
-            obj.comment=comment
+            p = parse_nbline(line)
+            
+            obj.name = p['name']
+            obj.default_value = p['value']
+            obj.python_type = p['python_type']
+            obj.comment = p['comment']
+            obj.owl_type = p['owl_type']
 
             obj.choose_owl_type()
             
-            logger.debug("%s %s %s comment: %s",obj.name,obj.default_value.__class__,obj.default_value,comment)
+            logger.debug("%s %s %s comment: %s",obj.name,obj.default_value.__class__,obj.default_value,obj.comment)
             return obj
-
     
 
     def choose_owl_type(self):
@@ -89,9 +119,14 @@ class InputParameter:
 
 class NotebookAdapter:
     def __init__(self,notebook_fn):
-        self.notebook_fn=notebook_fn
+        self.notebook_fn = notebook_fn
+        self.name = notebook_short_name(notebook_fn)
         logger.debug("notebook adapter for %s",notebook_fn)
         logger.debug(self.extract_parameters())
+    
+    @property
+    def preproc_notebook_fn(self):
+        return self.notebook_fn.replace(".ipynb","_preproc.ipynb")
 
     @property
     def output_notebook_fn(self):
@@ -134,10 +169,11 @@ class NotebookAdapter:
                     )
 
 
-
     def execute(self, parameters):
+        self.inject_output_gathering()
+
         pm.execute_notebook(
-           self.notebook_fn,
+           self.preproc_notebook_fn,
            self.output_notebook_fn,
            parameters = parameters,
         )
@@ -153,9 +189,49 @@ class NotebookAdapter:
 
         return outputs
 
+    
+    def extract_output_declarations(self):
+        nb=nbformat.reads(open(self.notebook_fn).read(), as_version=4)
+
+        outputs = {}
+
+        for cell in nb.cells:
+            if 'outputs' in cell.metadata.get('tags',[]):
+                for line in cell['source'].split("\n"):
+                    p = parse_nbline(line)
+                    outputs[p['name']] = p
+
+
+        return outputs 
 
     def extract_output(self):
         return self.extract_pm_output()
+
+    def inject_output_gathering(self):
+        outputs = self.extract_output_declarations()
+
+        output_gather_content="""
+import papermill as pm
+import base64
+
+"""
+        for output in outputs.keys():
+            logger.debug("output: %s",output)
+            output_gather_content+="\npm.record(\"{output}\",{output})".format(output=output)
+
+            output_gather_content+="\nisinstance({output},str) and os.path.exists({output}) and pm.record(\"{output}_content\",base64.b64encode(open({output}).read()))".format(output=output)
+            output_gather_content+="\n".format(output=output)
+            #output_gather_content+="pm.record(\"{}\",dict(filename=fn,content=base64.b64encode(open(fn).read())))"
+        #"pm.record(\"{}\",dict(filename=fn,content=base64.b64encode(open(fn).read())))"
+
+        newcell = nbformat.v4.new_code_cell(source=output_gather_content)
+        newcell.metadata['tags'] = ['injected-gather-outputs']
+
+        nb=nbformat.reads(open(self.notebook_fn).read(), as_version=4)
+        nb.cells = nb.cells + [newcell] 
+
+        pm.iorw.write_ipynb(nb, self.preproc_notebook_fn)
+
 
 def notebook_short_name(ipynb_fn):
     return os.path.basename(ipynb_fn).replace(".ipynb","")
@@ -163,7 +239,7 @@ def notebook_short_name(ipynb_fn):
 def find_notebooks(source):
 
     if os.path.isdir(source):
-        notebooks=[ fn for fn in glob.glob(source+"/*ipynb") if "output" not in fn ]
+        notebooks=[ fn for fn in glob.glob(source+"/*ipynb") if "output" not in fn and "preproc" not in fn ]
         logger.debug("found notebooks: %s",notebooks)
 
         if len(notebooks)==0:
