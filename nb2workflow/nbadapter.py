@@ -109,8 +109,8 @@ def find_notebooks(source):
         logger.debug("notebook adapters: %s",notebook_adapters)
 
 
-    elif os.path.isfile(args.notebook):
-        notebook_adapters={notebook_short_name(args.notebook),NotebookAdapter(args.notebook)}
+    elif os.path.isfile(source):
+        notebook_adapters={notebook_short_name(source): NotebookAdapter(source)}
 
     else:
         raise Exception("requested notebook not found:",source)
