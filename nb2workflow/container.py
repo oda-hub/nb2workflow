@@ -2,6 +2,7 @@ from __future__ import print_function
 
 import os
 import argparse
+import json
 import docker
 import shutil
 import tempfile
@@ -33,6 +34,8 @@ def build_image(repo_source,from_image,tag_image,nb2workflow_revision):
     dockerfile.append("FROM {}".format(from_image))
     dockerfile.append("ARG nb2workflow_revision".format(from_image))
     dockerfile.append("RUN git clone https://github.com/volodymyrss/nb2workflow.git /nb2workflow; cd /nb2workflow; git reset --hard $nb2workflow_revision; pip install -r requirements.txt; pip install .") 
+    dockerfile.append("ADD ./{}/requirements.txt /requirements.txt".format(rel_repo_path))
+    dockerfile.append("RUN pip install -r /requirements.txt".format(repo_hash))
     dockerfile.append("ADD ./{} /repo".format(rel_repo_path))
     dockerfile.append("RUN touch /repo-hash-{}; pip install -r /repo/requirements.txt".format(repo_hash))
     dockerfile.append("WORKDIR /workdir")
@@ -51,7 +54,7 @@ def build_image(repo_source,from_image,tag_image,nb2workflow_revision):
                 rm=True,
             )
     for k in r:
-        print(k)
+        print(json.loads(k)['stream'].strip())
 
     return True
 
@@ -97,7 +100,7 @@ def main():
             volumes={os.getcwd():{"bind":"/workdir","mode":"rw"}},
         )
         for r in c.attach(stream=True):
-            print(c,r)
+            print(c,r.strip())
 
 if __name__=="__main__":
     main()

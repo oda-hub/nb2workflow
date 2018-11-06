@@ -220,6 +220,7 @@ class NotebookAdapter:
         output_gather_content="""
 import papermill as pm
 import base64
+import os
 
 """
         for output in outputs.keys():

@@ -58,8 +58,12 @@ def workflow(target):
 @app.route('/api/v1.0/options',methods=['GET'])
 def workflow_options():
     return jsonify(dict([
-                    (target,dict(output=None,parameters=nba.extract_parameters()))
-                     for target, nba in app.notebook_adapters.items()]))
+                    (
+                        target,
+                        dict(output=nba.extract_output_declarations(),parameters=nba.extract_parameters()),
+                    )
+                     for target, nba in app.notebook_adapters.items()
+                    ]))
 
 @app.route('/health')
 def healthcheck():
