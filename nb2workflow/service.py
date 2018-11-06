@@ -8,7 +8,7 @@ from flask_caching import Cache
 import os
 import glob
 
-from nb2workflow.nbadapter import NotebookAdapter
+from nb2workflow.nbadapter import NotebookAdapter, find_notebooks
 
 class CustomJSONEncoder(JSONEncoder):
     def default(self, obj, *args, **kwargs):
@@ -34,31 +34,32 @@ app = create_app()
 
 
 @app.route('/api/v1.0/get/<string:target>',methods=['GET'])
-@cache.cached(timeout=50)
+@cache.cached(timeout=3600)
 def workflow(target):
-    if target!="default":
-        return make_response(jsonify("currently only support default target"), 400)
-
     issues = []
 
-    interpreted_parameters = app.notebook_adapter.interpret_parameters(request.args)
-    issues += interpreted_parameters['issues']
+    nba = app.notebook_adapters.get(target)
+
+    if nba is None:
+        issues.append("target not known: %s; available targets: %s"%(target,app.notebook_adapters.keys()))
+    else:
+        interpreted_parameters = nba.interpret_parameters(request.args)
+        issues += interpreted_parameters['issues']
 
     if len(issues)>0:
         return make_response(jsonify(issues=issues), 400)
     else:
-        app.notebook_adapter.execute(interpreted_parameters['request_parameters'])
+        nba.execute(interpreted_parameters['request_parameters'])
 
-        return jsonify(app.notebook_adapter.extract_output())
+        return jsonify(nba.extract_output())
 
 # list input -> output function signatures and identities
 
 @app.route('/api/v1.0/options',methods=['GET'])
 def workflow_options():
-    return jsonify(dict(
-                    default=dict(
-                        output=None,parameters=app.notebook_adapter.extract_parameters())
-                  ))
+    return jsonify(dict([
+                    (target,dict(output=None,parameters=nba.extract_parameters()))
+                     for target, nba in app.notebook_adapters.items()]))
 
 @app.route('/health')
 def healthcheck():
@@ -80,24 +81,7 @@ def main():
 
     args = parser.parse_args()
 
-    def short_name(ipnb_fn):
-        return os.path.basename(ipynb).replace(".ipynb","")
-    
-    if os.path.isdir(args.notebook):
-        notebooks=[ fn for fn in glob.glob(args.notebook+"/*ipynb") if "output" not in fn ]
-
-        if len(notebooks)==0:
-            raise Exception("no notebooks found in the directory:",args.notebook)
-
-        app.notebook_adapters=dict([
-                (short_name(notebook),NotebookAdapter(notebook)) for notebook in notebooks
-            ])
-
-    elif os.path.isfile(args.notebook):
-        app.notebook_adapters={short_name(args.notebook),NotebookAdapter(args.notebook)}
-
-    else:
-        raise Exception("requested notebook not found:",args.notebook)
+    app.notebook_adapters = find_notebooks(args.notebook)
 
     app.run(host=args.host,port=args.port)
 
