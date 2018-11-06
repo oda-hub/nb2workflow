@@ -1,6 +1,7 @@
 from ast import literal_eval
 import os
 import glob
+import re
 
 import papermill as pm
 import nbformat
@@ -12,6 +13,22 @@ def cast_parameter(x,par):
     logger.debug("cast %s %s",x,par)
     return par['python_type'](x)
 
+def understand_comment_references(comment):
+    logger.debug("treating comment %s",comment)
+
+    oda_ontology_prefix = "http://odahub.io/ontology"
+    r = re.search(r"\b("+oda_ontology_prefix+r".*?)(?:\s+|$)", comment)
+    if r:
+        owl_type = r.groups()[0]
+        logger.debug("comment contains owl references: %s",owl_type)
+    else:
+        owl_type = None
+        logger.debug("no references in this comment")
+
+    return dict(
+        owl_type = owl_type,
+    )
+        
 
 class InputParameter:
     def __init__(self):
@@ -34,22 +51,39 @@ class InputParameter:
                 assignment_line=line
                 comment=""
                 
-            obj.name,default_str=assignment_line.split("=")
+            name, default_str=assignment_line.split("=")
+            obj.name = name.strip()
+
             obj.default_value=literal_eval(default_str.strip())
             obj.python_type = type(obj.default_value)
+            obj.comment=comment
+
+            obj.choose_owl_type()
             
             logger.debug("%s %s %s comment: %s",obj.name,obj.default_value.__class__,obj.default_value,comment)
             return obj
 
-    @property
-    def owl_type(self):
-        return "http://odahub.io/ontology/types/"+self.python_type.__name__
+    
+
+    def choose_owl_type(self):
+        self.owl_type = None
+
+        if self.comment.strip() != "":
+            references =  understand_comment_references(self.comment)
+
+            if references.get('owl_type',None):
+                self.owl_type = references.get('owl_type')
+
+        if self.owl_type is None:
+            self.owl_type = "http://odahub.io/ontology/types/"+self.python_type.__name__ # also use this if already defined
 
     def as_dict(self):
         return dict(
                     default_value=self.default_value,
                     python_type=self.python_type,
                     name=self.name,
+                    comment=self.comment,
+                    owl_type=self.owl_type,
                 )
 
 
