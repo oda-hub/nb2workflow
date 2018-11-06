@@ -28,8 +28,8 @@ class InputParameter:
             obj=cls()
             obj.raw_line=line
 
-            if "#" in raw_line:
-                assignment_line,comment=raw_line.split("#",1)
+            if "#" in line:
+                assignment_line,comment=line.split("#",1)
             else:
                 assignment_line=line
                 comment=""
