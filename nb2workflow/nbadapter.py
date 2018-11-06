@@ -19,8 +19,6 @@ class InputParameter:
 
     @classmethod
     def from_nbline(cls,line):
-    
-                    
         if line.strip()=="":
             return None
         elif line.strip().startswith("#"):
@@ -29,11 +27,18 @@ class InputParameter:
         else:
             obj=cls()
             obj.raw_line=line
-            obj.name,default_str=line.split("=")
+
+            if "#" in raw_line:
+                assignment_line,comment=raw_line.split("#",1)
+            else:
+                assignment_line=line
+                comment=""
+                
+            obj.name,default_str=assignment_line.split("=")
             obj.default_value=literal_eval(default_str.strip())
             obj.python_type = type(obj.default_value)
             
-            logger.debug("%s %s %s",obj.name,obj.default_value.__class__,obj.default_value)
+            logger.debug("%s %s %s comment: %s",obj.name,obj.default_value.__class__,obj.default_value,comment)
             return obj
 
     @property
