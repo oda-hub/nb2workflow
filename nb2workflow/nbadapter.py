@@ -8,12 +8,45 @@ import nbformat
 import logging
 logger=logging.getLogger(__name__)
 
-def owlify_type(python_type):
-    return "http://odahub.io/ontology/types/"+python_type.__name__
-    
 def cast_parameter(x,par):
     logger.debug("cast %s %s",x,par)
     return par['python_type'](x)
+
+
+class InputParameter:
+    def __init__(self):
+        pass
+
+    @classmethod
+    def from_nbline(cls,line):
+    
+                    
+        if line.strip()=="":
+            return None
+        elif line.strip().startswith("#"):
+            logger.debug("found detached comment: \"%s\"",line)
+            return None
+        else:
+            obj=cls()
+            obj.raw_line=line
+            obj.name,default_str=line.split("=")
+            obj.default_value=literal_eval(default_str.strip())
+            obj.python_type = type(obj.default_value)
+            
+            logger.debug("%s %s %s",obj.name,obj.default_value.__class__,obj.default_value)
+            return obj
+
+    @property
+    def owl_type(self):
+        return "http://odahub.io/ontology/types/"+self.python_type.__name__
+
+    def as_dict(self):
+        return dict(
+                    default_value=self.default_value,
+                    python_type=self.python_type,
+                    name=self.name,
+                )
+
 
 class NotebookAdapter:
     def __init__(self,notebook_fn):
@@ -32,16 +65,10 @@ class NotebookAdapter:
 
         for cell in nb.cells:
             if 'parameters' in cell.metadata.get('tags',[]):
-                for row in cell['source'].split("\n"):
-                    if row.strip()!="":
-                        parameter,default_str=row.split("=")
-                        default=literal_eval(default_str.strip())
-                        logger.debug("%s %s %s",parameter,default.__class__,default)
-                        input_parameters[parameter]=dict(
-                            python_type = type(default),
-                            owl_type=owlify_type(type(default)),
-                            default_value = default,
-                        )
+                for line in cell['source'].split("\n"):
+                    par=InputParameter.from_nbline(line)
+                    if par is not None:
+                        input_parameters[par.name]=par.as_dict()
 
         return input_parameters
     
