@@ -78,6 +78,7 @@ def main():
     parser.add_argument('notebook', metavar='notebook', type=str)
     parser.add_argument('--host', metavar='host', type=str, default="127.0.0.1")
     parser.add_argument('--port', metavar='port', type=int, default=9191)
+    #parser.add_argument('--tmpdir', metavar='tmpdir', type=str, default=None)
 
     args = parser.parse_args()
 

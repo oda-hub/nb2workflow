@@ -2,6 +2,7 @@ from ast import literal_eval
 import os
 import glob
 import re
+import tempfile
 
 import papermill as pm
 import nbformat
@@ -125,12 +126,18 @@ class NotebookAdapter:
         logger.debug(self.extract_parameters())
     
     @property
+    def tmpdir(self):
+        if not hasattr(self,'_tmpdir'):
+            self._tmpdir = tempfile.mkdtemp()
+        return self._tmpdir
+    
+    @property
     def preproc_notebook_fn(self):
-        return self.notebook_fn.replace(".ipynb","_preproc.ipynb")
+        return os.path.join(self.tmpdir,os.path.basename(self.notebook_fn.replace(".ipynb","_preproc.ipynb")))
 
     @property
     def output_notebook_fn(self):
-        return self.notebook_fn.replace(".ipynb","_output.ipynb")
+        return os.path.join(self.tmpdir,os.path.basename(self.notebook_fn.replace(".ipynb","_output.ipynb")))
 
     def extract_parameters(self):
         nb=nbformat.reads(open(self.notebook_fn).read(), as_version=4)
