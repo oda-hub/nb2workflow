@@ -175,15 +175,25 @@ class NotebookAdapter:
                         request_parameters=request_parameters,
                     )
 
+    @property
+    def exceptions(self):
+        if not hasattr(self,'_exceptions'):
+            self._exceptions = []
+        return self._exceptions
 
     def execute(self, parameters):
         self.inject_output_gathering()
 
-        pm.execute_notebook(
-           self.preproc_notebook_fn,
-           self.output_notebook_fn,
-           parameters = parameters,
-        )
+        try:
+            pm.execute_notebook(
+               self.preproc_notebook_fn,
+               self.output_notebook_fn,
+               parameters = parameters,
+            )
+        except pm.PapermillExecutionError as e:
+            self.exceptions.append(e)
+            logger.debug(e)
+            logger.debug(e.args)
 
     def extract_pm_output(self):
         nb = pm.read_notebook(self.output_notebook_fn)

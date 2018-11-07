@@ -7,6 +7,7 @@ from flask_caching import Cache
 
 import os
 import glob
+import logging
 
 from nb2workflow.nbadapter import NotebookAdapter, find_notebooks
 
@@ -32,9 +33,13 @@ def create_app():
 
 app = create_app()
 
+def make_key():
+    """Make a key that includes GET parameters."""
+    return request.full_path
+
 
 @app.route('/api/v1.0/get/<string:target>',methods=['GET'])
-#@cache.cached(timeout=3600)
+@cache.cached(timeout=3600,key_prefix=make_key)
 def workflow(target):
     issues = []
 
@@ -51,7 +56,10 @@ def workflow(target):
     else:
         nba.execute(interpreted_parameters['request_parameters'])
 
-        return jsonify(nba.extract_output())
+        return jsonify(dict(
+                    output=nba.extract_output(),
+                    exceptions=nba.exceptions,
+                ))
 
 # list input -> output function signatures and identities
 
@@ -83,10 +91,17 @@ def main():
     parser.add_argument('--host', metavar='host', type=str, default="127.0.0.1")
     parser.add_argument('--port', metavar='port', type=int, default=9191)
     #parser.add_argument('--tmpdir', metavar='tmpdir', type=str, default=None)
+    parser.add_argument('--upsteam', metavar='upstream-url', type=str, default="https://api.odahub.io/register")
+    parser.add_argument('--profile', metavar='service profile', type=str, default="oda")
+    parser.add_argument('--debug', action="store_true")
 
     args = parser.parse_args()
 
     app.notebook_adapters = find_notebooks(args.notebook)
+
+    if args.debug:
+        logger=logging.getLogger("nb2workflow")
+        logger.setLevel(level=logging.DEBUG)
 
     app.run(host=args.host,port=args.port)
 
