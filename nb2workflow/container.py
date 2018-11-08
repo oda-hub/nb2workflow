@@ -38,7 +38,10 @@ def build_image(repo_source,from_image,tag_image,nb2workflow_revision):
     dockerfile.append("RUN pip install -r /requirements.txt".format(repo_hash))
     dockerfile.append("ADD ./{} /repo".format(rel_repo_path))
     dockerfile.append("RUN touch /repo-hash-{}; pip install -r /repo/requirements.txt".format(repo_hash))
+    dockerfile.append("RUN useradd -ms /bin/bash oda")
+    dockerfile.append("USER oda")
     dockerfile.append("WORKDIR /workdir")
+    dockerfile.append("ENTRYPOINT nb2service /repo/ --host 0.0.0.0" )
 
     open(os.path.join(tempdir,"Dockerfile"),"w").write(("\n".join(dockerfile))+"\n")
 
@@ -94,7 +97,6 @@ def main():
             tag_image,
             user=os.getuid(),
             ports={ 9191: (args.host, args.port) },
-            command="nb2service /repo/ --host 0.0.0.0", 
             name=args.name,
             detach=True,
             volumes={os.getcwd():{"bind":"/workdir","mode":"rw"}},
