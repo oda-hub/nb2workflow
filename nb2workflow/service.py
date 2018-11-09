@@ -3,7 +3,7 @@ from __future__ import print_function
 from flask import Flask, make_response, jsonify, request
 from flask.json import JSONEncoder
 from flask_caching import Cache
-
+from flask_cors import CORS
 
 import os
 import glob
@@ -27,16 +27,24 @@ cache = Cache(config={'CACHE_TYPE': 'simple'})
 
 def create_app():
     app=Flask(__name__)
+#    CORS(app)
     app.json_encoder = CustomJSONEncoder
     cache.init_app(app, config={'CACHE_TYPE': 'simple'})
     return app
 
+
 app = create_app()
+
+@app.after_request
+def after_request(response):
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    return response
 
 def make_key():
     """Make a key that includes GET parameters."""
     return request.full_path
-
 
 @app.route('/api/v1.0/get/<string:target>',methods=['GET'])
 @cache.cached(timeout=3600,key_prefix=make_key)
