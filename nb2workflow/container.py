@@ -71,7 +71,7 @@ def main():
     parser.add_argument('--tag-image', metavar='TAG', type=str, default="")
     parser.add_argument('--host', metavar='host', type=str, default="127.0.0.1")
     parser.add_argument('--port', metavar='port', type=int, default=9191)
-    parser.add_argument('--nb2wrev', metavar='TAG', type=str)
+    parser.add_argument('--nb2wrev', metavar='TAG', type=str, default="master")
 
     args = parser.parse_args()
 
