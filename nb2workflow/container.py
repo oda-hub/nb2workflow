@@ -72,6 +72,8 @@ def main():
     parser.add_argument('--host', metavar='host', type=str, default="127.0.0.1")
     parser.add_argument('--port', metavar='port', type=int, default=9191)
     parser.add_argument('--nb2wrev', metavar='TAG', type=str, default="master")
+    parser.add_argument('--volume', metavar='mount:mount', type=str, nargs="*")
+
 
     args = parser.parse_args()
 
@@ -99,8 +101,11 @@ def main():
             ports={ 9191: (args.host, args.port) },
             name=args.name,
             detach=True,
-            volumes={os.getcwd():{"bind":"/workdir","mode":"rw"}},
+            volumes=dict([
+                (os.getcwd(),{"bind":"/workdir","mode":"rw"}),
+            ]+[v.split(":",1) for v in args.volume]),
         )
+
         for r in c.attach(stream=True):
             print(c,r.strip())
 
