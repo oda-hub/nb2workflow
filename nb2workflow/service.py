@@ -91,8 +91,8 @@ def workflow(target):
                     exceptions=nba.exceptions,
                 ))
 
-def setup_routes():
-    for target, nba in app.notebook_adapters.items()
+def setup_routes(app):
+    for target, nba in app.notebook_adapters.items():
         target_specs=specs_dict = {
   "parameters": [
     {
@@ -108,7 +108,6 @@ def setup_routes():
       "default": "all"
     }
   ],
-  },
   "responses": {
     "200": {
       "description": "A list of colors (may be filtered by palette)",
@@ -126,13 +125,11 @@ def setup_routes():
   }
 }
 
-        app.route('/api/v1.0/get/'+target,methods=['GET'])(
+        app.route('/api/v1.0/get/'+target,methods=['GET'],endpoint='endpoint_'+target)(
         swag_from(target_specs)(
         cache.cached(timeout=3600,key_prefix=make_key)(
             lambda :workflow(target)
         )))
-
-setup_routes()
 
 # list input -> output function signatures and identities
 
@@ -171,6 +168,7 @@ def main():
     args = parser.parse_args()
 
     app.notebook_adapters = find_notebooks(args.notebook)
+    setup_routes(app)
 
     if args.debug:
         logger=logging.getLogger("nb2workflow")
