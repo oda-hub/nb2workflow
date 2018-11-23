@@ -91,6 +91,20 @@ def workflow(target):
                     exceptions=nba.exceptions,
                 ))
 
+def to_oapi_type(in_type):
+    print(in_type)
+
+    if issubclass(in_type,int):
+        return 'integer'
+
+    if issubclass(in_type,float):
+        return 'number'
+    
+    if issubclass(in_type,str):
+        return 'string'
+    
+    return 'string'
+
 def setup_routes(app):
     for target, nba in app.notebook_adapters.items():
         target_specs=specs_dict = {
@@ -98,7 +112,7 @@ def setup_routes(app):
                 {
                   "name": p_name,
                   "in": "args",
-                  "type": p_data['python_type'],
+                  "type": to_oapi_type(p_data['python_type']),
                   "required": "false",
                   "default": p_data['default_value'],
                   "description": p_data['comment']+" "+p_data['owl_type'],
@@ -107,7 +121,7 @@ def setup_routes(app):
               ],
               "responses": {
                 "200": {
-                  "description": nba.extract_output_declarations(),
+                  "description": repr(nba.extract_output_declarations()),
                 }
               }
             }
