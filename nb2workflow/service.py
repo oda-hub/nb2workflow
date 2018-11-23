@@ -9,7 +9,7 @@ from flask.json import JSONEncoder
 from flask_caching import Cache
 from flask_cors import CORS
 
-from flasgger import LazyJSONEncoder, LazyString, Swagger
+from flasgger import LazyJSONEncoder, LazyString, Swagger, swag_from
 
 from nb2workflow.nbadapter import NotebookAdapter, find_notebooks
 
@@ -47,6 +47,7 @@ cache = Cache(config={'CACHE_TYPE': 'simple'})
 
 def create_app():
     app=Flask(__name__)
+    template = dict(swaggerUiPrefix=LazyString(lambda : request.environ.get('HTTP_X_FORWARDED_PREFIX', '')))
     swagger = Swagger(app, template=template)
     app.wsgi_app = ReverseProxied(app.wsgi_app)
     app.json_encoder = CustomJSONEncoder
@@ -54,8 +55,6 @@ def create_app():
 #    CORS(app)
     return app
 
-
-template = dict(swaggerUiPrefix=LazyString(lambda : request.environ.get('HTTP_X_FORWARDED_PREFIX', '')))
 
 app = create_app()
 
@@ -70,8 +69,7 @@ def make_key():
     """Make a key that includes GET parameters."""
     return request.full_path
 
-@app.route('/api/v1.0/get/<string:target>',methods=['GET'])
-@cache.cached(timeout=3600,key_prefix=make_key)
+
 def workflow(target):
     issues = []
 
@@ -92,6 +90,49 @@ def workflow(target):
                     output=nba.extract_output(),
                     exceptions=nba.exceptions,
                 ))
+
+def setup_routes():
+    for target, nba in app.notebook_adapters.items()
+        target_specs=specs_dict = {
+  "parameters": [
+    {
+      "name": "palette",
+      "in": "path",
+      "type": "string",
+      "enum": [
+        "all",
+        "rgb",
+        "cmyk"
+      ],
+      "required": "true",
+      "default": "all"
+    }
+  ],
+  },
+  "responses": {
+    "200": {
+      "description": "A list of colors (may be filtered by palette)",
+      "schema": {
+        "$ref": "#/definitions/Palette"
+      },
+      "examples": {
+        "rgb": [
+          "red",
+          "green",
+          "blue"
+        ]
+      }
+    }
+  }
+}
+
+        app.route('/api/v1.0/get/'+target,methods=['GET'])(
+        swag_from(target_specs)(
+        cache.cached(timeout=3600,key_prefix=make_key)(
+            lambda :workflow(target)
+        )))
+
+setup_routes()
 
 # list input -> output function signatures and identities
 
