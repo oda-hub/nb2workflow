@@ -1,17 +1,37 @@
 from __future__ import print_function
 
+import os
+import glob
+import logging
+
 from flask import Flask, make_response, jsonify, request
 from flask.json import JSONEncoder
 from flask_caching import Cache
 from flask_cors import CORS
 
-import os
-import glob
-import logging
+from flasgger import LazyJSONEncoder, LazyString, Swagger
 
 from nb2workflow.nbadapter import NotebookAdapter, find_notebooks
 
-class CustomJSONEncoder(JSONEncoder):
+class ReverseProxied(object):
+    def __init__(self, app):
+        self.app = app
+
+    def __call__(self, environ, start_response):
+        script_name = environ.get('HTTP_X_FORWARDED_PREFIX', '')
+        if script_name:
+            environ['SCRIPT_NAME'] = script_name
+            path_info = environ['PATH_INFO']
+            if path_info.startswith(script_name):
+                environ['PATH_INFO'] = path_info[len(script_name):]
+
+        scheme = environ.get('HTTP_X_SCHEME', '')
+        if scheme:
+            environ['wsgi.url_scheme'] = scheme
+        return self.app(environ, start_response)
+
+
+class CustomJSONEncoder(LazyJSONEncoder):
     def default(self, obj, *args, **kwargs):
         try:
             if isinstance(obj, type):
@@ -27,11 +47,15 @@ cache = Cache(config={'CACHE_TYPE': 'simple'})
 
 def create_app():
     app=Flask(__name__)
-#    CORS(app)
+    swagger = Swagger(app, template=template)
+    app.wsgi_app = ReverseProxied(app.wsgi_app)
     app.json_encoder = CustomJSONEncoder
     cache.init_app(app, config={'CACHE_TYPE': 'simple'})
+#    CORS(app)
     return app
 
+
+template = dict(swaggerUiPrefix=LazyString(lambda : request.environ.get('HTTP_X_FORWARDED_PREFIX', '')))
 
 app = create_app()
 

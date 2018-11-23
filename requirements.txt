@@ -7,3 +7,4 @@ docker
 checksumdir
 Flask-Caching
 flask-cors
+flasgger
