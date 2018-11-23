@@ -126,11 +126,21 @@ def setup_routes(app):
               }
             }
 
-        app.route('/api/v1.0/get/'+target,methods=['GET'],endpoint='endpoint_'+target)(
-        swag_from(target_specs)(
-        cache.cached(timeout=3600,key_prefix=make_key)(
-            lambda :workflow(target)
-        )))
+        endpoint='endpoint_'+target
+        try:
+            app.route('/api/v1.0/get/'+target,methods=['GET'],endpoint=endpoint)(
+            swag_from(target_specs)(
+            cache.cached(timeout=3600,key_prefix=make_key)(
+                lambda :workflow(target)
+            )))
+        except AssertionError as e:
+            print("unable to add route:",e)
+
+#    app.route('/api/v1.0/get/<target>',methods=['GET'],endpoint='endpoint_undefined')(
+#    swag_from(target_specs)(
+#    cache.cached(timeout=3600,key_prefix=make_key)(
+#        workflow
+#    )))
 
 # list input -> output function signatures and identities
 

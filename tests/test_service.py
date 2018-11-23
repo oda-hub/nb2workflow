@@ -13,6 +13,7 @@ from flask import url_for
 def app():
     app = nb2workflow.service.app
     app.notebook_adapters = nb2workflow.nbadapter.find_notebooks(os.environ.get("TEST_NOTEBOOK"))
+    nb2workflow.service.setup_routes(app)
     print("creating app")
     return app
 
@@ -23,6 +24,8 @@ def test_service(client):
     print(service_signature)
 
     assert len(service_signature['parameters'])==4
+
+    print('get: /api/v1.0/get/'+service_name)
 
     r=client.get('/api/v1.0/get/'+service_name,query_string=dict(eminFAKE=20.))
     assert r.status_code == 400
