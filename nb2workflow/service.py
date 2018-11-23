@@ -94,36 +94,23 @@ def workflow(target):
 def setup_routes(app):
     for target, nba in app.notebook_adapters.items():
         target_specs=specs_dict = {
-  "parameters": [
-    {
-      "name": "palette",
-      "in": "path",
-      "type": "string",
-      "enum": [
-        "all",
-        "rgb",
-        "cmyk"
-      ],
-      "required": "true",
-      "default": "all"
-    }
-  ],
-  "responses": {
-    "200": {
-      "description": "A list of colors (may be filtered by palette)",
-      "schema": {
-        "$ref": "#/definitions/Palette"
-      },
-      "examples": {
-        "rgb": [
-          "red",
-          "green",
-          "blue"
-        ]
-      }
-    }
-  }
-}
+              "parameters": [
+                {
+                  "name": p_name,
+                  "in": "args",
+                  "type": p_data['python_type'],
+                  "required": "false",
+                  "default": p_data['default_value'],
+                  "description": p_data['comment']+" "+p_data['owl_type'],
+                }
+                for p_name, p_data in nba.extract_parameters().items()
+              ],
+              "responses": {
+                "200": {
+                  "description": nba.extract_output_declarations(),
+                }
+              }
+            }
 
         app.route('/api/v1.0/get/'+target,methods=['GET'],endpoint='endpoint_'+target)(
         swag_from(target_specs)(
