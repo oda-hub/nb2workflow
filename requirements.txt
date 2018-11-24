@@ -9,3 +9,4 @@ Flask-Caching
 flask-cors
 flasgger
 owlready2
+rdflib

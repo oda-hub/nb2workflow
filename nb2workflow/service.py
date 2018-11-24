@@ -32,6 +32,7 @@ dictConfig({
 })
 
 from nb2workflow.nbadapter import NotebookAdapter, find_notebooks
+from nb2workflow import ontology
     
 logger=logging.getLogger('nb2workflow.service')
 
@@ -181,6 +182,10 @@ def workflow_options():
                      for target, nba in app.notebook_adapters.items()
                     ]))
 
+@app.route('/api/v1.0/rdf',methods=['GET'])
+def workflow_rdf():
+    return make_response(app.service_semantic_signature)
+
 @app.route('/health')
 def healthcheck():
     issues=[]
@@ -207,6 +212,7 @@ def main():
 
     app.notebook_adapters = find_notebooks(args.notebook)
     setup_routes(app)
+    app.service_semantic_signature=ontology.service_semantic_signature(app.notebook_adapters)
 
     if args.debug:
         logging.getLogger("nb2workflow").setLevel(level=logging.DEBUG)
