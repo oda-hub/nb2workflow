@@ -3,6 +3,8 @@ from __future__ import print_function
 import os
 import glob
 import logging
+import inspect
+
 
 from flask import Flask, make_response, jsonify, request
 from flask.json import JSONEncoder
@@ -11,7 +13,28 @@ from flask_cors import CORS
 
 from flasgger import LazyJSONEncoder, LazyString, Swagger, swag_from
 
+from logging.config import dictConfig
+
+dictConfig({
+    'version': 1,
+    'formatters': {'default': {
+        'format': '[%(asctime)s] %(levelname)s in %(module)s: %(message)s',
+    }},
+    'handlers': {'wsgi': {
+        'class': 'logging.StreamHandler',
+  #      'stream': 'ext://flask.logging.wsgi_errors_stream',
+        'formatter': 'default'
+    }},
+    'root': {
+        'level': 'INFO',
+        'handlers': ['wsgi']
+    }
+})
+
 from nb2workflow.nbadapter import NotebookAdapter, find_notebooks
+    
+
+logger=logging.getLogger('nb2workflow.service')
 
 class ReverseProxied(object):
     def __init__(self, app):
@@ -81,6 +104,10 @@ def workflow(target):
         interpreted_parameters = nba.interpret_parameters(request.args)
         issues += interpreted_parameters['issues']
 
+    logger.debug("interpreted parameters %s",interpreted_parameters)
+
+    raise Exception(interpreted_parameters)
+
     if len(issues)>0:
         return make_response(jsonify(issues=issues), 400)
     else:
@@ -92,18 +119,19 @@ def workflow(target):
                 ))
 
 def to_oapi_type(in_type):
-    print(in_type)
 
     if issubclass(in_type,int):
-        return 'integer'
+        out_type='integer'
 
     if issubclass(in_type,float):
-        return 'number'
+        out_type='number'
     
     if issubclass(in_type,str):
-        return 'string'
+        out_type='string'
     
-    return 'string'
+    logger.debug("oapi type cast from %s to %s",repr(in_type),repr(out_type))
+    
+    return out_type
 
 def setup_routes(app):
     for target, nba in app.notebook_adapters.items():
@@ -134,7 +162,7 @@ def setup_routes(app):
                 lambda :workflow(target)
             )))
         except AssertionError as e:
-            print("unable to add route:",e)
+            logger.info("unable to add route:",e)
 
 #    app.route('/api/v1.0/get/<target>',methods=['GET'],endpoint='endpoint_undefined')(
 #    swag_from(target_specs)(
@@ -182,8 +210,9 @@ def main():
     setup_routes(app)
 
     if args.debug:
-        logger=logging.getLogger("nb2workflow")
-        logger.setLevel(level=logging.DEBUG)
+        logging.getLogger("nb2workflow").setLevel(level=logging.DEBUG)
+        logging.getLogger("flask").setLevel(level=logging.DEBUG)
+
 
     app.run(host=args.host,port=args.port)
 
