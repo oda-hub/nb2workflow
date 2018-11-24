@@ -106,7 +106,7 @@ class InputParameter:
                 self.owl_type = references.get('owl_type')
 
         if self.owl_type is None:
-            self.owl_type = "http://odahub.io/ontology/types/"+self.python_type.__name__ # also use this if already defined
+            self.owl_type = "http://www.w3.org/2001/XMLSchema#"+self.python_type.__name__ # also use this if already defined
 
     def as_dict(self):
         return dict(
