@@ -4,8 +4,8 @@ setup(name='nb2workflow',
       version='1.0',
       description='convert notebook to workflow',
       author='Volodymyr Savchenko',
-      author_email='vladimir.savchenko@gmail.com',
-      license='MIT',
+      author_email='contact@volodymyrsavchenko.com',
+      license='GPLv3',
       packages=['nb2workflow'],
       zip_safe=False,
 
@@ -15,4 +15,10 @@ setup(name='nb2workflow',
             'nb2worker = nb2workflow.container:main',
             ]
       },
+
+      url = 'https://github.com/volodymyrss/nb2workflow',
+      download_url = 'https://github.com/volodymyrss/nb2workflow/archive/1.0.tar.gz',
+      keywords = ['jupyter', 'docker'],
+      classifiers = [],
      )
+
