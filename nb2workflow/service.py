@@ -33,7 +33,6 @@ dictConfig({
 
 from nb2workflow.nbadapter import NotebookAdapter, find_notebooks
     
-
 logger=logging.getLogger('nb2workflow.service')
 
 class ReverseProxied(object):
@@ -95,6 +94,8 @@ def make_key():
 
 def workflow(target):
     issues = []
+    
+    logger.debug("raw parameters %s",request.args)
 
     nba = app.notebook_adapters.get(target)
 
@@ -105,8 +106,6 @@ def workflow(target):
         issues += interpreted_parameters['issues']
 
     logger.debug("interpreted parameters %s",interpreted_parameters)
-
-    raise Exception(interpreted_parameters)
 
     if len(issues)>0:
         return make_response(jsonify(issues=issues), 400)
@@ -139,7 +138,7 @@ def setup_routes(app):
               "parameters": [
                 {
                   "name": p_name,
-                  "in": "args",
+                  "in": "query",
                   "type": to_oapi_type(p_data['python_type']),
                   "required": "false",
                   "default": p_data['default_value'],
