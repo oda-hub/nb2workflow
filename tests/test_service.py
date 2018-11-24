@@ -20,7 +20,7 @@ def app():
 def test_service(client):
     r=client.get('/api/v1.0/options')
     
-    service_name,service_signature=r.json.items()[0]
+    service_name,service_signature=sorted(r.json.items())[0]
     print(service_signature)
 
     assert len(service_signature['parameters'])==4
@@ -39,4 +39,4 @@ def test_service(client):
 
     print(r.json)
 
-    open("output.png","w").write(base64.b64decode(r.json['output']['spectrum_png_content']))
+    open("output.png","wb").write(base64.b64decode(r.json['output']['spectrum_png_content']))

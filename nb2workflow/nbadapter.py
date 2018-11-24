@@ -238,7 +238,7 @@ import os
             logger.debug("output: %s",output)
             output_gather_content+="\npm.record(\"{output}\",{output})".format(output=output)
 
-            output_gather_content+="\nisinstance({output},str) and os.path.exists({output}) and pm.record(\"{output}_content\",base64.b64encode(open({output}).read()))".format(output=output)
+            output_gather_content+="\nisinstance({output},str) and os.path.exists({output}) and pm.record(\"{output}_content\",base64.b64encode(open({output},'rb').read()))".format(output=output)
             output_gather_content+="\n".format(output=output)
             #output_gather_content+="pm.record(\"{}\",dict(filename=fn,content=base64.b64encode(open(fn).read())))"
         #"pm.record(\"{}\",dict(filename=fn,content=base64.b64encode(open(fn).read())))"

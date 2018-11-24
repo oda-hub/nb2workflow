@@ -8,3 +8,4 @@ checksumdir
 Flask-Caching
 flask-cors
 flasgger
+owlready2
