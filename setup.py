@@ -16,6 +16,21 @@ setup(name='nb2workflow',
             ]
       },
 
+      install_requires=[
+        'flask',
+        'pytest-flask',
+        'papermill',
+        'ipykernel',
+        'nbconvert',
+        'docker',
+        'checksumdir',
+        'Flask-Caching',
+        'flask-cors',
+        'flasgger',
+        'owlready2',
+        'rdflib',
+      ],
+
       url = 'https://github.com/volodymyrss/nb2workflow',
       download_url = 'https://github.com/volodymyrss/nb2workflow/archive/1.0.tar.gz',
       keywords = ['jupyter', 'docker'],
