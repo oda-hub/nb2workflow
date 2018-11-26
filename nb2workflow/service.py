@@ -227,7 +227,7 @@ def main():
 
     app.notebook_adapters = find_notebooks(args.notebook)
     setup_routes(app)
- #   app.service_semantic_signature=ontology.service_semantic_signature(app.notebook_adapters)
+    app.service_semantic_signature=ontology.service_semantic_signature(app.notebook_adapters)
 
 
   #  for rule in app.url_map.iter_rules():
