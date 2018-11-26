@@ -169,7 +169,7 @@ def setup_routes(app):
                 return workflow(target)
             return workflow_func
 
-        logger.debug("target: %s with endpoint %s and func %s",target,endpoint,func)
+        logger.debug("target: %s with endpoint %s",target,endpoint)
 
         try:
             app.route('/api/v1.0/get/'+target,methods=['GET'],endpoint=endpoint)(
