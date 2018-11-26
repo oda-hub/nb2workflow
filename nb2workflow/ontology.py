@@ -16,6 +16,7 @@ def get_dda():
 
 
 def to_xsd_type(p):
+    out_type='string'
 
     if issubclass(p['python_type'],int):
         out_type='integer'

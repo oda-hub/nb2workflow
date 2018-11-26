@@ -119,6 +119,7 @@ def workflow(target):
                 ))
 
 def to_oapi_type(in_type):
+    out_type='string'
 
     if issubclass(in_type,int):
         out_type='integer'
