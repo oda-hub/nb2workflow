@@ -120,7 +120,7 @@ def workflow(target):
 
         return jsonify(dict(
                     output=output,
-                    exceptions=nba.exceptions,
+                    exceptions=[repr(e) for e in nba.exceptions],
                 ))
 
 def to_oapi_type(in_type):
