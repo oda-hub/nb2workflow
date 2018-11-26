@@ -33,7 +33,7 @@ def prepare_image(repo_source,from_image):
 
     dockerfile.append("FROM {}".format(from_image))
     dockerfile.append("ARG nb2workflow_revision".format(from_image))
-    dockerfile.append("RUN git clone https://github.com/volodymyrss/nb2workflow.git /nb2workflow; cd /nb2workflow; git reset --hard $nb2workflow_revision; pip install -r requirements.txt; pip install .") 
+    dockerfile.append("RUN git clone https://github.com/volodymyrss/nb2workflow.git /nb2workflow; cd /nb2workflow; git reset --hard $nb2workflow_revision; pip install -r requirements.txt; pip install .; rm -rf /nb2workflow") 
     dockerfile.append("ARG REPO_PATH=./{}".format(rel_repo_path))
     dockerfile.append("ADD $REPO_PATH/requirements.txt /requirements.txt")
     dockerfile.append("RUN pip install -r /requirements.txt".format(repo_hash))
