@@ -1,0 +1,9 @@
+FROM python:3.6
+
+RUN git clone https://github.com/volodymyrss/nb2workflow.git /nb2workflow; cd /nb2workflow; git reset --hard $nb2workflow_revision; pip install -r requirements.txt; pip install .; rm -rf /nb2workflow
+
+RUN useradd -ms /bin/bash oda
+USER oda
+WORKDIR /workdir
+
+ENTRYPOINT nb2service /repo/ --host 0.0.0.0

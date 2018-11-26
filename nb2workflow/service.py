@@ -6,7 +6,7 @@ import logging
 import inspect
 
 
-from flask import Flask, make_response, jsonify, request
+from flask import Flask, make_response, jsonify, request, url_for
 from flask.json import JSONEncoder
 from flask_caching import Cache
 from flask_cors import CORS
@@ -96,6 +96,7 @@ def make_key():
 def workflow(target):
     issues = []
     
+    logger.debug("target %s",target)
     logger.debug("raw parameters %s",request.args)
 
     nba = app.notebook_adapters.get(target)
@@ -161,20 +162,24 @@ def setup_routes(app):
             }
 
         endpoint='endpoint_'+target
+
+
+        def funcg(target):
+            def workflow_func():
+                return workflow(target)
+            return workflow_func
+
+        logger.debug("target: %s with endpoint %s and func %s",target,endpoint,func)
+
         try:
             app.route('/api/v1.0/get/'+target,methods=['GET'],endpoint=endpoint)(
             swag_from(target_specs)(
             cache.cached(timeout=3600,key_prefix=make_key)(
-                lambda :workflow(target)
+                funcg(target)
             )))
         except AssertionError as e:
             logger.info("unable to add route:",e)
-
-#    app.route('/api/v1.0/get/<target>',methods=['GET'],endpoint='endpoint_undefined')(
-#    swag_from(target_specs)(
-#    cache.cached(timeout=3600,key_prefix=make_key)(
-#        workflow
-#    )))
+            raise
 
 # list input -> output function signatures and identities
 
@@ -216,14 +221,17 @@ def main():
 
     args = parser.parse_args()
 
-    app.notebook_adapters = find_notebooks(args.notebook)
-    setup_routes(app)
-    app.service_semantic_signature=ontology.service_semantic_signature(app.notebook_adapters)
-
     if args.debug:
         logging.getLogger("nb2workflow").setLevel(level=logging.DEBUG)
         logging.getLogger("flask").setLevel(level=logging.DEBUG)
 
+    app.notebook_adapters = find_notebooks(args.notebook)
+    setup_routes(app)
+ #   app.service_semantic_signature=ontology.service_semantic_signature(app.notebook_adapters)
+
+
+  #  for rule in app.url_map.iter_rules():
+ #       logger.debug("==>> %s %s %s %s",rule,rule.endpoint,rule.__class__,rule.__dict__)
 
     app.run(host=args.host,port=args.port)
 
