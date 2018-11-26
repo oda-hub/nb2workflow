@@ -113,8 +113,13 @@ def workflow(target):
     else:
         nba.execute(interpreted_parameters['request_parameters'])
 
+        output=nba.extract_output()
+
+        logger.debug("output: %s",output)
+        logger.debug("exceptions: %s",nba.exceptions)
+
         return jsonify(dict(
-                    output=nba.extract_output(),
+                    output=output,
                     exceptions=nba.exceptions,
                 ))
 
