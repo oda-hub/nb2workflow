@@ -21,7 +21,7 @@ def import_repo(repo_source,target):
 
     return checksumdir.dirhash(target)
 
-def build_image(repo_source,from_image,tag_image,nb2workflow_revision):
+def prepare_image(repo_source,from_image):
     tempdir=tempfile.mkdtemp()
 
     rel_repo_path="repo"
@@ -45,6 +45,10 @@ def build_image(repo_source,from_image,tag_image,nb2workflow_revision):
 
     open(os.path.join(tempdir,"Dockerfile"),"w").write(("\n".join(dockerfile))+"\n")
 
+    return tempdir
+
+
+def build_image(tempdir,tag_image,nb2workflow_revision):
     cli=docker.from_env()
     
     print("-- building image, tagging as",tag_image)
@@ -66,6 +70,7 @@ def main():
     parser = argparse.ArgumentParser(description='Process some integers.')
     parser.add_argument('repo', metavar='repo', type=str)
     parser.add_argument('--run', action='store_true')
+    parser.add_argument('--build', action='store_true')
     parser.add_argument('--name', metavar='TAG', type=str, default="nb2worker")
     parser.add_argument('--from-image', metavar='FROM IMAGE', type=str, default="python:2.7")
     parser.add_argument('--tag-image', metavar='TAG', type=str, default="")
@@ -73,6 +78,7 @@ def main():
     parser.add_argument('--port', metavar='port', type=int, default=9191)
     parser.add_argument('--nb2wrev', metavar='TAG', type=str, default="master")
     parser.add_argument('--volume', metavar='mount:mount', type=str, nargs="*")
+    parser.add_argument('--store-dockerfile', metavar='location', type=str, default=None)
 
 
     args = parser.parse_args()
@@ -83,31 +89,37 @@ def main():
     if args.tag_image == "":
         tag_image=os.path.basename(os.path.abspath(repo_path))
 
-    build_result=build_image(repo_path,args.from_image,tag_image,args.nb2wrev)
+    tempdir=prepare_image(repo_path,args.from_image)
 
-    if build_result is None:
-        raise Exception("failed to build")
+    if args.store_dockerfile:
+        shutil.copy(os.path.join(tempdir,"Dockerfile"),args.store_dockerfile)
+        print("stored Dockerfile as",args.store_dockerfile)
 
-    print("built:",build_result)
-    #print("\n".join(list(build_result[1])))
+    if args.build:
+        build_result=build_image(tempdir,tag_image,args.nb2wrev)
 
-    if args.run:
-        
-        print("running",tag_image,"service on",args.port)
-        cli=docker.from_env()
-        c=cli.containers.run(
-            tag_image,
-            user=os.getuid(),
-            ports={ 9191: (args.host, args.port) },
-            name=args.name,
-            detach=True,
-            volumes=dict([
-                (os.getcwd(),{"bind":"/workdir","mode":"rw"}),
-            ]+[v.split(":",1) for v in args.volume]),
-        )
+        if build_result is None:
+            raise Exception("failed to build")
 
-        for r in c.attach(stream=True):
-            print(c,r.strip())
+        print("built:",build_result)
+
+        if args.run:
+            
+            print("running",tag_image,"service on",args.port)
+            cli=docker.from_env()
+            c=cli.containers.run(
+                tag_image,
+                user=os.getuid(),
+                ports={ 9191: (args.host, args.port) },
+                name=args.name,
+                detach=True,
+                volumes=dict([
+                    (os.getcwd(),{"bind":"/workdir","mode":"rw"}),
+                ]+[v.split(":",1) for v in args.volume]),
+            )
+
+            for r in c.attach(stream=True):
+                print(c,r.strip())
 
 if __name__=="__main__":
     main()
