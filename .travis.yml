@@ -14,6 +14,7 @@ before_install:
 - git clone https://github.com/volodymyrss/nbworkflow-test.git tests/testrepo
 install:
 - pip install -r requirements.txt
+- pip install pysqlite3>=3.8.3 --upgrade
 - pip install -r tests/testrepo/requirements.txt
 - pip install .
 script:
