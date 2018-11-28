@@ -50,7 +50,7 @@ def test_nbadapter_repo():
 
     nbas=find_notebooks(test_notebook_repo)
 
-    assert len(nbas) == 2
+    assert len(nbas) == 1
 
     for nba_name,nba in nbas.items():
         print("notebook",nba_name)
