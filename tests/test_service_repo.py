@@ -4,18 +4,21 @@ import os
 import pytest
 import base64
 
-import nb2workflow.service
+from imp import reload
+
+from nb2workflow import service
 import nb2workflow.nbadapter
 from flask import url_for
 
 
 @pytest.fixture
 def app():
-    app = nb2workflow.service.app
+    reload(service)
+    app = service.app
     app.notebook_adapters=nb2workflow.nbadapter.find_notebooks(os.environ.get("TEST_NOTEBOOK_REPO"))
     app.config["CACHE_TYPE"] = "null"
-    nb2workflow.service.cache.init_app(app)
-    nb2workflow.service.setup_routes(app)
+    service.cache.init_app(app)
+    service.setup_routes(app)
     print("creating app")
     return app
 

@@ -21,7 +21,7 @@ def test_nbadapter():
     assert len(parameters)==4
 
     assert 'comment' in parameters['scwid']
-    assert parameters['scwid']['owl_type'] == "http://odahub.io/ontology/integral/ScWID"
+    assert parameters['scwid']['owl_type'] == "http://odahub.io/ontology/integral#ScWID"
 
 
     outputs = nba.extract_output_declarations()
