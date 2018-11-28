@@ -1,5 +1,6 @@
 import os
 import logging
+import pytest
 
 test_notebook_repo=os.environ.get('TEST_NOTEBOOK_REPO')
 
@@ -10,6 +11,7 @@ logging.basicConfig(format=FORMAT)
 logger=logging.getLogger("nb2workflow")
 logger.setLevel(level=logging.DEBUG)
 
+@pytest.mark.skip(reason="no way of currently testing this")
 def test_nbadapter_repo():
     from nb2workflow.nbadapter import NotebookAdapter, find_notebooks
     from nb2workflow import ontology
