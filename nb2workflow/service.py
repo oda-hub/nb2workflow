@@ -32,7 +32,7 @@ dictConfig({
 })
 
 from nb2workflow.nbadapter import NotebookAdapter, find_notebooks
-from nb2workflow import ontology
+from nb2workflow import ontology, publish
     
 logger=logging.getLogger('nb2workflow.service')
 
@@ -215,7 +215,7 @@ def main():
     parser.add_argument('--host', metavar='host', type=str, default="127.0.0.1")
     parser.add_argument('--port', metavar='port', type=int, default=9191)
     #parser.add_argument('--tmpdir', metavar='tmpdir', type=str, default=None)
-    parser.add_argument('--upsteam', metavar='upstream-url', type=str, default="https://api.odahub.io/register")
+    parser.add_argument('--publish', metavar='upstream-url', type=str, default=None)
     parser.add_argument('--profile', metavar='service profile', type=str, default="oda")
     parser.add_argument('--debug', action="store_true")
 
@@ -228,6 +228,12 @@ def main():
     app.notebook_adapters = find_notebooks(args.notebook)
     setup_routes(app)
     app.service_semantic_signature=ontology.service_semantic_signature(app.notebook_adapters)
+
+    if args.publish:
+        logger.info("publishing to %s",args.publish)
+
+        for nba_name, nba in app.notebook_adapters.items():
+            publish.publish(args.publish, nba_name, args.host, args.port)
 
 
   #  for rule in app.url_map.iter_rules():
