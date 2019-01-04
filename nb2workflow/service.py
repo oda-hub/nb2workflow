@@ -237,6 +237,15 @@ def healthcheck():
     else:
         return make_response(jsonify(issues=issues), 500)
 
+@app.route('/')
+def root():
+    issues=[]
+
+    if len(issues)==0:
+        return "all is ok!"
+    else:
+        return make_response(jsonify(issues=issues), 500)
+
 
 def main():
     import argparse
