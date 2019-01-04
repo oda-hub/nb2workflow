@@ -8,6 +8,6 @@ checksumdir
 Flask-Caching
 flask-cors
 flasgger
-owlready2
+owlready2=0.12
 rdflib
 python-consul
