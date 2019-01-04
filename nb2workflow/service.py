@@ -4,9 +4,13 @@ import os
 import glob
 import logging
 import inspect
+import requests
+import base64
+
+from io import BytesIO
 
 
-from flask import Flask, make_response, jsonify, request, url_for
+from flask import Flask, make_response, jsonify, request, url_for, send_file
 from flask.json import JSONEncoder
 from flask_caching import Cache
 from flask_cors import CORS
@@ -124,6 +128,7 @@ def workflow(target):
                     exceptions=[repr(e) for e in nba.exceptions],
                 ))
 
+
 def to_oapi_type(in_type):
     out_type='string'
 
@@ -192,6 +197,32 @@ def workflow_options():
                     )
                      for target, nba in app.notebook_adapters.items()
                     ]))
+
+@app.route('/api/v1.0/get-file/<target>/<filename>',methods=['GET'])
+def workflow_filename(target, filename):
+
+    target_url = url_for('endpoint_'+target,_external=True,**request.args)
+
+    # report equivalency
+
+    r = requests.get(target_url)
+    
+    try:
+        output = r.json()['output']
+        content = base64.b64decode(base64.b64decode(output.get(filename+'_content',None)))
+
+        if content:
+            return send_file(BytesIO(content), mimetype='image/png')
+        else:
+            return jsonify(dict(
+                        exceptions=["no such file, available:",output.keys()],
+                    ))
+
+    except Exception as e:
+        logger.error("problem decoding: %s",e)
+        return jsonify(dict(
+                    exceptions={"problem":r.content.decode('utf-8')},
+                ))
 
 @app.route('/api/v1.0/rdf',methods=['GET'])
 def workflow_rdf():

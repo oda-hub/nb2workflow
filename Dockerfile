@@ -7,4 +7,4 @@ RUN useradd -ms /bin/bash oda
 USER oda
 WORKDIR /workdir
 
-ENTRYPOINT nb2service /repo/ --host 0.0.0.0
+ENTRYPOINT nb2service /repo/ --host 0.0.0.0 --port 5000
