@@ -35,6 +35,8 @@ dictConfig({
     }
 })
 
+verify_tls = False
+
 from nb2workflow.nbadapter import NotebookAdapter, find_notebooks
 from nb2workflow import ontology, publish
     
@@ -205,7 +207,7 @@ def workflow_filename(target, filename):
 
     # report equivalency
 
-    r = requests.get(target_url)
+    r = requests.get(target_url, verify = verify_tls)
     
     try:
         output = r.json()['output']
