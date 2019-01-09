@@ -6,6 +6,6 @@ RUN git clone https://github.com/volodymyrss/nb2workflow.git /nb2workflow; cd /n
 RUN useradd -ms /bin/bash oda
 
 USER oda
-WORKDIR /repo
+WORKDIR /workdir
 
-ENTRYPOINT nb2service /repo/ --host 0.0.0.0 --port 5000
+ENTRYPOINT cp -rfv /repo/* .; nb2service /repo/ --host 0.0.0.0 --port 5000
