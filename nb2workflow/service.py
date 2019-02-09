@@ -258,6 +258,7 @@ def main():
     parser.add_argument('--port', metavar='port', type=int, default=9191)
     #parser.add_argument('--tmpdir', metavar='tmpdir', type=str, default=None)
     parser.add_argument('--publish', metavar='upstream-url', type=str, default=None)
+    parser.add_argument('--publish-as', metavar='published url', type=str, default=None)
     parser.add_argument('--profile', metavar='service profile', type=str, default="oda")
     parser.add_argument('--debug', action="store_true")
 
@@ -274,8 +275,13 @@ def main():
     if args.publish:
         logger.info("publishing to %s",args.publish)
 
+        if args.publish_as:
+            publish_host, publish_port = args.publish_as.split(":")
+        else:
+            publish_host, publish_port = args.host, args.port
+
         for nba_name, nba in app.notebook_adapters.items():
-            publish.publish(args.publish, nba_name, args.host, args.port)
+            publish.publish(args.publish, nba_name, publish_host, publish_port)
 
 
   #  for rule in app.url_map.iter_rules():

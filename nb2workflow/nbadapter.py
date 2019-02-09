@@ -184,6 +184,7 @@ class NotebookAdapter:
 
     def execute(self, parameters):
         self.inject_output_gathering()
+        self._exceptions = []
 
         try:
             pm.execute_notebook(
