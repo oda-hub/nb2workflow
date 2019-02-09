@@ -8,4 +8,4 @@ RUN useradd -ms /bin/bash oda
 USER oda
 WORKDIR /workdir
 
-ENTRYPOINT cp -rfv /repo/* .; nb2service /repo/ --host 0.0.0.0 --port 5000
+ENTRYPOINT cp -rfv /repo/* .; . /deploy-env; nb2service /repo/ --host 0.0.0.0 --port 5000
