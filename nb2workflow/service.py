@@ -207,7 +207,13 @@ def workflow_filename(target, filename):
 
     # report equivalency
 
-    r = requests.get(target_url, verify = verify_tls)
+    if "HTTP_AUTH" in os.environ:
+        username, password = os.environ.get("HTTP_AUTH").split(":")
+        auth=requests.auth.HTTPBasicAuth(username, password)
+    else:
+        auth=None
+
+    r = requests.get(target_url, verify = verify_tls, auth = auth)
     
     try:
         output = r.json()['output']
@@ -276,7 +282,8 @@ def main():
         logger.info("publishing to %s",args.publish)
 
         if args.publish_as:
-            publish_host, publish_port = args.publish_as.split(":")
+            s = args.publish_as.split(":")
+            publish_host, publish_port = ":".join(s[:-1]), int(s[-1])
         else:
             publish_host, publish_port = args.host, args.port
 

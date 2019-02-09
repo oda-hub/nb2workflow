@@ -22,6 +22,8 @@ def publish(upstream_url, name, service_host, service_port):
     cc = consul.Consul(host = host, scheme = scheme, port = port)
 
     logger.debug("found services: %s",cc.agent.services())
+
+    logger.debug("will publish as %s",service_host, service_port)
     
-    cc.agent.service.register(name, address = service_host, port = service_port, tags = ["nb2service"])
+    cc.agent.service.register(name, address = service_host, port = service_port, tags = ["nb2service", "traefik.protocol=https"])
 
