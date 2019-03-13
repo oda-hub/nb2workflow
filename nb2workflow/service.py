@@ -181,7 +181,7 @@ def setup_routes(app):
         try:
             app.route('/api/v1.0/get/'+target,methods=['GET'],endpoint=endpoint)(
             swag_from(target_specs)(
-            cache.cached(timeout=3600,key_prefix=make_key)(
+            cache.cached(timeout=nba.cache_timeout,key_prefix=make_key)(
                 funcg(target)
             )))
         except AssertionError as e:
@@ -200,8 +200,8 @@ def workflow_options():
                      for target, nba in app.notebook_adapters.items()
                     ]))
 
-@app.route('/api/v1.0/get-file/<target>/<filename>',methods=['GET'])
-def workflow_filename(target, filename):
+@app.route('/api/v1.0/get-<mode>/<target>/<filename>',methods=['GET'])
+def workflow_filename(mode, target, filename):
 
     target_url = url_for('endpoint_'+target,_external=True,**request.args)
 
@@ -220,7 +220,12 @@ def workflow_filename(target, filename):
         content = base64.b64decode(base64.b64decode(output.get(filename+'_content',None)))
 
         if content:
-            return send_file(BytesIO(content), mimetype='image/png')
+            if mode == "file" or mode == "png":
+                return send_file(BytesIO(content), mimetype='image/png')
+            elif mode == "html":
+                return content
+            else:
+                return 404
         else:
             return jsonify(dict(
                         exceptions=["no such file, available:",output.keys()],

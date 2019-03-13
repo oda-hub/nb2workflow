@@ -151,6 +151,10 @@ class NotebookAdapter:
                     if par is not None:
                         input_parameters[par.name]=par.as_dict()
 
+        if 'cache_timeout' in input_parameters:
+            self._cache_timeout = input_parameters.pop('cache_timeout')['default_value'] # oh, global var
+            logger.debug("custom cache timeout: %f", self.cache_timeout)
+
         return input_parameters
     
     def interpret_parameters(self,parameters):
@@ -251,6 +255,10 @@ import os
         nb.cells = nb.cells + [newcell] 
 
         pm.iorw.write_ipynb(nb, self.preproc_notebook_fn)
+
+    @property
+    def cache_timeout(self):
+        return getattr(self,'_cache_timeout',3600)
 
 
 def notebook_short_name(ipynb_fn):
