@@ -11,4 +11,4 @@ USER oda
 WORKDIR /workdir
 
 
-ENTRYPOINT cp -rfv /repo/* .; . /deploy-env; nb2service /repo/ --host 0.0.0.0 --port 5000
+ENTRYPOINT cp -rfv /repo/* .; [ -s /deploy-env ] && . /deploy-env; nb2service /repo/ --host 0.0.0.0 --port 5000
