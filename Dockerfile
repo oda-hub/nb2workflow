@@ -5,7 +5,10 @@ RUN git clone https://github.com/volodymyrss/nb2workflow.git /nb2workflow; cd /n
 
 RUN useradd -ms /bin/bash oda
 
+RUN pip install git+https://github.com/volodymyrss/flask-caching.git@control_with_response#egg=flask-caching
+
 USER oda
 WORKDIR /workdir
+
 
 ENTRYPOINT cp -rfv /repo/* .; . /deploy-env; nb2service /repo/ --host 0.0.0.0 --port 5000
