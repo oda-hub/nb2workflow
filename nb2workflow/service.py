@@ -10,7 +10,7 @@ import base64
 from io import BytesIO
 
 
-from flask import Flask, make_response, jsonify, request, url_for, send_file
+from flask import Flask, make_response, jsonify, request, url_for, send_file, Response
 from flask.json import JSONEncoder
 from flask_caching import Cache
 from flask_cors import CORS
@@ -125,10 +125,16 @@ def workflow(target):
         logger.debug("output: %s",output)
         logger.debug("exceptions: %s",nba.exceptions)
 
-        return jsonify(dict(
+        r = jsonify(dict(
                     output=output,
                     exceptions=[repr(e) for e in nba.exceptions],
                 ))
+
+        return_code = 200
+        if len(nba.exceptions) > 0:
+            return_code = 500
+
+        return r, return_code
 
 
 def to_oapi_type(in_type):
@@ -178,10 +184,16 @@ def setup_routes(app):
 
         logger.debug("target: %s with endpoint %s",target,endpoint)
 
+        def response_filter(rv):
+            if isinstance(rv, tuple) and isinstance(rv[0], Response) and rv[1] >= 400:
+                return False
+            else:
+                return True
+
         try:
             app.route('/api/v1.0/get/'+target,methods=['GET'],endpoint=endpoint)(
             swag_from(target_specs)(
-            cache.cached(timeout=nba.cache_timeout,key_prefix=make_key)(
+            cache.cached(timeout=nba.cache_timeout,key_prefix=make_key,response_filter=response_filter)(
                 funcg(target)
             )))
         except AssertionError as e:
