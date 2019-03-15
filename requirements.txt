@@ -5,9 +5,9 @@ ipykernel
 nbconvert
 docker
 checksumdir
-Flask-Caching
 flask-cors
 flasgger
 owlready2==0.11
 rdflib
 python-consul
+-e git+https://github.com/volodymyrss/flask-caching.git#egg=flask-caching
