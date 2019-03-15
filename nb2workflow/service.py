@@ -2,6 +2,7 @@ from __future__ import print_function
 
 import os
 import glob
+import time
 import logging
 import inspect
 import requests
@@ -125,7 +126,16 @@ def workflow(target, background = False):
     else:
         nba.execute(interpreted_parameters['request_parameters'])
 
-        output=nba.extract_output()
+        nretry=10
+        while nretry>0:
+            try:
+                output=nba.extract_output()
+                break
+            except nbformat.reader.NotJSONError as e:
+                logger.debug("output notebook incomplte", e, "attempts left", nretry)
+                nretry-=1
+                time.sleep(1)
+        
 
         logger.debug("output: %s",output)
         logger.debug("exceptions: %s",nba.exceptions)
@@ -224,7 +234,7 @@ def setup_routes(app):
         try:
             app.route('/api/v1.0/get/'+target,methods=['GET'],endpoint=endpoint)(
             swag_from(target_specs)(
-            cache.cached(timeout=cache_timeout,key_prefix=make_key,response_filter=response_filter)(
+            cache.cached(timeout=cache_timeout,key_prefix=make_key,response_filter=response_filter,query_string=True)(
                 funcg(target)
             )))
         except AssertionError as e:
@@ -236,7 +246,7 @@ def setup_routes(app):
             logger.info("scheduling callable %s every %lg", str(funcg), float(schedule_interval))
 
             def schedulable():
-                with app.test_request_context():
+                with app.test_request_context('/api/v1.0/get/'+target):
                     from flask import request
                     get_view_function('/api/v1.0/get/'+target)[0]()
 
