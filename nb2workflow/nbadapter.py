@@ -142,7 +142,8 @@ class NotebookAdapter:
     def extract_parameters(self):
         nb=nbformat.reads(open(self.notebook_fn).read(), as_version=4)
 
-        input_parameters={}
+        input_parameters = {}
+        system_parameters = {}
 
         for cell in nb.cells:
             if 'parameters' in cell.metadata.get('tags',[]):
@@ -150,10 +151,16 @@ class NotebookAdapter:
                     par=InputParameter.from_nbline(line)
                     if par is not None:
                         input_parameters[par.name]=par.as_dict()
+                        input_parameters[par.name]=par.as_dict()
+            
+            if 'system-parameters' in cell.metadata.get('tags',[]):
+                for line in cell['source'].split("\n"):
+                    par=InputParameter.from_nbline(line)
+                    if par is not None:
+                        system_parameters[par.name]=par.as_dict()
+                        system_parameters[par.name]=par.as_dict()
 
-        if 'cache_timeout' in input_parameters:
-            self._cache_timeout = input_parameters.pop('cache_timeout')['default_value'] # oh, global var
-            logger.debug("custom cache timeout: %f", self.cache_timeout)
+        self.system_parameters = system_parameters
 
         return input_parameters
     
@@ -256,9 +263,11 @@ import os
 
         pm.iorw.write_ipynb(nb, self.preproc_notebook_fn)
 
-    @property
-    def cache_timeout(self):
-        return getattr(self,'_cache_timeout',3600)
+    def get_system_parameter_value(self, name, default):
+        if name in self.system_parameters:
+            return self.system_parameters.pop(name)['default_value'] 
+
+        return default
 
 
 def notebook_short_name(ipynb_fn):

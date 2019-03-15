@@ -38,7 +38,7 @@ dictConfig({
 verify_tls = False
 
 from nb2workflow.nbadapter import NotebookAdapter, find_notebooks
-from nb2workflow import ontology, publish
+from nb2workflow import ontology, publish, schedule
     
 logger=logging.getLogger('nb2workflow.service')
 
@@ -99,19 +99,24 @@ def make_key():
     return request.full_path
 
 
-def workflow(target):
+def workflow(target, background = False):
     issues = []
     
     logger.debug("target %s",target)
-    logger.debug("raw parameters %s",request.args)
+
+    if not background:
+        logger.debug("raw parameters %s",request.args)
 
     nba = app.notebook_adapters.get(target)
 
     if nba is None:
         issues.append("target not known: %s; available targets: %s"%(target,app.notebook_adapters.keys()))
     else:
-        interpreted_parameters = nba.interpret_parameters(request.args)
-        issues += interpreted_parameters['issues']
+        if not background:
+            interpreted_parameters = nba.interpret_parameters(request.args)
+            issues += interpreted_parameters['issues']
+        else:
+            interpreted_parameters = dict(request_parameters=[])
 
     logger.debug("interpreted parameters %s",interpreted_parameters)
 
@@ -153,6 +158,31 @@ def to_oapi_type(in_type):
     
     return out_type
 
+from werkzeug.routing import RequestRedirect, MethodNotAllowed, NotFound
+
+def get_view_function(url, method='GET'):
+    """Match a url and return the view and arguments
+    it will be called with, or None if there is no view.
+    """
+
+    adapter = app.url_map.bind('localhost')
+
+    try:
+        match = adapter.match(url, method=method)
+    except RequestRedirect as e:
+        # recursively match redirects
+        return get_view_function(e.new_url, method)
+    except (MethodNotAllowed, NotFound):
+        # no match
+        return None
+
+    try:
+        # return the view function and arguments
+        return app.view_functions[match[0]], match[1]
+    except KeyError:
+        # no view is associated with the endpoint
+        return None
+
 def setup_routes(app):
     for target, nba in app.notebook_adapters.items():
         target_specs=specs_dict = {
@@ -190,15 +220,27 @@ def setup_routes(app):
             else:
                 return True
 
+        cache_timeout = nba.get_system_parameter_value('cache_timeout', 0)
         try:
             app.route('/api/v1.0/get/'+target,methods=['GET'],endpoint=endpoint)(
             swag_from(target_specs)(
-            cache.cached(timeout=nba.cache_timeout,key_prefix=make_key,response_filter=response_filter)(
+            cache.cached(timeout=cache_timeout,key_prefix=make_key,response_filter=response_filter)(
                 funcg(target)
             )))
         except AssertionError as e:
             logger.info("unable to add route:",e)
             raise
+
+        schedule_interval = nba.get_system_parameter_value('schedule_interval', 0)
+        if schedule_interval>0:
+            logger.info("scheduling callable %s every %lg", str(funcg), float(schedule_interval))
+
+            def schedulable():
+                with app.test_request_context():
+                    from flask import request
+                    get_view_function('/api/v1.0/get/'+target)[0]()
+
+            schedule.schedule_callable(schedulable, schedule_interval)
 
 # list input -> output function signatures and identities
 
