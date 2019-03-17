@@ -365,6 +365,22 @@ def main():
 
     app.run(host=args.host,port=args.port)
 
+
+@app.route('/clear-cache')
+def clear_cache():
+    n_entries = None
+    try:
+        n_entries = len(cache.cache._cache)
+    except Exception as e:
+        pass
+    
+    cache.clear()
+
+    if n_entries is not None:
+        return 'cleared %i entries'%n_entries
+    else:
+        return 'cleared some entries'
+
 if __name__ == '__main__':
     main()
 
