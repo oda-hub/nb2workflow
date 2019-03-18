@@ -193,7 +193,7 @@ class NotebookAdapter:
             self._exceptions = []
         return self._exceptions
 
-    def execute(self, parameters):
+    def execute(self, parameters, progress_bar = True, log_output = True):
         self.inject_output_gathering()
         self._exceptions = []
 
@@ -202,6 +202,8 @@ class NotebookAdapter:
                self.preproc_notebook_fn,
                self.output_notebook_fn,
                parameters = parameters,
+               progress_bar = progress_bar,
+               log_output = log_output,
             )
         except pm.PapermillExecutionError as e:
             self.exceptions.append(e)
