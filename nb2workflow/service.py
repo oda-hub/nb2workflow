@@ -90,6 +90,8 @@ def create_app():
 
 app = create_app()
 
+app.async_workflows = dict()
+
 @app.after_request
 def after_request(response):
     response.headers.add('Access-Control-Allow-Origin', '*')
@@ -110,6 +112,12 @@ class AsyncWorkflow(threading.Thread):
         super(AsyncWorkflow, self).__init__()
 
     def run(self):
+        try:
+            self._run()
+        except Exception as e:
+            print("failed",e)
+
+    def _run(self):
         nba = app.notebook_adapters.get(self.target)
         nba.execute(self.params['request_parameters'])
 
@@ -117,6 +125,7 @@ class AsyncWorkflow(threading.Thread):
         while nretry>0:
             try:
                 output=nba.extract_output()
+                logger.info("completed %s",len(output))
                 if len(output) == 0:
                     logger.debug("output from notebook is empty, something failed, attempts left:", nretry)
                 else:
@@ -131,7 +140,8 @@ class AsyncWorkflow(threading.Thread):
         logger.debug("output: %s",output)
         logger.debug("exceptions: %s",nba.exceptions)
         
-        cache.add(self.key, output)
+        logger.info("updating key %s",self.key)
+        app.async_workflows[self.key] = output
 
 
 def workflow(target, background=False, async_request=False):
@@ -160,17 +170,20 @@ def workflow(target, background=False, async_request=False):
 
     ## async
     if async_request:
-        key=hashlib.sha224(json.dumps(dict(target=target, params=interpreted_parameters)).encode('utf-8')).hexdigest()
+        key = hashlib.sha224(json.dumps(dict(target=target, params=interpreted_parameters)).encode('utf-8')).hexdigest()
         
-        value=cache.get(key)
+        value = app.async_workflows.get(key, None)
+
+        print('cache key/value',key,value)
+    
         if value is None:
             async_task = AsyncWorkflow(key=key, target=target, params=interpreted_parameters)
             async_task.start()
-            cache.add(key, 'started')
+            app.async_workflows[key]='started'
             return make_response(jsonify(workflow_status="submitted", comment="task created"), 201)
 
         elif value == 'started':
-            return make_response(jsonify(workflow_status="running", comment="task created before"), 201)
+            return make_response(jsonify(workflow_status="started", comment="task created before"), 201)
 
         else:
             return make_response(jsonify(workflow_status="done", data=value, comment=""), 200)
@@ -284,9 +297,14 @@ def setup_routes(app):
         logger.debug("target: %s with endpoint %s",target,endpoint)
 
         def response_filter(rv):
-            if isinstance(rv, tuple) and isinstance(rv[0], Response) and rv[1] >= 400:
+            if isinstance(rv, tuple) and isinstance(rv[0], Response) and rv[1] != 200:
+                logger.info("NOT caching response %s", rv[1])
+                return False
+            elif isinstance(rv, Response) and rv.status != 200:
+                logger.info("NOT caching response %s", rv)
                 return False
             else:
+                logger.info("caching response %s", rv)
                 return True
 
         cache_timeout = nba.get_system_parameter_value('cache_timeout', 0)
@@ -424,6 +442,10 @@ def main():
 
     app.run(host=args.host,port=args.port)
 
+
+@app.route('/async/list')
+def async_list():
+    return jsonify(app.async_workflows)
 
 @app.route('/clear-cache')
 def clear_cache():
