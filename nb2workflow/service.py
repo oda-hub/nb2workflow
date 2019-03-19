@@ -1,12 +1,14 @@
 from __future__ import print_function
 
 import os
+import json
 import glob
 import time
 import logging
 import inspect
 import requests
 import base64
+import hashlib
 
 from io import BytesIO
 
@@ -99,9 +101,43 @@ def make_key():
     """Make a key that includes GET parameters."""
     return request.full_path
 
+import threading  
+class AsyncWorkflow(threading.Thread):
+    def __init__(self, key, target, params):
+        self.key = key
+        self.target = target
+        self.params = params
+        super(AsyncWorkflow, self).__init__()
 
-def workflow(target, background = False):
+    def run(self):
+        nba = app.notebook_adapters.get(self.target)
+        nba.execute(self.params['request_parameters'])
+
+        nretry=10
+        while nretry>0:
+            try:
+                output=nba.extract_output()
+                if len(output) == 0:
+                    logger.debug("output from notebook is empty, something failed, attempts left:", nretry)
+                else:
+                    break
+            except nbformat.reader.NotJSONError as e:
+                logger.debug("output notebook incomplte", e, "attempts left:", nretry)
+
+            nretry-=1
+            time.sleep(1)
+        
+
+        logger.debug("output: %s",output)
+        logger.debug("exceptions: %s",nba.exceptions)
+        
+        cache.add(self.key, output)
+
+
+def workflow(target, background=False, async_request=False):
     issues = []
+
+    async_request = request.args.get('_async_request', async_request)
     
     logger.debug("target %s",target)
 
@@ -120,6 +156,25 @@ def workflow(target, background = False):
             interpreted_parameters = dict(request_parameters=[])
 
     logger.debug("interpreted parameters %s",interpreted_parameters)
+
+
+    ## async
+    if async_request:
+        key=hashlib.sha224(json.dumps(dict(target=target, params=interpreted_parameters)).encode('utf-8')).hexdigest()
+        
+        value=cache.get(key)
+        if value is None:
+            async_task = AsyncWorkflow(key=key, target=target, params=interpreted_parameters)
+            async_task.start()
+            cache.add(key, 'started')
+            return make_response(jsonify(workflow_status="submitted", comment="task created"), 201)
+
+        elif value == 'started':
+            return make_response(jsonify(workflow_status="running", comment="task created before"), 201)
+
+        else:
+            return make_response(jsonify(workflow_status="done", data=value, comment=""), 200)
+
 
     if len(issues)>0:
         return make_response(jsonify(issues=issues), 400)

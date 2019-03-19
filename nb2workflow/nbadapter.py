@@ -170,6 +170,8 @@ class NotebookAdapter:
 
         unexpected_parameters=[]
         for arg in parameters:
+            if arg.startswith("_"): continue
+
             logger.info("request arg %s",parameters[arg])
             if arg in expected_parameters:
                 request_parameters[arg]=cast_parameter(parameters.get(arg),expected_parameters.get(arg))
