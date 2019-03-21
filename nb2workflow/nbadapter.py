@@ -3,6 +3,7 @@ import os
 import glob
 import re
 import tempfile
+import subprocess
 
 import papermill as pm
 import nbformat
@@ -201,6 +202,9 @@ class NotebookAdapter:
 
     def execute(self, parameters, progress_bar = True, log_output = True):
         logger.info("new tmpdir: %s", self.new_tmpdir())
+
+
+        logger.info(subprocess.check_output(["git","clone",os.path.dirname(os.path.realpath(self.notebook_fn)), self.tmpdir]))
 
         self.inject_output_gathering()
         self._exceptions = []
