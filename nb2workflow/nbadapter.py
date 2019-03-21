@@ -200,7 +200,7 @@ class NotebookAdapter:
         return self._exceptions
 
     def execute(self, parameters, progress_bar = True, log_output = True):
-        logger.info("new tmpdir:", self.new_tmpdir())
+        logger.info("new tmpdir: %s", self.new_tmpdir())
 
         self.inject_output_gathering()
         self._exceptions = []
