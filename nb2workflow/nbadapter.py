@@ -124,6 +124,10 @@ class NotebookAdapter:
         self.name = notebook_short_name(notebook_fn)
         logger.debug("notebook adapter for %s",notebook_fn)
         logger.debug(self.extract_parameters())
+
+    def new_tmpdir(self):
+        self._tmpdir = tempfile.mkdtemp()
+        return self._tmpdir
     
     @property
     def tmpdir(self):
@@ -196,6 +200,8 @@ class NotebookAdapter:
         return self._exceptions
 
     def execute(self, parameters, progress_bar = True, log_output = True):
+        logger.info("new tmpdir:", self.new_tmpdir())
+
         self.inject_output_gathering()
         self._exceptions = []
 
@@ -206,6 +212,7 @@ class NotebookAdapter:
                parameters = parameters,
                progress_bar = progress_bar,
                log_output = log_output,
+               cwd = self.tmpdir, # is?
             )
         except pm.PapermillExecutionError as e:
             self.exceptions.append(e)

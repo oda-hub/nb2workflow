@@ -125,7 +125,7 @@ class AsyncWorkflow(threading.Thread):
         while nretry>0:
             try:
                 output=nba.extract_output()
-                logger.info("completed %s",len(output))
+                logger.info("completed, output length %s",len(output))
                 if len(output) == 0:
                     logger.debug("output from notebook is empty, something failed, attempts left:", nretry)
                 else:
