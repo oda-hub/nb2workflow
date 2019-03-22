@@ -122,9 +122,11 @@ class AsyncWorkflow(threading.Thread):
         nba.execute(self.params['request_parameters'])
 
         nretry=10
+        exceptions=[]
         while nretry>0:
             try:
                 output=nba.extract_output()
+                exceptions=nba.exceptions
                 logger.info("completed, output length %s",len(output))
                 if len(output) == 0:
                     logger.debug("output from notebook is empty, something failed, attempts left:", nretry)
@@ -141,7 +143,7 @@ class AsyncWorkflow(threading.Thread):
         logger.debug("exceptions: %s",nba.exceptions)
         
         logger.info("updating key %s",self.key)
-        app.async_workflows[self.key] = output
+        app.async_workflows[self.key] = dict(output=output, exceptions=exceptions)
 
 
 def workflow(target, background=False, async_request=False):
