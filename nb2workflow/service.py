@@ -143,7 +143,7 @@ class AsyncWorkflow(threading.Thread):
         logger.debug("exceptions: %s",nba.exceptions)
         
         logger.info("updating key %s",self.key)
-        app.async_workflows[self.key] = dict(output=output, exceptions=exceptions)
+        app.async_workflows[self.key] = dict(output=output, exceptions=map(repr, exceptions))
 
 
 def workflow(target, background=False, async_request=False):
