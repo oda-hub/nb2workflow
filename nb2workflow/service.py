@@ -9,6 +9,7 @@ import inspect
 import requests
 import base64
 import hashlib
+import datetime
 
 from io import BytesIO
 
@@ -91,6 +92,7 @@ def create_app():
 app = create_app()
 
 app.async_workflows = dict()
+app.started_at = datetime.datetime.now()
 
 @app.after_request
 def after_request(response):
@@ -444,6 +446,14 @@ def main():
 
     app.run(host=args.host,port=args.port)
 
+@app.route('/status')
+def status():
+    return jsonify(
+                version = os.environ.get('WORKFLOW_VERSION','unknown'),
+                started_at = app.started_at.strftime("%s"),
+                started_since = (app.started_at-datetime.datetime.now()).seconds,
+                background_jobs = len(app.async_workflows),
+            )
 
 @app.route('/async/list')
 def async_list():
