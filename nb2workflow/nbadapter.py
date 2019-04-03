@@ -224,9 +224,9 @@ class NotebookAdapter:
                    cwd = self.tmpdir, # is?
                 )
             except pm.PapermillExecutionError as e:
-                exceptions.append(e)
-                logger.debug(e)
-                logger.debug(e.args)
+                exceptions.append([e,e.args])
+                logger.info(e)
+                logger.info(e.args)
             except nbformat.reader.NotJSONError:
                 ntries -= 1
                 logger.info("retrying...", ntries)
@@ -235,7 +235,7 @@ class NotebookAdapter:
 
             break
 
-        return dict(exceptions = exceptions)
+        return exceptions
 
     def extract_pm_output(self):
         nb = pm.read_notebook(self.output_notebook_fn)

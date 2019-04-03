@@ -124,27 +124,31 @@ class AsyncWorkflow(threading.Thread):
         nba = app.notebook_adapters.get(self.target)
         exceptions = nba.execute(self.params['request_parameters'])
 
-        nretry=10
-        while nretry>0:
-            try:
-                output=nba.extract_output()
-                logger.info("completed, output length %s",len(output))
-                if len(output) == 0:
-                    logger.debug("output from notebook is empty, something failed, attempts left:", nretry)
-                else:
-                    break
-            except nbformat.reader.NotJSONError as e:
-                logger.debug("output notebook incomplte", e, "attempts left:", nretry)
+        logger.info("exceptions: %s",repr(exceptions))
 
-            nretry-=1
-            time.sleep(1)
-        
+        if len(exceptions)>0:
+            output='incomplete'
+            logger.error("exceptions: %s",repr(exceptions))
+        else:
+            nretry=10
+            while nretry>0:
+                try:
+                    output=nba.extract_output()
+                    logger.info("completed, output length %s",len(output))
+                    if len(output) == 0:
+                        logger.debug("output from notebook is empty, something failed, attempts left:", nretry)
+                    else:
+                        break
+                except nbformat.reader.NotJSONError as e:
+                    logger.debug("output notebook incomplte", e, "attempts left:", nretry)
 
-        logger.debug("output: %s",output)
-        logger.debug("exceptions: %s",exceptions)
+                nretry-=1
+                time.sleep(1)
+
+        logger.error("output: %s",output)
         
         logger.info("updating key %s",self.key)
-        app.async_workflows[self.key] = dict(output=output, exceptions=map(repr, exceptions))
+        app.async_workflows[self.key] = dict(output=output, exceptions=repr(exceptions))
 
 
 def workflow(target, background=False, async_request=False):
@@ -363,8 +367,17 @@ def workflow_filename(mode, target, filename):
         rj = r.json()
         logger.info(rj.keys())
 
-        output = rj.get('output', rj.get('data').get('output'))
-        content = base64.b64decode(base64.b64decode(output.get(filename+'_content',None)))
+        if 'data' in rj:
+            output = rj.get('data').get('output')
+        elif 'output' in rj:
+            output = rj.get('output')
+        else:
+            return jsonify(rj)
+
+        if filename+'_content' in output:
+            content = base64.b64decode(base64.b64decode(output.get(filename+'_content',None)))
+        else:
+            return jsonify({'workflow_status':'anomaly', 'comment': 'searching for key '+filename+'_content'+', available: '+(", ".join(output.keys())), 'base_workflow_result':rj })
 
         if content:
             if mode == "file" or mode == "png":
@@ -381,7 +394,7 @@ def workflow_filename(mode, target, filename):
     except Exception as e:
         logger.error("problem decoding: %s",repr(e))
         return jsonify(dict(
-                    exceptions={"problem":r.content.decode('utf-8')},
+                    exceptions={"problem decoding":repr(e),"raw_response":r.content.decode('utf-8')},
                 ))
 
 @app.route('/api/v1.0/rdf',methods=['GET'])
