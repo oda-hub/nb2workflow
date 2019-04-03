@@ -451,7 +451,7 @@ def status():
     return jsonify(
                 version = os.environ.get('WORKFLOW_VERSION','unknown'),
                 started_at = app.started_at.strftime("%s"),
-                started_since = (app.started_at-datetime.datetime.now()).seconds,
+                started_since = (datetime.datetime.now()-app.started_at).seconds,
                 background_jobs = len(app.async_workflows),
             )
 
