@@ -1,7 +1,9 @@
 from ast import literal_eval
 import os
+import sys
 import glob
 import re
+import time
 import tempfile
 import subprocess
 
@@ -194,34 +196,46 @@ class NotebookAdapter:
                         request_parameters=request_parameters,
                     )
 
-    @property
-    def exceptions(self):
-        if not hasattr(self,'_exceptions'):
-            self._exceptions = []
-        return self._exceptions
-
     def execute(self, parameters, progress_bar = True, log_output = True):
+        exceptions = self.execute(parameters, progress_bar, log_output):
+
+        return exceptions
+
+    def _execute(self, parameters, progress_bar = True, log_output = True):
         logger.info("new tmpdir: %s", self.new_tmpdir())
 
 
         logger.info(subprocess.check_output(["git","clone",os.path.dirname(os.path.realpath(self.notebook_fn)), self.tmpdir]))
 
         self.inject_output_gathering()
-        self._exceptions = []
+        exceptions = []
 
-        try:
-            pm.execute_notebook(
-               self.preproc_notebook_fn,
-               self.output_notebook_fn,
-               parameters = parameters,
-               progress_bar = progress_bar,
-               log_output = log_output,
-               cwd = self.tmpdir, # is?
-            )
-        except pm.PapermillExecutionError as e:
-            self.exceptions.append(e)
-            logger.debug(e)
-            logger.debug(e.args)
+        #    original = sys.stdout
+
+        ntries = 10
+        while ntries > 0:
+            try:
+                pm.execute_notebook(
+                   self.preproc_notebook_fn,
+                   self.output_notebook_fn,
+                   parameters = parameters,
+                   progress_bar = progress_bar,
+                   log_output = log_output,
+                   cwd = self.tmpdir, # is?
+                )
+            except pm.PapermillExecutionError as e:
+                exceptions.append(e)
+                logger.debug(e)
+                logger.debug(e.args)
+            except nbformat.reader.NotJSONError:
+                ntries -= 1
+                logger.info("retrying...", ntries)
+                time.sleep(2)
+                continue   
+
+            break
+
+        return dict(exceptions = exceptions)
 
     def extract_pm_output(self):
         nb = pm.read_notebook(self.output_notebook_fn)

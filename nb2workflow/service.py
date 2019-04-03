@@ -10,6 +10,7 @@ import requests
 import base64
 import hashlib
 import datetime
+import nbformat
 
 from io import BytesIO
 
@@ -121,14 +122,12 @@ class AsyncWorkflow(threading.Thread):
 
     def _run(self):
         nba = app.notebook_adapters.get(self.target)
-        nba.execute(self.params['request_parameters'])
+        exceptions = nba.execute(self.params['request_parameters'])
 
         nretry=10
-        exceptions=[]
         while nretry>0:
             try:
                 output=nba.extract_output()
-                exceptions=nba.exceptions
                 logger.info("completed, output length %s",len(output))
                 if len(output) == 0:
                     logger.debug("output from notebook is empty, something failed, attempts left:", nretry)
@@ -142,7 +141,7 @@ class AsyncWorkflow(threading.Thread):
         
 
         logger.debug("output: %s",output)
-        logger.debug("exceptions: %s",nba.exceptions)
+        logger.debug("exceptions: %s",exceptions)
         
         logger.info("updating key %s",self.key)
         app.async_workflows[self.key] = dict(output=output, exceptions=map(repr, exceptions))
@@ -196,7 +195,7 @@ def workflow(target, background=False, async_request=False):
     if len(issues)>0:
         return make_response(jsonify(issues=issues), 400)
     else:
-        nba.execute(interpreted_parameters['request_parameters'])
+        exceptions = nba.execute(interpreted_parameters['request_parameters'])
 
         nretry=10
         while nretry>0:
@@ -214,15 +213,15 @@ def workflow(target, background=False, async_request=False):
         
 
         logger.debug("output: %s",output)
-        logger.debug("exceptions: %s",nba.exceptions)
+        logger.debug("exceptions: %s",exceptions)
 
         r = jsonify(dict(
                     output=output,
-                    exceptions=[repr(e) for e in nba.exceptions],
+                    exceptions=[repr(e) for e in exceptions],
                 ))
 
         return_code = 200
-        if len(nba.exceptions) > 0:
+        if len(exceptions) > 0:
             return_code = 500
 
         return r, return_code
@@ -361,7 +360,10 @@ def workflow_filename(mode, target, filename):
     r = requests.get(target_url, verify = verify_tls, auth = auth)
     
     try:
-        output = r.json()['output']
+        rj = r.json()
+        logger.info(rj.keys())
+
+        output = rj.get('output', rj.get('data').get('output'))
         content = base64.b64decode(base64.b64decode(output.get(filename+'_content',None)))
 
         if content:
@@ -377,7 +379,7 @@ def workflow_filename(mode, target, filename):
                     ))
 
     except Exception as e:
-        logger.error("problem decoding: %s",e)
+        logger.error("problem decoding: %s",repr(e))
         return jsonify(dict(
                     exceptions={"problem":r.content.decode('utf-8')},
                 ))
