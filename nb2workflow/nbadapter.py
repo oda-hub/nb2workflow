@@ -197,7 +197,7 @@ class NotebookAdapter:
                     )
 
     def execute(self, parameters, progress_bar = True, log_output = True):
-        exceptions = self.execute(parameters, progress_bar, log_output):
+        exceptions = self.execute(parameters, progress_bar, log_output)
 
         return exceptions
 
