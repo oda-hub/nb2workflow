@@ -478,11 +478,11 @@ def status():
             )
 
 @app.route('/async/delete')
-def async_list():
+def async_delete():
     return jsonify(app.async_workflows)
 
 @app.route('/async/clear')
-def async_list():
+def async_clear():
     s = app.async_workflows
     app.async_workflows = dict()
     return jsonify(s)
