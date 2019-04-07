@@ -131,7 +131,7 @@ class NotebookAdapter:
     def new_tmpdir(self):
         self._tmpdir = tempfile.mkdtemp()
         return self._tmpdir
-    
+
     @property
     def tmpdir(self):
         if not hasattr(self,'_tmpdir'):
@@ -202,10 +202,10 @@ class NotebookAdapter:
         return exceptions
 
     def _execute(self, parameters, progress_bar = True, log_output = True):
-        logger.info("new tmpdir: %s", self.new_tmpdir())
+        tmpdir = self.new_tmpdir()
+        logger.info("new tmpdir: %s", tmpdir)
 
-
-        logger.info(subprocess.check_output(["git","clone",os.path.dirname(os.path.realpath(self.notebook_fn)), self.tmpdir]))
+        logger.info(subprocess.check_output(["git","clone",os.path.dirname(os.path.realpath(self.notebook_fn)), tmpdir]))
 
         self.inject_output_gathering()
         exceptions = []
@@ -221,7 +221,7 @@ class NotebookAdapter:
                    parameters = parameters,
                    progress_bar = progress_bar,
                    log_output = log_output,
-                   cwd = self.tmpdir, # is?
+                   cwd = tmpdir, 
                 )
             except pm.PapermillExecutionError as e:
                 exceptions.append([e,e.args])

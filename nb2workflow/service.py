@@ -121,7 +121,10 @@ class AsyncWorkflow(threading.Thread):
             print("failed",e)
 
     def _run(self):
-        nba = app.notebook_adapters.get(self.target)
+        template_nba = app.notebook_adapters.get(self.target)
+
+        nba = NotebookAdapter(template_nba.notebook_fn)
+
         exceptions = nba.execute(self.params['request_parameters'])
 
         logger.info("exceptions: %s",repr(exceptions))
@@ -139,6 +142,8 @@ class AsyncWorkflow(threading.Thread):
                         logger.debug("output from notebook is empty, something failed, attempts left:", nretry)
                     else:
                         break
+                except Exception as e:
+                    logger.debug("output notebook incomplte or does not exist", e, "attempts left:", nretry)
                 except nbformat.reader.NotJSONError as e:
                     logger.debug("output notebook incomplte", e, "attempts left:", nretry)
 
@@ -161,7 +166,8 @@ def workflow(target, background=False, async_request=False):
     if not background:
         logger.debug("raw parameters %s",request.args)
 
-    nba = app.notebook_adapters.get(target)
+    template_nba = app.notebook_adapters.get(target)
+    nba = NotebookAdapter(template_nba.notebook_fn)
 
     if nba is None:
         issues.append("target not known: %s; available targets: %s"%(target,app.notebook_adapters.keys()))
@@ -467,8 +473,19 @@ def status():
                 version = os.environ.get('WORKFLOW_VERSION','unknown'),
                 started_at = app.started_at.strftime("%s"),
                 started_since = (datetime.datetime.now()-app.started_at).seconds,
-                background_jobs = len(app.async_workflows),
+                background_jobs = len([w for w in app.async_workflows if w]),
+                stored_jobs = len(app.async_workflows),
             )
+
+@app.route('/async/delete')
+def async_list():
+    return jsonify(app.async_workflows)
+
+@app.route('/async/clear')
+def async_list():
+    s = app.async_workflows
+    app.async_workflows = dict()
+    return jsonify(s)
 
 @app.route('/async/list')
 def async_list():
