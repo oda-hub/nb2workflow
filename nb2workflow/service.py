@@ -416,6 +416,25 @@ def healthcheck():
     else:
         return make_response(jsonify(issues=issues), 500)
 
+@app.route('/test')
+def test():
+    results = {}
+
+    for template_nba in app.notebook_adapters.values():
+        if template_nba.name.startswith('test_'):
+            nba = NotebookAdapter(template_nba.notebook_fn)
+            exceptions = nba.execute({})
+
+            logger.info("exceptions: %s", repr(exceptions))
+
+            results[template_nba.name] = list(map(repr, exceptions)) # and output notebook
+
+    if all([len(v)==0 for v in results.values()]):
+        return make_response('all is OK: '+"; ".join(results.keys()), 200)
+    else:
+        return make_response(jsonify(results), 500)
+
+
 @app.route('/')
 def root():
     issues=[]
