@@ -419,20 +419,38 @@ def healthcheck():
 @app.route('/test')
 def test():
     results = {}
+    expecting = []
 
     for template_nba in app.notebook_adapters.values():
         if template_nba.name.startswith('test_'):
-            nba = NotebookAdapter(template_nba.notebook_fn)
-            exceptions = nba.execute({})
+            key = template_nba.name
 
-            logger.info("exceptions: %s", repr(exceptions))
+            if key in app.async_workflows:
+                print("found", app.async_workflows[key])
 
-            results[template_nba.name] = list(map(repr, exceptions)) # and output notebook
+                if isinstance(app.async_workflows[key], dict):
+                    workflow_status = app.async_workflows[key].get('workflow_status', 'done')
+                else:
+                    workflow_status = app.async_workflows[key]
 
-    if all([len(v)==0 for v in results.values()]):
-        return make_response('all is OK: '+"; ".join(results.keys()), 200)
+                if workflow_status == 'done':
+                    results[template_nba.name] = app.async_workflows[key]['exceptions'] # and output notebook
+                else:
+                    expecting.append(dict(key = key, workflow_status=workflow_status))
+            else:
+                async_task = AsyncWorkflow(key=key, target=template_nba.name, params=dict(request_parameters={}))
+                async_task.start()
+                app.async_workflows[key]='started'
+                expecting.append(dict(key = key, workflow_status='submitted'))
+
+
+    if expecting != [] :
+        return make_response(jsonify(dict(expecting=expecting)), 201)
     else:
-        return make_response(jsonify(results), 500)
+        if all([v=='[]' for v in results.values()]):
+            return make_response('all is OK: '+"; ".join(results.keys()), 200)
+        else:
+            return make_response(jsonify(results), 500)
 
 
 @app.route('/')
