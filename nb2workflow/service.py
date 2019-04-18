@@ -438,7 +438,7 @@ def test():
                 else:
                     expecting.append(dict(key = key, workflow_status=workflow_status))
             else:
-                async_task = AsyncWorkflow(key=key, target=template_nba.name, params=dict(request_parameters={}))
+                async_task = AsyncWorkflow(key=key, target=template_nba.name, params=dict(request_parameters=dict(location=os.path.dirname(template_nba.notebook_fn))))
                 async_task.start()
                 app.async_workflows[key]='started'
                 expecting.append(dict(key = key, workflow_status='submitted'))
