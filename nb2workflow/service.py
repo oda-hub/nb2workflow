@@ -106,6 +106,14 @@ def make_key():
     """Make a key that includes GET parameters."""
     return request.full_path
 
+
+def serialize_workflow_exception(e):
+    return dict(
+                ename = e[0].ename,
+                evalue = e[0].evalue,
+                edump = e[1][0],
+            )
+
 import threading  
 class AsyncWorkflow(threading.Thread):
     def __init__(self, key, target, params):
@@ -153,7 +161,7 @@ class AsyncWorkflow(threading.Thread):
         logger.error("output: %s",output)
         
         logger.info("updating key %s",self.key)
-        app.async_workflows[self.key] = dict(output=output, exceptions=repr(exceptions))
+        app.async_workflows[self.key] = dict(output=output, exceptions=map(serialize_workflow_exception, exceptions))
 
 
 def workflow(target, background=False, async_request=False):
