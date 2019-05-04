@@ -35,6 +35,13 @@ except Exception as e:
 class WorkflowException(Exception):
     pass
 
+def serialize_workflow_exception(e):
+    return dict(
+                ename = e[0].ename,
+                evalue = e[0].evalue,
+                edump = e[1][0],
+            )
+
     
 def reroute(router, *args, **kwargs):
     workflow_routes = dict([ r.split("=") for r in os.environ.get('WORKFLOW_ROUTES','').split(",") if len(r.split("=")) == 2 ])
@@ -92,7 +99,7 @@ def evaluate(router, *args, **kwargs):
 
         output = nba.extract_output()
 
-        result = dict(output = output, exceptions = exceptions)
+        result = dict(output = output, exceptions = [serialize_workflow_exception(e) for e in exceptions])
 
     elif router.startswith("odahub") or router.startswith("host"):
         if router == "odahub-staging":

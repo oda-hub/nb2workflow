@@ -24,6 +24,10 @@ from flasgger import LazyJSONEncoder, LazyString, Swagger, swag_from
 
 from logging.config import dictConfig
 
+from nb2workflow.workflows import serialize_workflow_exception
+
+import threading  
+
 dictConfig({
     'version': 1,
     'formatters': {'default': {
@@ -107,14 +111,6 @@ def make_key():
     return request.full_path
 
 
-def serialize_workflow_exception(e):
-    return dict(
-                ename = e[0].ename,
-                evalue = e[0].evalue,
-                edump = e[1][0],
-            )
-
-import threading  
 class AsyncWorkflow(threading.Thread):
     def __init__(self, key, target, params):
         self.key = key

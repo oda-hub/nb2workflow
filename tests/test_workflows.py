@@ -32,6 +32,21 @@ def test_workflow_localfile():
     assert result['exceptions'] == []
 
     assert 'spectrum' in result['output']
+
+def test_workflow_exception_localfile():
+    
+    from nb2workflow import workflows
+
+    result = workflows.evaluate("localfile", os.environ.get("TEST_NOTEBOOK_REPO"), "workflow-notebook", scwid="66500220010.001")
+
+    print(result)
+    assert len(result['output']) == 0
+    assert len(result['exceptions']) == 1
+
+    ex = result['exceptions'][0]
+
+    print(ex)
+
     
 
 def test_service(service_fixture, app):
