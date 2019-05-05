@@ -61,6 +61,7 @@ def evaluate(router, *args, **kwargs):
     key = json.dumps((router, args, OrderedDict(sorted(kwargs.items()))))
 
     ntries = kwargs.pop('_ntries', 30)
+    async_request = kwargs.pop('_async_request', 30)
 
 
     if logstasher:
@@ -132,6 +133,15 @@ def evaluate(router, *args, **kwargs):
                     print("raw output:",c.text)
                     logstasher.log(dict(event='failed to decode output',raw_output=c.text, exception=repr(ed)))
                     raise
+
+
+                if 'output' in result and 'workflow_status' in result['output']:
+                    if result['output']['workflow_status'] != "done": # bad
+                        print("waiting for async workflow")
+                        time.sleep(5)
+
+                        ntries -= 1
+                        continue
 
                 break
 
