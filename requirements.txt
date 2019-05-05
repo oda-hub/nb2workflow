@@ -1,6 +1,6 @@
 flask
 pytest-flask
-papermill
+papermill==0.19.1
 ipykernel
 nbconvert
 docker
