@@ -421,6 +421,39 @@ def healthcheck():
     if status['fs_space']['avail_mb'] < 300:
         issues.append("not enough free space: %.5lg Mb left"%status['fs_space']['avail_mb'])
 
+
+    import psutil
+
+    processes = []
+    status['n_open_files'] = 0
+    status['n_processes'] = 0
+    status['n_threads'] = 0
+
+    for proc in psutil.process_iter():
+        try:
+            processes.append(dict(
+                    n_open_files = len(proc.open_files()),
+                ))
+
+            status['n_open_files'] += len(proc.open_files())
+            status['n_processes'] += 1
+            status['n_threads'] += proc.num_threads()
+        except Exception as e:
+            pass
+
+    status['cpu_times'] = dict(psutil.cpu_times_percent()._asdict())
+
+    status['loadavg'] = psutil.getloadavg()
+
+    if max(status['loadavg']) > 10:
+        issues.append("high load avg: %s"%repr(status['loadavg']))
+
+
+    status['disk_usage'] = dict([ (k+"_mb", v/1024/1024) if k!="percent" else (k,v) for k,v in dict(psutil.disk_usage(".")._asdict()).items()])
+
+
+    #status['processes'] = processes
+
     if len(issues)==0:
         return jsonify(dict(summary="all is ok!",status=status))
     else:
