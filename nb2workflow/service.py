@@ -24,6 +24,10 @@ from flasgger import LazyJSONEncoder, LazyString, Swagger, swag_from
 
 from logging.config import dictConfig
 
+from nb2workflow.workflows import serialize_workflow_exception
+
+import threading  
+
 dictConfig({
     'version': 1,
     'formatters': {'default': {
@@ -106,7 +110,7 @@ def make_key():
     """Make a key that includes GET parameters."""
     return request.full_path
 
-import threading  
+
 class AsyncWorkflow(threading.Thread):
     def __init__(self, key, target, params):
         self.key = key
@@ -153,7 +157,7 @@ class AsyncWorkflow(threading.Thread):
         logger.error("output: %s",output)
         
         logger.info("updating key %s",self.key)
-        app.async_workflows[self.key] = dict(output=output, exceptions=repr(exceptions))
+        app.async_workflows[self.key] = dict(output=output, exceptions=map(serialize_workflow_exception, exceptions))
 
 
 def workflow(target, background=False, async_request=False):

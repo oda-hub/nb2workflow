@@ -1,6 +1,6 @@
 flask
 pytest-flask
-papermill
+papermill==0.19.1
 ipykernel
 nbconvert
 docker
@@ -14,3 +14,5 @@ apscheduler
 psutil
 -e git+https://github.com/volodymyrss/flask-caching.git@control_with_response#egg=flask-caching
 -e git+https://github.com/volodymyrss/isdc-client.git@fe4faa1#egg=isdc-client
+diskcache
+psutil
