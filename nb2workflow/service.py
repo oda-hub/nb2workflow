@@ -158,7 +158,7 @@ class AsyncWorkflow(threading.Thread):
         logger.error("output: %s",output)
         
         logger.info("updating key %s",self.key)
-        app.async_workflows[self.key] = dict(output=output, exceptions=map(serialize_workflow_exception, exceptions), jobdir=nba.tmpdir)
+        app.async_workflows[self.key] = dict(output=output, exceptions=list(map(serialize_workflow_exception, exceptions)), jobdir=nba.tmpdir)
 
 
 def workflow(target, background=False, async_request=False):
@@ -478,12 +478,15 @@ def test():
                 print("found", app.async_workflows[key])
 
                 if isinstance(app.async_workflows[key], dict):
+                    print("found result seems a reasonable dict")
                     workflow_status = app.async_workflows[key].get('workflow_status', 'done')
+                    print("workflow_status", workflow_status)
                 else:
                     workflow_status = app.async_workflows[key]
 
                 if workflow_status == 'done':
                     results[template_nba.name] = app.async_workflows[key]['exceptions'] # and output notebook
+                    print("workflow_status is done, results exceptions:", results[template_nba.name])
                 else:
                     expecting.append(dict(key = key, workflow_status=workflow_status))
             else:
@@ -496,9 +499,11 @@ def test():
     if expecting != [] :
         return make_response(jsonify(dict(expecting=expecting)), 201)
     else:
-        if all([v=='[]' for v in results.values()]):
+        if all([v in ['[]', []] for v in results.values()]):
+            print("tests passed")
             return make_response('all is OK: '+"; ".join(results.keys()), 200)
         else:
+            print("tests NOT passed")
             return make_response(jsonify(results), 500)
 
 
