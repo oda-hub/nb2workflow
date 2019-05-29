@@ -410,9 +410,19 @@ def workflow_rdf():
 @app.route('/health')
 def healthcheck():
     issues=[]
+    status = {}
+
+    statvfs = os.statvfs(".")
+    status['fs_space'] = dict(
+        size_mb = statvfs.f_frsize * statvfs.f_blocks / 1024 / 1024,
+        avail_mb = statvfs.f_frsize * statvfs.f_bavail / 1024 / 1024,
+    )
+
+    if status['fs_space']['avail_mb'] < 300:
+        issues.append("not enough free space: %.5lg Mb left"%status['fs_space']['avail_mb'])
 
     if len(issues)==0:
-        return "all is ok!"
+        return jsonify(dict(summary="all is ok!",status=status))
     else:
         return make_response(jsonify(issues=issues), 500)
 
