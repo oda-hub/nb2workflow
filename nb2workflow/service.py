@@ -10,6 +10,7 @@ import requests
 import base64
 import hashlib
 import datetime
+import tempfile
 import nbformat
 
 from io import BytesIO
@@ -157,7 +158,7 @@ class AsyncWorkflow(threading.Thread):
         logger.error("output: %s",output)
         
         logger.info("updating key %s",self.key)
-        app.async_workflows[self.key] = dict(output=output, exceptions=map(serialize_workflow_exception, exceptions))
+        app.async_workflows[self.key] = dict(output=output, exceptions=map(serialize_workflow_exception, exceptions), jobdir=nba.tmpdir)
 
 
 def workflow(target, background=False, async_request=False):
@@ -232,6 +233,7 @@ def workflow(target, background=False, async_request=False):
         r = jsonify(dict(
                     output=output,
                     exceptions=[repr(e) for e in exceptions],
+                    jobdir=nba.tmpdir,
                 ))
 
         return_code = 200
@@ -574,6 +576,41 @@ def async_clear():
 @app.route('/async/list')
 def async_list():
     return jsonify(app.async_workflows)
+
+def get_trace_list():
+    r=[]
+    for d in glob.glob(os.path.join(tempfile.gettempdir(),"tmp*")):
+        r.append(dict(fn=d, mtime=os.stat(d).st_mtime, ctime=os.stat(d).st_ctime))
+    return sorted(r, key=lambda x:['ctime'])
+
+@app.route('/trace/list')
+def trace_list():
+    return jsonify(get_trace_list())
+
+@app.route('/trace/<string:job>')
+def trace_get(job):
+    r = []
+
+    r = []
+    for fn in glob.glob(os.path.join(tempfile.gettempdir(), job,"*_output.ipynb")):
+        r.append(fn)
+
+    return jsonify(r)
+
+
+@app.route('/trace/<string:job>/<string:func>')
+def trace_get_func(job, func):
+    if func == "custom.css":
+        return ""
+
+    from nbconvert.exporters import HTMLExporter
+    exporter = HTMLExporter()
+   
+    fn = os.path.join(tempfile.gettempdir(), job, func+"_output.ipynb")
+
+    output, resources = exporter.from_filename(fn)
+
+    return output
 
 @app.route('/clear-cache')
 def clear_cache():
