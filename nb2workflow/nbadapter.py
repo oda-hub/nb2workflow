@@ -212,6 +212,13 @@ class NotebookAdapter:
 
         #    original = sys.stdout
 
+	import logging
+	logger_=logging.getLogger()
+	logger_.setLevel(logging.DEBUG)
+	handler=logging.StreamHandler()
+	handler.setLevel(logging.DEBUG)
+	logger_.addHandler(handler)
+
         ntries = 10
         while ntries > 0:
             try:
@@ -219,8 +226,8 @@ class NotebookAdapter:
                    self.preproc_notebook_fn,
                    self.output_notebook_fn,
                    parameters = parameters,
-                   progress_bar = progress_bar,
-                   log_output = log_output,
+                   progress_bar = False,
+                   log_output = True,
                    cwd = tmpdir, 
                 )
             except pm.PapermillExecutionError as e:

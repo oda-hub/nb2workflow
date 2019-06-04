@@ -1,6 +1,6 @@
 FROM python:3.6
 
-ARG nb2workflow_revision
+ARG nb2workflow_revision=1.0.2-17-gc0d6226
 RUN git clone https://github.com/volodymyrss/nb2workflow.git /nb2workflow; cd /nb2workflow; git reset --hard $nb2workflow_revision; pip install -r requirements.txt; pip install .; rm -rf /nb2workflow
 
 RUN useradd -ms /bin/bash oda

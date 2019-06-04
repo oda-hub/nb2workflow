@@ -16,3 +16,4 @@ psutil
 -e git+https://github.com/volodymyrss/isdc-client.git@fe4faa1#egg=isdc-client
 diskcache
 psutil
+diskcache

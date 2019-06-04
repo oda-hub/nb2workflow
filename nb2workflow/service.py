@@ -48,7 +48,7 @@ dictConfig({
 verify_tls = False
 
 from nb2workflow.nbadapter import NotebookAdapter, find_notebooks
-from nb2workflow import ontology, publish, schedule
+from nb2workflow import  publish, schedule
     
 logger=logging.getLogger('nb2workflow.service')
 
@@ -387,7 +387,7 @@ def workflow_filename(mode, target, filename):
             return jsonify(rj)
 
         if filename+'_content' in output:
-            content = base64.b64decode(base64.b64decode(output.get(filename+'_content',None)))
+            content = base64.b64decode(output.get(filename+'_content',None))
         else:
             return jsonify({'workflow_status':'anomaly', 'comment': 'searching for key '+filename+'_content'+', available: '+(", ".join(output.keys())), 'base_workflow_result':rj })
 
@@ -538,7 +538,7 @@ def main():
 
     app.notebook_adapters = find_notebooks(args.notebook)
     setup_routes(app)
-    app.service_semantic_signature=ontology.service_semantic_signature(app.notebook_adapters)
+    app.service_semantic_signature=None
 
     if args.publish:
         logger.info("publishing to %s",args.publish)
