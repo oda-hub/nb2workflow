@@ -217,11 +217,11 @@ def workflow(target, background=False, async_request=False):
             try:
                 output=nba.extract_output()
                 if len(output) == 0:
-                    logger.debug("output from notebook is empty, something failed, attempts left:", nretry)
+                    logger.debug("output from notebook is empty, something failed, attempts left: %s", nretry)
                 else:
                     break
             except nbformat.reader.NotJSONError as e:
-                logger.debug("output notebook incomplte", e, "attempts left:", nretry)
+                logger.debug("output notebook incomplte %s attempts left: %i", repr(e), nretry)
 
             nretry-=1
             time.sleep(1)
