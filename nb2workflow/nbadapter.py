@@ -13,6 +13,16 @@ import nbformat
 import logging
 logger=logging.getLogger(__name__)
 
+
+try:
+    import logstash
+    logstasher = logstash.LogStasher()
+except Exception as e:
+    logger.info("unable to setup logstash",repr(e))
+
+    logstasher = None
+
+
 def cast_parameter(x,par):
     logger.debug("cast %s %s",x,par)
     return par['python_type'](x)
@@ -197,6 +207,9 @@ class NotebookAdapter:
                     )
 
     def execute(self, parameters, progress_bar = True, log_output = True):
+        if logstasher is not None:
+            logstasher.log(dict(parameters=parameters, workflow_name=notebook_short_name(self.notebook_fn)))
+
         exceptions = self._execute(parameters, progress_bar, log_output)
 
         return exceptions

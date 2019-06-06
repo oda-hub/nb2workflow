@@ -1,6 +1,7 @@
 import socket
 import json
 import sys
+import os
 
 
 class LogStasher:
