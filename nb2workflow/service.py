@@ -23,27 +23,10 @@ from flask_cors import CORS
 
 from flasgger import LazyJSONEncoder, LazyString, Swagger, swag_from
 
-from logging.config import dictConfig
 
 from nb2workflow.workflows import serialize_workflow_exception
 
 import threading  
-
-dictConfig({
-    'version': 1,
-    'formatters': {'default': {
-        'format': '[%(asctime)s] %(levelname)s in %(module)s: %(message)s',
-    }},
-    'handlers': {'wsgi': {
-        'class': 'logging.StreamHandler',
-  #      'stream': 'ext://flask.logging.wsgi_errors_stream',
-        'formatter': 'default'
-    }},
-    'root': {
-        'level': 'INFO',
-        'handlers': ['wsgi']
-    }
-})
 
 verify_tls = False
 
@@ -529,12 +512,26 @@ def main():
     parser.add_argument('--publish-as', metavar='published url', type=str, default=None)
     parser.add_argument('--profile', metavar='service profile', type=str, default="oda")
     parser.add_argument('--debug', action="store_true")
+    parser.add_argument('--one-shot', metavar='workflow', type=str)
 
     args = parser.parse_args()
 
+    handler = logging.StreamHandler()
+    handler.setLevel(logging.INFO)
+
+    root = logging.getLogger()
+
+    handler = logging.StreamHandler()
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+    root.addHandler(handler)
+
     if args.debug:
-        logging.getLogger("nb2workflow").setLevel(level=logging.DEBUG)
-        logging.getLogger("flask").setLevel(level=logging.DEBUG)
+        root.setLevel(logging.DEBUG)
+        handler.setLevel(logging.DEBUG)
+    else:
+        root.setLevel(logging.INFO)
+        handler.setLevel(logging.INFO)
 
     app.notebook_adapters = find_notebooks(args.notebook)
     setup_routes(app)

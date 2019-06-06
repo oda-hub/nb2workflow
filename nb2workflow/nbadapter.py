@@ -210,7 +210,18 @@ class NotebookAdapter:
         self.inject_output_gathering()
         exceptions = []
 
-        #    original = sys.stdout
+        
+#        root = logging.getLogger()
+#        root.setLevel(logging.DEBUG)
+
+#        handler = logging.StreamHandler()
+#        handler.setLevel(logging.DEBUG)
+#        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+#        handler.setFormatter(formatter)
+#        root.addHandler(handler)
+
+#        root.info("towards excution")
+
 
         ntries = 10
         while ntries > 0:
@@ -219,8 +230,8 @@ class NotebookAdapter:
                    self.preproc_notebook_fn,
                    self.output_notebook_fn,
                    parameters = parameters,
-                   progress_bar = progress_bar,
-                   log_output = log_output,
+                   progress_bar = False,
+                   log_output = True,
                    cwd = tmpdir, 
                 )
             except pm.PapermillExecutionError as e:
