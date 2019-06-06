@@ -4,8 +4,12 @@ import sys
 
 
 class LogStasher:
-    def __init__(self, url):
-        self.url = url
+    def __init__(self, url=None):
+        if url is None:
+            self.url = os.environ.get("LOGSTASH_ENTRYPOINT", open("/cdci-resources/logstash-entrypoint").read().strip())
+        else:
+            self.url = url
+
         self.context = {}
 
     def set_context(self, c):
