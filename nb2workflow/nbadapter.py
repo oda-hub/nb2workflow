@@ -15,10 +15,10 @@ logger=logging.getLogger(__name__)
 
 
 try:
-    import logstash
+    from nb2workflow import logstash
     logstasher = logstash.LogStasher()
 except Exception as e:
-    logger.info("unable to setup logstash",repr(e))
+    logger.warning("unable to setup logstash",repr(e))
 
     logstasher = None
 
@@ -208,7 +208,7 @@ class NotebookAdapter:
 
     def execute(self, parameters, progress_bar = True, log_output = True):
         if logstasher is not None:
-            logstasher.log(dict(parameters=parameters, workflow_name=notebook_short_name(self.notebook_fn)))
+            logstasher.log(dict(origin="nb2workflow.execute", parameters=parameters, workflow_name=notebook_short_name(self.notebook_fn)))
 
         exceptions = self._execute(parameters, progress_bar, log_output)
 
