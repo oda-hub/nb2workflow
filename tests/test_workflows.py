@@ -49,6 +49,7 @@ def test_workflow_exception_localfile():
 
     
 
+@pytest.mark.service
 def test_service(service_fixture, app):
     from nb2workflow import workflows
 
@@ -61,6 +62,7 @@ def test_service(service_fixture, app):
 
     assert 'spectrum' in result['output']
 
+@pytest.mark.service
 def test_workflow_exception_service(service_fixture, app):
     from nb2workflow import workflows
 
@@ -74,6 +76,7 @@ def test_workflow_exception_service(service_fixture, app):
 
     print(ex)
 
+@pytest.mark.service
 def test_async_service(service_fixture, app):
     from nb2workflow import workflows
 
@@ -86,6 +89,7 @@ def test_async_service(service_fixture, app):
 
     assert 'spectrum' in result['output']
 
+@pytest.mark.service
 def test_async_service_exception(service_fixture, app):
     from nb2workflow import workflows
 
