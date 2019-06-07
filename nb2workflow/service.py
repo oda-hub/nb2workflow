@@ -398,6 +398,14 @@ def workflow_rdf():
 
 @app.route('/health')
 def healthcheck():
+    status, issues = current_health()
+
+    if len(issues)==0:
+        return jsonify(dict(summary="all is ok!",status=status))
+    else:
+        return make_response(jsonify(issues=issues, status=status, summary="warning: "+"; ".join(issues)), 500)
+
+def current_health():
     issues=[]
     status = {}
 
@@ -440,13 +448,10 @@ def healthcheck():
 
     status['disk_usage'] = dict([ (k+"_mb", v/1024/1024) if k!="percent" else (k,v) for k,v in dict(psutil.disk_usage(".")._asdict()).items()])
 
-
     #status['processes'] = processes
 
-    if len(issues)==0:
-        return jsonify(dict(summary="all is ok!",status=status))
-    else:
-        return make_response(jsonify(issues=issues), 500)
+    return status, health
+
 
 @app.route('/test')
 def test():

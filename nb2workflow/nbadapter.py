@@ -10,6 +10,9 @@ import subprocess
 import papermill as pm
 import nbformat
 
+from nb2workflow.health import current_health
+from nb2workflow import workflows
+
 import logging
 logger=logging.getLogger(__name__)
 
@@ -207,10 +210,21 @@ class NotebookAdapter:
                     )
 
     def execute(self, parameters, progress_bar = True, log_output = True):
+        t0 = time.time()
         if logstasher is not None:
-            logstasher.log(dict(origin="nb2workflow.execute", parameters=parameters, workflow_name=notebook_short_name(self.notebook_fn)))
+            logstasher.log(dict(origin="nb2workflow.execute", event="starting", parameters=parameters, workflow_name=notebook_short_name(self.notebook_fn), health=current_health()))
 
         exceptions = self._execute(parameters, progress_bar, log_output)
+
+        tspent = time.time() - t0
+        if logstasher is not None:
+            logstasher.log(dict(origin="nb2workflow.execute", 
+                                event="done", 
+                                parameters=parameters, 
+                                workflow_name=notebook_short_name(self.notebook_fn), 
+                                exceptions=list(map(workflows.serialize_workflow_exception, exceptions)),
+                                health=current_health(), 
+                                time_spent=tspent))
 
         return exceptions
 
