@@ -450,7 +450,7 @@ def current_health():
 
     #status['processes'] = processes
 
-    return status, health
+    return status, issues
 
 
 @app.route('/test')
