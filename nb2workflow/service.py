@@ -35,6 +35,10 @@ from nb2workflow import ontology, publish, schedule
     
 logger=logging.getLogger('nb2workflow.service')
 
+import queue
+
+async_queue = queue.Queue()
+
 class ReverseProxied(object):
     def __init__(self, app):
         self.app = app
@@ -94,13 +98,27 @@ def make_key():
     """Make a key that includes GET parameters."""
     return request.full_path
 
+import time
 
-class AsyncWorkflow(threading.Thread):
+class AsyncWorker(threading.Thread):
+    def __init__(self, worker_id):
+        self.worker_id = worker_id
+        super(AsyncWorker, self).__init__()
+
+    def run(self):
+        while True:
+            logger.info("worker_id %s", self.worker_id)
+            async_workflow = async_queue.get(block=True)
+        
+            async_workflow.run()
+    
+            time.sleep(5)        
+
+class AsyncWorkflow:
     def __init__(self, key, target, params):
         self.key = key
         self.target = target
         self.params = params
-        super(AsyncWorkflow, self).__init__()
 
     def run(self):
         try:
@@ -109,6 +127,8 @@ class AsyncWorkflow(threading.Thread):
             print("failed",e)
 
     def _run(self):
+        app.async_workflows[self.key]='started'
+
         template_nba = app.notebook_adapters.get(self.target)
 
         nba = NotebookAdapter(template_nba.notebook_fn)
@@ -179,12 +199,14 @@ def workflow(target, background=False, async_request=False):
     
         if value is None:
             async_task = AsyncWorkflow(key=key, target=target, params=interpreted_parameters)
-            async_task.start()
-            app.async_workflows[key]='started'
+            
+            async_queue.put(async_task)
+
+            app.async_workflows[key]='submitted'
             return make_response(jsonify(workflow_status="submitted", comment="task created"), 201)
 
-        elif value == 'started':
-            return make_response(jsonify(workflow_status="started", comment="task created before"), 201)
+        elif value in ['started', 'submitted']:
+            return make_response(jsonify(workflow_status=value, comment="task is "+value), 201)
 
         else:
             return make_response(jsonify(workflow_status="done", data=value, comment=""), 200)
@@ -448,6 +470,8 @@ def current_health():
 
     status['disk_usage'] = dict([ (k+"_mb", v/1024/1024) if k!="percent" else (k,v) for k,v in dict(psutil.disk_usage(".")._asdict()).items()])
 
+    status['async'] = dict(qsize=async_queue.qsize(), async_workflows_n=len(app.async_workflows))
+
     #status['processes'] = processes
 
     return status, issues
@@ -479,7 +503,9 @@ def test():
                     expecting.append(dict(key = key, workflow_status=workflow_status))
             else:
                 async_task = AsyncWorkflow(key=key, target=template_nba.name, params=dict(request_parameters=dict(location=os.path.dirname(template_nba.notebook_fn))))
-                async_task.start()
+
+                async_queue.put(async_task)
+
                 app.async_workflows[key]='started'
                 expecting.append(dict(key = key, workflow_status='submitted'))
 
@@ -512,6 +538,7 @@ def main():
     parser.add_argument('notebook', metavar='notebook', type=str)
     parser.add_argument('--host', metavar='host', type=str, default="127.0.0.1")
     parser.add_argument('--port', metavar='port', type=int, default=9191)
+    parser.add_argument('--async-workers', metavar='N', type=int, default=3)
     #parser.add_argument('--tmpdir', metavar='tmpdir', type=str, default=None)
     parser.add_argument('--publish', metavar='upstream-url', type=str, default=None)
     parser.add_argument('--publish-as', metavar='published url', type=str, default=None)
@@ -558,6 +585,10 @@ def main():
   #  for rule in app.url_map.iter_rules():
  #       logger.debug("==>> %s %s %s %s",rule,rule.endpoint,rule.__class__,rule.__dict__)
 
+    for worker_i in range(args.async_workers):
+        async_worker = AsyncWorker('default-%i'%worker_i)
+        async_worker.start()
+
     app.run(host=args.host,port=args.port)
 
 @app.route('/status')
@@ -583,6 +614,10 @@ def async_clear():
 @app.route('/async/list')
 def async_list():
     return jsonify(app.async_workflows)
+
+@app.route('/async/qsize')
+def async_qsize():
+    return jsonify(dict(async_qsize=async_queue.qsize()))
 
 def get_trace_list():
     r=[]
