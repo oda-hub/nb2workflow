@@ -13,10 +13,8 @@ cache = Cache('data/default-cache')
 enable_cache = False
 
 try:
-    logstash_entrypoint = os.environ.get("LOGSTASH_ENTRYPOINT", open("/cdci-resources/logstash-entrypoint").read().strip())
-
-    import logstash
-    logstasher = logstash.LogStasher(logstash_entrypoint)
+    from nb2workflow import logstash
+    logstasher = logstash.LogStasher()
 except Exception as e:
     print("unable to setup logstash",repr(e))
 

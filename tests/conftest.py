@@ -80,3 +80,22 @@ def service_fixture(pytestconfig):
     os.kill(p.pid, signal.SIGKILL)
 
 
+
+def pytest_addoption(parser):
+    parser.addoption(
+        "--runservice", action="store_true", default=False, help="run service tests"
+    )
+
+
+def pytest_configure(config):
+    config.addinivalue_line("markers", "service: mark test as relying on local service to run")
+
+
+def pytest_collection_modifyitems(config, items):
+    if config.getoption("--runservice"):
+        # --runslow given in cli: do not skip slow tests
+        return
+    skip_service = pytest.mark.skip(reason="need --runservice option to run")
+    for item in items:
+        if "service" in item.keywords:
+            item.add_marker(skip_service)

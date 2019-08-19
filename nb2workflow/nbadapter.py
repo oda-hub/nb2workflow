@@ -10,8 +10,21 @@ import subprocess
 import papermill as pm
 import nbformat
 
+from nb2workflow.health import current_health
+from nb2workflow import workflows
+
 import logging
 logger=logging.getLogger(__name__)
+
+
+try:
+    from nb2workflow import logstash
+    logstasher = logstash.LogStasher()
+except Exception as e:
+    logger.warning("unable to setup logstash %s",repr(e))
+
+    logstasher = None
+
 
 def cast_parameter(x,par):
     logger.debug("cast %s %s",x,par)
@@ -197,7 +210,21 @@ class NotebookAdapter:
                     )
 
     def execute(self, parameters, progress_bar = True, log_output = True):
+        t0 = time.time()
+        if logstasher is not None:
+            logstasher.log(dict(origin="nb2workflow.execute", event="starting", parameters=parameters, workflow_name=notebook_short_name(self.notebook_fn), health=current_health()))
+
         exceptions = self._execute(parameters, progress_bar, log_output)
+
+        tspent = time.time() - t0
+        if logstasher is not None:
+            logstasher.log(dict(origin="nb2workflow.execute", 
+                                event="done", 
+                                parameters=parameters, 
+                                workflow_name=notebook_short_name(self.notebook_fn), 
+                                exceptions=list(map(workflows.serialize_workflow_exception, exceptions)),
+                                health=current_health(), 
+                                time_spent=tspent))
 
         return exceptions
 
@@ -210,7 +237,18 @@ class NotebookAdapter:
         self.inject_output_gathering()
         exceptions = []
 
-        #    original = sys.stdout
+        
+#        root = logging.getLogger()
+#        root.setLevel(logging.DEBUG)
+
+#        handler = logging.StreamHandler()
+#        handler.setLevel(logging.DEBUG)
+#        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+#        handler.setFormatter(formatter)
+#        root.addHandler(handler)
+
+#        root.info("towards excution")
+
 
         ntries = 10
         while ntries > 0:
@@ -219,8 +257,8 @@ class NotebookAdapter:
                    self.preproc_notebook_fn,
                    self.output_notebook_fn,
                    parameters = parameters,
-                   progress_bar = progress_bar,
-                   log_output = log_output,
+                   progress_bar = False,
+                   log_output = True,
                    cwd = tmpdir, 
                 )
             except pm.PapermillExecutionError as e:
