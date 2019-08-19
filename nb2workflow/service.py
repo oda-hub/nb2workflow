@@ -86,7 +86,8 @@ cache = Cache(config={'CACHE_TYPE': 'simple'})
 
 def create_app():
     app=Flask(__name__)
-    template = dict(swaggerUiPrefix=LazyString(lambda : request.environ.get('HTTP_X_FORWARDED_PREFIX', '')))
+    
+    template = dict(swaggerUiPrefix=LazyString(lambda : request.environ.get('HTTP_X_FORWARDED_PREFIX', None)))
     swagger = Swagger(app, template=template)
     app.wsgi_app = ReverseProxied(app.wsgi_app)
     app.json_encoder = CustomJSONEncoder
