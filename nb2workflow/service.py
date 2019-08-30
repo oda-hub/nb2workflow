@@ -30,12 +30,13 @@ import threading
 
 verify_tls = False
 
-from nb2workflow.nbadapter import NotebookAdapter, find_notebooks
+from nb2workflow.nbadapter import NotebookAdapter, find_notebooks, PapermillWorkflowIncomplete
 from nb2workflow import ontology, publish, schedule
     
 logger=logging.getLogger('nb2workflow.service')
 
 import queue
+
 
 async_queue = queue.Queue()
 
@@ -127,14 +128,43 @@ class AsyncWorkflow:
         except Exception as e:
             print("failed",e)
 
+    def note(self, *args, **kwargs):
+        if not hasattr(self, 'notes'):
+            self.notes = []
+
+        self.notes.append(dict(
+                            time=time.time(),
+                            data=(args,kwargs),
+                        ))
+
+    blocked_until = 0
+
     def _run(self):
+        if self.blocked_until > time.time():
+            logger.info("workflow still blocked, waiting %i", self.blocked_until - time.time())
+            async_queue.put(self)
+            app.async_workflows[self.key]='submitted'
+            return
+
         app.async_workflows[self.key]='started'
 
         template_nba = app.notebook_adapters.get(self.target)
 
         nba = NotebookAdapter(template_nba.notebook_fn)
 
-        exceptions = nba.execute(self.params['request_parameters'])
+        try:
+            exceptions = nba.execute(self.params['request_parameters'])
+        except PapermillWorkflowIncomplete as e:
+            logger.info("found incomplete workflow: %s, rescheduling", repr(e))
+
+            self.note("rescheduled")
+
+            self.blocked_until = time.time() + 10
+
+            async_queue.put(self)
+            app.async_workflows[self.key]='submitted'
+            return
+
 
         logger.info("exceptions: %s",repr(exceptions))
 

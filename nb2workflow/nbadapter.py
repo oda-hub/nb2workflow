@@ -26,6 +26,10 @@ except Exception as e:
     logstasher = None
 
 
+class PapermillWorkflowIncomplete(Exception):
+    pass
+
+
 def cast_parameter(x,par):
     logger.debug("cast %s %s",x,par)
     return par['python_type'](x)
@@ -265,6 +269,11 @@ class NotebookAdapter:
                 exceptions.append([e,e.args])
                 logger.info(e)
                 logger.info(e.args)
+            
+                if e.ename == "WorkflowIncomplete":
+                    logger.info("detected incomplete workflow")
+                    raise  PapermillWorkflowIncomplete()
+
             except nbformat.reader.NotJSONError:
                 ntries -= 1
                 logger.info("retrying...", ntries)
