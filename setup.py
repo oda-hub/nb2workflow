@@ -1,4 +1,4 @@
-from distutils.core import setup
+from setuptools import setup
 
 setup(name='nb2workflow',
       version='1.0.1',
@@ -11,8 +11,8 @@ setup(name='nb2workflow',
 
       entry_points={
           'console_scripts': [
-            'nb2service = nb2workflow.service:main',
-            'nb2worker = nb2workflow.container:main',
+            'nb2service=nb2workflow.service:main',
+            'nb2worker=nb2workflow.container:main',
             ]
       },
 
