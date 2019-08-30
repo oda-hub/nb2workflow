@@ -1,18 +1,30 @@
-flask
-pytest-flask
-papermill==0.19.1
-ipykernel
-nbconvert
-docker
-checksumdir
-flask-cors
-flasgger
-owlready2==0.11
-rdflib
-python-consul
-apscheduler
-psutil
+################################################################################
+# This requirements file has been automatically generated from `Pipfile` with
+# `pipenv-to-requirements`
+#
+#
+# This has been done to maintain backward compatibility with tools and services
+# that do not support `Pipfile` yet.
+#
+# Do NOT edit it directly, use `pipenv install [-d]` to modify `Pipfile` and
+# `Pipfile.lock` and then regenerate `requirements*.txt`.
+################################################################################
+
 -e git+https://github.com/volodymyrss/flask-caching.git@control_with_response#egg=flask-caching
 -e git+https://github.com/volodymyrss/isdc-client.git@fe4faa1#egg=isdc-client
+apscheduler
+checksumdir
 diskcache
+docker
+flasgger
+flask
+flask-cors
+ipykernel
+nbconvert==5.5
+owlready2==0.11
+papermill==0.19.1
 psutil
+pytest-flask
+python-consul
+rdflib
+requests
