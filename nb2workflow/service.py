@@ -645,7 +645,7 @@ def async_clear():
 
 @app.route('/async/size')
 def async_list():
-    return jsonify({'async_listsize': len(app.async_workflows}))
+    return jsonify({'async_size': len(app.async_workflows}))
 
 @app.route('/async/list')
 def async_list():
