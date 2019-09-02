@@ -12,6 +12,7 @@ import hashlib
 import datetime
 import tempfile
 import nbformat
+import ruamel.yaml as yaml
 
 from io import BytesIO
 
@@ -650,15 +651,36 @@ def async_list():
 def async_qsize():
     return jsonify(dict(async_qsize=async_queue.qsize()))
 
-def get_trace_list():
+def get_trace_list(since=None):
     r=[]
-    for d in glob.glob(os.path.join(tempfile.gettempdir(),"tmp*")):
-        r.append(dict(fn=d, mtime=os.stat(d).st_mtime, ctime=os.stat(d).st_ctime))
+    for d in glob.glob(os.path.join(tempfile.gettempdir(),"nb2w-*")):
+        if since is not None and time.time() - os.stat(d).st_mtime > since:
+            continue
+                        
+        try:
+            summary=yaml.load(open(os.path.join(d,"summary.yaml")))
+        except Exception as e:
+            summary="unable to load: "+repr(e)
+
+        r.append(
+                    dict(
+                        fn=d, 
+                        mtime=os.stat(d).st_mtime, 
+                        ctime=os.stat(d).st_ctime,
+                        summary=summary,
+                    )
+                )
+
     return sorted(r, key=lambda x:['ctime'])
 
 @app.route('/trace/list')
 def trace_list():
-    return jsonify(get_trace_list())
+    f = request.args.get('format', 'json')
+
+    if f == 'html':
+        return "not implemented"
+    else:
+        return jsonify(get_trace_list())
 
 @app.route('/trace/<string:job>')
 def trace_get(job):

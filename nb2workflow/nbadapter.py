@@ -2,10 +2,12 @@ from ast import literal_eval
 import os
 import sys
 import glob
+import yaml 
 import re
 import time
 import tempfile
 import subprocess
+import ruamel.yaml as yaml
 
 import papermill as pm
 import nbformat
@@ -145,14 +147,19 @@ class NotebookAdapter:
         logger.debug("notebook adapter for %s",notebook_fn)
         logger.debug(self.extract_parameters())
 
+
     def new_tmpdir(self):
-        self._tmpdir = tempfile.mkdtemp()
-        return self._tmpdir
+        print("tmpdir was", getattr(self,'_tmpdir',None))
+        self._tmpdir = None
+        new_tmpdir = self.tmpdir
+        print("tmpdir became", self._tmpdir)
+
+        return self.tmpdir
 
     @property
     def tmpdir(self):
-        if not hasattr(self,'_tmpdir'):
-            self._tmpdir = tempfile.mkdtemp()
+        if getattr(self,'_tmpdir', None) is None:
+            self._tmpdir = tempfile.mkdtemp(prefix="nb2w-")
         return self._tmpdir
     
     @property
@@ -213,10 +220,30 @@ class NotebookAdapter:
                         request_parameters=request_parameters,
                     )
 
+    def update_summary(self, **d):
+        if not hasattr(self, '_summary'):
+            self._summary = dict(
+                                name=self.name,
+                                initialized=dict(s_epoch=time.time(), isot=time.strftime("%Y-%m-%d %H:%M:%S")),
+                            )
+
+        state=d.pop('state', None)
+
+        self._summary.update(d)
+        
+        if state is not None:
+            self._summary['state'] = self._summary.get("state",[]) + [(time.time(), state)]
+
+        fn = os.path.join(self.tmpdir, "summary.yaml")
+        yaml.dump(self._summary, open(fn, "w"))
+
+        
+
     def execute(self, parameters, progress_bar = True, log_output = True):
         t0 = time.time()
         if logstasher is not None:
             logstasher.log(dict(origin="nb2workflow.execute", event="starting", parameters=parameters, workflow_name=notebook_short_name(self.notebook_fn), health=current_health()))
+
 
         exceptions = self._execute(parameters, progress_bar, log_output)
 
@@ -234,9 +261,12 @@ class NotebookAdapter:
 
     def _execute(self, parameters, progress_bar = True, log_output = True):
         tmpdir = self.new_tmpdir()
+
         logger.info("new tmpdir: %s", tmpdir)
 
         logger.info(subprocess.check_output(["git","clone",os.path.dirname(os.path.realpath(self.notebook_fn)), tmpdir]))
+        
+        self.update_summary(state="started", parameters=parameters)
 
         self.inject_output_gathering()
         exceptions = []
@@ -272,6 +302,7 @@ class NotebookAdapter:
             
                 if e.ename == "WorkflowIncomplete":
                     logger.info("detected incomplete workflow")
+                    self.update_summmary(state="incomplete dependency", dependency=e)
                     raise  PapermillWorkflowIncomplete()
 
             except nbformat.reader.NotJSONError:
@@ -281,6 +312,11 @@ class NotebookAdapter:
                 continue   
 
             break
+
+        if len(exceptions) == 0:
+            self.update_summary(state="done")
+        else:
+            self.update_summary(state="failed", exceptions=exceptions)
 
         return exceptions
 
