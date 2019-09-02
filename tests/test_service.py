@@ -41,7 +41,7 @@ def test_service(client):
 
     open("output.png","wb").write(base64.b64decode(r.json['output']['spectrum_png_content']))
 
-def test_trace(client):
+# trace
     r=client.get('/api/v1.0/options')
     
     service_name,service_signature=sorted(r.json.items())[0]
