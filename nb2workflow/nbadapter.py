@@ -316,7 +316,7 @@ class NotebookAdapter:
         if len(exceptions) == 0:
             self.update_summary(state="done")
         else:
-            self.update_summary(state="failed", exceptions=exceptions)
+            self.update_summary(state="failed", exceptions=list(map(workflows.serialize_workflow_exception, exceptions)))
 
         return exceptions
 
