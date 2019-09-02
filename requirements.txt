@@ -28,3 +28,4 @@ pytest-flask
 python-consul
 rdflib
 requests
+ruamel.yaml
