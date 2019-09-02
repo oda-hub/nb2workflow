@@ -302,7 +302,7 @@ class NotebookAdapter:
             
                 if e.ename == "WorkflowIncomplete":
                     logger.info("detected incomplete workflow")
-                    self.update_summmary(state="incomplete dependency", dependency=e)
+                    self.update_summary(state="incomplete dependency", dependency=e)
                     raise  PapermillWorkflowIncomplete()
 
             except nbformat.reader.NotJSONError:
