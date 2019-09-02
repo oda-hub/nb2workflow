@@ -643,6 +643,10 @@ def async_clear():
     app.async_workflows = dict()
     return jsonify(s)
 
+@app.route('/async/size')
+def async_list():
+    return jsonify({'async_listsize': len(app.async_workflows}))
+
 @app.route('/async/list')
 def async_list():
     return jsonify(app.async_workflows)
@@ -672,6 +676,11 @@ def get_trace_list(since=None):
                 )
 
     return sorted(r, key=lambda x:['ctime'])
+
+@app.route('/trace/size')
+def trace_list():
+    return jsonify({"trace_size":len(glob.glob(os.path.join(tempfile.gettempdir(),"nb2w-*")))})
+
 
 @app.route('/trace/list')
 def trace_list():
