@@ -418,7 +418,7 @@ def nbrun(nb_source, inp):
     if len(nbas) > 1:
         nba = nbas[inp.pop('notebook')]
     elif len(nbas) == 1:
-        nba = nbas.values()[0]
+        nba = list(nbas.values())[0]
 
     r = nba.interpret_parameters(inp)
     
@@ -427,7 +427,7 @@ def nbrun(nb_source, inp):
 
     pars = r['request_parameters']
 
-    logging.info("found parameters %s", pars)
+    logging.info("found parameters %s", repr(pars))
 
     nba.execute(pars)
 
@@ -443,9 +443,16 @@ def main():
     parser.add_argument('notebook', metavar='notebook', type=str)
     parser.add_argument('--debug', action="store_true")
     
-    parser.add_argument('--inp', nargs="+", action="append")
+    parser.add_argument('inputs', nargs=argparse.REMAINDER)
 
     args = parser.parse_args()
+
+    inputs={}
+    for i in args.inputs:
+        if not i.startswith("--inp-"): continue
+        k,v = i.replace('--inp-','').split("=")
+        inputs[k] = v
+        
 
     handler = logging.StreamHandler()
     handler.setLevel(logging.INFO)
@@ -465,7 +472,7 @@ def main():
         handler.setLevel(logging.INFO)
 
 
-    nbrun(args.notebook, dict(i.split("=", 1) for i in args.inp[0]))
+    nbrun(args.notebook, inputs)
 
 
 if __name__ == "__main__":

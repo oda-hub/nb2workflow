@@ -7,6 +7,7 @@ import docker
 import shutil
 import tempfile
 import checksumdir
+import subprocess
  
 def build_python(dockefile):
     dockerfile.append("RUN yum install -y python")
@@ -21,7 +22,7 @@ def import_repo(repo_source,target):
 
     return checksumdir.dirhash(target)
 
-def prepare_image(repo_source,from_image, service=True):
+def prepare_image(repo_source, from_image, service=True, nb2w_path=None):
     tempdir=tempfile.mkdtemp()
 
     rel_repo_path="repo"
@@ -38,8 +39,15 @@ def prepare_image(repo_source,from_image, service=True):
     dockerfile.append("ADD $REPO_PATH /repo")
     dockerfile.append("RUN touch /repo-hash-{}; pip install -r /repo/requirements.txt".format(repo_hash))
     dockerfile.append("RUN useradd -ms /bin/bash oda")
-    dockerfile.append("ARG nb2workflow_revision".format(from_image))
-    dockerfile.append("RUN git clone https://github.com/volodymyrss/nb2workflow.git /nb2workflow; cd /nb2workflow; git reset --hard $nb2workflow_revision; pip install -r requirements.txt; pip install .; rm -rf /nb2workflow") 
+
+    if nb2w_path is None:
+        dockerfile.append("ARG nb2workflow_revision".format(from_image))
+        dockerfile.append("RUN git clone https://github.com/volodymyrss/nb2workflow.git /nb2workflow; cd /nb2workflow; git reset --hard $nb2workflow_revision; pip install -r requirements.txt; pip install .; rm -rf /nb2workflow") 
+    else:
+        subprocess.check_output(["git","clone", nb2w_path, os.path.join(tempdir,"nb2workflow")])
+        dockerfile.append("ADD ./nb2workflow /nb2workflow")
+        dockerfile.append("RUN cd /nb2workflow; pip install -r requirements.txt; pip install .") 
+
     dockerfile.append("USER oda")
     dockerfile.append("WORKDIR /workdir")
 
@@ -86,6 +94,7 @@ def main():
     parser.add_argument('--host', metavar='host', type=str, default="127.0.0.1")
     parser.add_argument('--port', metavar='port', type=int, default=9191)
     parser.add_argument('--nb2wrev', metavar='TAG', type=str, default="master")
+    parser.add_argument('--nb2wpath', metavar='PATH', type=str)
     parser.add_argument('--volume', metavar='mount:mount', type=str, nargs="*")
     parser.add_argument('--store-dockerfile', metavar='location', type=str, default=None)
 
@@ -98,7 +107,7 @@ def main():
     if args.tag_image == "":
         tag_image=os.path.basename(os.path.abspath(repo_path))
 
-    tempdir=prepare_image(repo_path,args.from_image, service=not args.job)
+    tempdir=prepare_image(repo_path,args.from_image, service=not args.job, nb2w_path=args.nb2wpath)
 
     if args.store_dockerfile:
         shutil.copy(os.path.join(tempdir,"Dockerfile"),args.store_dockerfile)

@@ -39,7 +39,7 @@ def nb2cwl(notebook_fn, cwl_fn):
                          param_format=None,
                          streamable=None, 
                          doc=None, 
-                         input_binding=dict(prefix="--inp="+par['name']+"=", separate=False), 
+                         input_binding=dict(prefix="--inp-"+par['name']+"=", separate=False), 
                          default=None)
         )
 
