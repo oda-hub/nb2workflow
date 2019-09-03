@@ -1,8 +1,12 @@
 import io
 import logging
+import argparse
+
+import nb2workflow.nbadapter as nbadapter
 
 logger = logging.getLogger(__name__)
 
+import rdflib
 import owlready2
     
 xsd = owlready2.get_ontology("https://www.w3.org/2001/XMLSchema#").load()
@@ -59,7 +63,7 @@ def function_semantic_signature(dda, function_name, parameters, output):
 
     
 
-def service_semantic_signature(nbas):
+def service_semantic_signature(nbas, format="rdfxml"):
     dda = get_dda()
     dda.graph.destroy()
     dda = get_dda()
@@ -78,7 +82,7 @@ def service_semantic_signature(nbas):
                                     output=nba.extract_output_declarations()))
 
     f=io.BytesIO()
-    dda.save(f)
+    dda.save(f, format=format)
     owl_str=f.getvalue().decode("unicode_escape")
     owl_str = bytes(owl_str, "utf-8").decode("unicode_escape")
 
@@ -86,3 +90,52 @@ def service_semantic_signature(nbas):
     
     return str(owl_str)
 
+
+
+
+def nb2rdf(notebook_fn, rdf_fn):
+    nba = nbadapter.NotebookAdapter(notebook_fn)
+
+    with open(rdf_fn, "wb") as f:
+        rdf = service_semantic_signature(dict(local=nba))
+
+        G = rdflib.Graph()
+        G.parse(data=rdf, format="xml")
+        rdf = G.serialize(format="turtle")
+
+        logging.getLogger().info("rdf: "+rdf.decode())
+        f.write(rdf)
+
+
+def main():
+    parser = argparse.ArgumentParser(description='Process some integers.')
+    parser.add_argument('notebook', metavar='notebook', type=str)
+    parser.add_argument('rdf', metavar='rdf', type=str)
+    parser.add_argument('--publish', metavar='upstream-url', type=str, default=None)
+    parser.add_argument('--publish-as', metavar='published url', type=str, default=None)
+    parser.add_argument('--debug', action="store_true")
+
+    args = parser.parse_args()
+
+    handler = logging.StreamHandler()
+    handler.setLevel(logging.INFO)
+
+    root = logging.getLogger()
+
+    handler = logging.StreamHandler()
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+    root.addHandler(handler)
+
+    if args.debug:
+        root.setLevel(logging.DEBUG)
+        handler.setLevel(logging.DEBUG)
+    else:
+        root.setLevel(logging.INFO)
+        handler.setLevel(logging.INFO)
+
+    nb2rdf(args.notebook, args.rdf)
+
+
+if __name__ == "__main__":
+    main()

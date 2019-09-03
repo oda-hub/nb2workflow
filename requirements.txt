@@ -29,3 +29,4 @@ python-consul
 rdflib
 requests
 ruamel.yaml
+cwlgen

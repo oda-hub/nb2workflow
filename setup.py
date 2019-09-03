@@ -13,6 +13,8 @@ setup(name='nb2workflow',
           'console_scripts': [
             'nb2service=nb2workflow.service:main',
             'nb2worker=nb2workflow.container:main',
+            'nb2cwl=nb2workflow.cwl:main',
+            'nb2rdf=nb2workflow.ontology:main',
             ]
       },
 
