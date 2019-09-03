@@ -21,7 +21,7 @@ def import_repo(repo_source,target):
 
     return checksumdir.dirhash(target)
 
-def prepare_image(repo_source,from_image):
+def prepare_image(repo_source,from_image, service=True):
     tempdir=tempfile.mkdtemp()
 
     rel_repo_path="repo"
@@ -42,7 +42,11 @@ def prepare_image(repo_source,from_image):
     dockerfile.append("RUN useradd -ms /bin/bash oda")
     dockerfile.append("USER oda")
     dockerfile.append("WORKDIR /workdir")
-    dockerfile.append("ENTRYPOINT nb2service /repo/ --host 0.0.0.0" )
+
+    if service:
+        dockerfile.append("ENTRYPOINT nb2service /repo/ --host 0.0.0.0" )
+    else:
+        dockerfile.append("ENTRYPOINT nbrun /repo/" )
 
     open(os.path.join(tempdir,"Dockerfile"),"w").write(("\n".join(dockerfile))+"\n")
 
@@ -73,9 +77,9 @@ def main():
 
     parser = argparse.ArgumentParser(description='Process some integers.')
     parser.add_argument('repo', metavar='repo', type=str)
-    parser.add_argument('--run-job', action='store_true')
     parser.add_argument('--run', action='store_true')
     parser.add_argument('--build', action='store_true')
+    parser.add_argument('--job', action='store_true')
     parser.add_argument('--name', metavar='TAG', type=str, default="nb2worker")
     parser.add_argument('--from-image', metavar='FROM IMAGE', type=str, default="python:3.6")
     parser.add_argument('--tag-image', metavar='TAG', type=str, default="")
@@ -94,7 +98,7 @@ def main():
     if args.tag_image == "":
         tag_image=os.path.basename(os.path.abspath(repo_path))
 
-    tempdir=prepare_image(repo_path,args.from_image)
+    tempdir=prepare_image(repo_path,args.from_image, service=not args.job)
 
     if args.store_dockerfile:
         shutil.copy(os.path.join(tempdir,"Dockerfile"),args.store_dockerfile)
@@ -109,39 +113,38 @@ def main():
         print("built:",build_result)
 
         if args.run:
-            
-            print("running",tag_image,"service on",args.port)
-            cli=docker.from_env()
-            c=cli.containers.run(
-                tag_image,
-                user=os.getuid(),
-                ports={ 9191: (args.host, args.port) },
-                name=args.name,
-                detach=True,
-                volumes=dict([
-                    (os.getcwd(),{"bind":"/workdir","mode":"rw"}),
-                ]+[v.split(":",1) for v in args.volume]),
-            )
+            if args.job:
+                print("running",tag_image,"service on",args.port)
+                cli=docker.from_env()
+                c=cli.containers.run(
+                    tag_image,
+                    user=os.getuid(),
+                    ports={ 9191: (args.host, args.port) },
+                    name=args.name,
+                    detach=True,
+                    volumes=dict([
+                        (os.getcwd(),{"bind":"/workdir","mode":"rw"}),
+                    ]+[v.split(":",1) for v in args.volume]),
+                )
 
-            for r in c.attach(stream=True):
-                print(c,r.strip())
-        
-        if args.run_job:
-            
-            print("running",tag_image)
-            cli=docker.from_env()
-            c=cli.containers.run(
-                tag_image,
-                user=os.getuid(),
-                name=args.name,
-                detach=True,
-                volumes=dict([
-                    (os.getcwd(),{"bind":"/workdir","mode":"rw"}),
-                ]+[v.split(":",1) for v in args.volume]),
-            )
+                for r in c.attach(stream=True):
+                    print(c,r.strip())
+            else:
+                print("running",tag_image)
+                cli=docker.from_env()
+                c=cli.containers.run(
+                    tag_image,
+                    user=os.getuid(),
+                    name=args.name,
+                    detach=True,
+                    volumes=dict([
+                        (os.getcwd(),{"bind":"/workdir","mode":"rw"}),
+                    ]+[v.split(":",1) for v in args.volume]),
+                    entrypoint=["nbrun", "/repo/*ipynb"],
+                )
 
-            for r in c.attach(stream=True):
-                print(c,r.strip())
+                for r in c.attach(stream=True):
+                    print(c,r.strip())
 
 if __name__=="__main__":
     main()

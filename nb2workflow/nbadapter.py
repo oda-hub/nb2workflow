@@ -411,9 +411,15 @@ def find_notebooks(source):
     return notebook_adapters
 
 
-def nbrun(nb_fn, inp):
-    nba = NotebookAdapter(nb_fn)
-    
+def nbrun(nb_source, inp):
+
+    nbas = find_notebooks(nb_source)
+
+    if len(nbas) > 1:
+        nba = nbas[inp.pop('notebook')]
+    elif len(nbas) == 1:
+        nba = nbas.values()[0]
+
     r = nba.interpret_parameters(inp)
     
     if r['issues'] != []:
