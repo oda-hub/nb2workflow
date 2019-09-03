@@ -53,8 +53,9 @@ def prepare_image(repo_source, from_image, service=True, nb2w_path=None):
 
     if service:
         dockerfile.append("ENTRYPOINT nb2service /repo/ --host 0.0.0.0" )
-    else:
-        dockerfile.append('ENTRYPOINT ["nbrun", "/repo/"]' )
+    #else:
+        #dockerfile.append('ENTRYPOINT ["bash"]' )
+        #dockerfile.append('ENTRYPOINT ["nbrun", "/repo/"]' )
 
     open(os.path.join(tempdir,"Dockerfile"),"w").write(("\n".join(dockerfile))+"\n")
 
