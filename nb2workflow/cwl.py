@@ -31,7 +31,7 @@ def nb2cwl_container(image, notebook_fn, cwl_fn):
 
     tool_object.arguments=["-m", "nb2workflow.nbadapter", "/repo/"+notebook_name]
 
-    tool_object.hints.append(cwlgen.DockerRequirement(docker_pull=image))
+    tool_object.requirements.append(cwlgen.DockerRequirement(docker_pull=image))
 
 
     for par in nba.extract_parameters().values():
