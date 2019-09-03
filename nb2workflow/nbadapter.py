@@ -427,7 +427,7 @@ def nbrun(nb_source, inp):
 
     pars = r['request_parameters']
 
-    logging.info("found parameters", pars)
+    logging.info("found parameters %s", pars)
 
     nba.execute(pars)
 
