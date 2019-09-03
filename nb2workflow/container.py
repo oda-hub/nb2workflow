@@ -122,6 +122,14 @@ def main():
 
         print("built:",build_result)
 
+        if args.job:
+            from nb2workflow.cwl import nb2cwl_container
+
+            from nb2workflow.nbadapter import find_notebooks
+            
+            for n, nba in find_notebooks(repo_path).items():
+                nb2cwl_container(tag_image, nba.notebook_fn, n+".cwl")
+
         if args.run:
             if not args.job:
                 print("running",tag_image,"service on",args.port)
@@ -155,6 +163,7 @@ def main():
 
                 for r in c.attach(stream=True):
                     print(c,r.strip())
+
 
 if __name__=="__main__":
     main()

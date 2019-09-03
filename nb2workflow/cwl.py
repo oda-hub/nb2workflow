@@ -1,5 +1,6 @@
 import argparse
 import logging
+import os
 
 import cwlgen
 
@@ -10,6 +11,58 @@ def python_type2cwl_type(pt):
         return 'string'
 
     return pt.__name__
+
+def nb2cwl_container(image, notebook_fn, cwl_fn):
+    nba = nbadapter.NotebookAdapter(notebook_fn)
+
+    
+    tool_object = cwlgen.CommandLineTool(
+                    tool_id=nba.name, 
+                    base_command="python",
+                    label=None, 
+                    doc=None,
+                    cwl_version="v1.0", 
+                    stdin=None,
+                    stderr=None, 
+                    stdout=None, 
+                    path=None)
+
+    notebook_name = os.path.basename(notebook_fn)
+
+    tool_object.arguments=["-m", "nb2workflow.nbadapter", "/repo/"+notebook_name]
+
+    tool_object.hints.append(cwlgen.DockerRequirement(docker_pull=image))
+
+
+    for par in nba.extract_parameters().values():
+        tool_object.inputs.append(
+            cwlgen.CommandInputParameter(
+                         par['name'], 
+                         param_type=python_type2cwl_type(par['python_type']),
+                         label=None, 
+                         secondary_files=None, 
+                         param_format=None,
+                         streamable=None, 
+                         doc=None, 
+                         input_binding=dict(prefix="--inp-"+par['name']+"=", separate=False), 
+                         default=None)
+        )
+
+    #tool_object.outputs.append(
+    #    cwlgen.CommandOutputParameter('log',
+    #                                  param_type='stdout',
+    #                                  doc='log')
+    #)
+
+    for n, o in nba.extract_output_declarations().items():
+        tool_object.outputs.append(
+            cwlgen.CommandOutputParameter(n,
+                                          param_type='string',
+                                          doc='lines found with the pattern')
+        )
+
+    tool_object.export()
+    tool_object.export(cwl_fn)
 
 def nb2cwl(notebook_fn, cwl_fn):
     nba = nbadapter.NotebookAdapter(notebook_fn)
@@ -57,7 +110,6 @@ def nb2cwl(notebook_fn, cwl_fn):
         )
 
     tool_object.export()
-
     tool_object.export(cwl_fn)
 
 def main():
@@ -88,7 +140,10 @@ def main():
         root.setLevel(logging.INFO)
         handler.setLevel(logging.INFO)
 
-    nb2cwl(args.notebook, args.cwl)
+    if args.container:
+        nb2cwl_container(os.path.basename(args.notebook), args.cwl)
+    else:
+        nb2cwl(args.image, args.notebook, args.cwl)
 
 
 if __name__ == "__main__":
