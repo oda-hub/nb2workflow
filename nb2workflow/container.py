@@ -38,15 +38,15 @@ def prepare_image(repo_source,from_image, service=True):
     dockerfile.append("ADD $REPO_PATH /repo")
     dockerfile.append("RUN touch /repo-hash-{}; pip install -r /repo/requirements.txt".format(repo_hash))
     dockerfile.append("RUN useradd -ms /bin/bash oda")
-    dockerfile.append("USER oda")
     dockerfile.append("ARG nb2workflow_revision".format(from_image))
     dockerfile.append("RUN git clone https://github.com/volodymyrss/nb2workflow.git /nb2workflow; cd /nb2workflow; git reset --hard $nb2workflow_revision; pip install -r requirements.txt; pip install .; rm -rf /nb2workflow") 
+    dockerfile.append("USER oda")
     dockerfile.append("WORKDIR /workdir")
 
     if service:
         dockerfile.append("ENTRYPOINT nb2service /repo/ --host 0.0.0.0" )
     else:
-        dockerfile.append("ENTRYPOINT nbrun /repo/" )
+        dockerfile.append('ENTRYPOINT ["nbrun", "/repo/"]' )
 
     open(os.path.join(tempdir,"Dockerfile"),"w").write(("\n".join(dockerfile))+"\n")
 
