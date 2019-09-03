@@ -10,7 +10,7 @@
 # `Pipfile.lock` and then regenerate `requirements*.txt`.
 ################################################################################
 
--e git+https://github.com/volodymyrss/flask-caching.git@control_with_response#egg=flask-caching
+flask-caching
 -e git+https://github.com/volodymyrss/isdc-client.git@fe4faa1#egg=isdc-client
 apscheduler
 checksumdir

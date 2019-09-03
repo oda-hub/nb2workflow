@@ -58,11 +58,14 @@ def build_image(tempdir,tag_image,nb2workflow_revision):
                 tag=tag_image,
                 quiet=False,
                 buildargs=dict(nb2workflow_revision=nb2workflow_revision),
-                stream=True,
+               # stream=True,
                 rm=True,
             )
     for k in r:
-        print(json.loads(k)['stream'].strip())
+        try:
+            print(json.loads(k)['stream'].strip())
+        except:
+            print(k)
 
     return True
 
@@ -70,6 +73,7 @@ def main():
 
     parser = argparse.ArgumentParser(description='Process some integers.')
     parser.add_argument('repo', metavar='repo', type=str)
+    parser.add_argument('--run-job', action='store_true')
     parser.add_argument('--run', action='store_true')
     parser.add_argument('--build', action='store_true')
     parser.add_argument('--name', metavar='TAG', type=str, default="nb2worker")
@@ -112,6 +116,23 @@ def main():
                 tag_image,
                 user=os.getuid(),
                 ports={ 9191: (args.host, args.port) },
+                name=args.name,
+                detach=True,
+                volumes=dict([
+                    (os.getcwd(),{"bind":"/workdir","mode":"rw"}),
+                ]+[v.split(":",1) for v in args.volume]),
+            )
+
+            for r in c.attach(stream=True):
+                print(c,r.strip())
+        
+        if args.run_job:
+            
+            print("running",tag_image)
+            cli=docker.from_env()
+            c=cli.containers.run(
+                tag_image,
+                user=os.getuid(),
                 name=args.name,
                 detach=True,
                 volumes=dict([
