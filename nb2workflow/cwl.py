@@ -16,8 +16,8 @@ def nb2cwl(notebook_fn, cwl_fn):
 
     
     tool_object = cwlgen.CommandLineTool(
-                    tool_id="papermill", 
-                    base_command="echo", 
+                    tool_id=nba.name, 
+                    base_command="python",
                     label=None, 
                     doc=None,
                     cwl_version="v1.0", 
@@ -25,6 +25,9 @@ def nb2cwl(notebook_fn, cwl_fn):
                     stderr=None, 
                     stdout=None, 
                     path=None)
+
+    tool_object.arguments=["-m","nb2workflow.nbadapter",notebook_fn]
+
 
     for par in nba.extract_parameters().values():
         tool_object.inputs.append(
@@ -36,15 +39,15 @@ def nb2cwl(notebook_fn, cwl_fn):
                          param_format=None,
                          streamable=None, 
                          doc=None, 
-                         input_binding=None, 
+                         input_binding=dict(prefix="--inp="+par['name']+"=", separate=False), 
                          default=None)
         )
 
-    tool_object.outputs.append(
-        cwlgen.CommandOutputParameter('log',
-                                      param_type='stdout',
-                                      doc='log')
-    )
+    #tool_object.outputs.append(
+    #    cwlgen.CommandOutputParameter('log',
+    #                                  param_type='stdout',
+    #                                  doc='log')
+    #)
 
     for n, o in nba.extract_output_declarations().items():
         tool_object.outputs.append(

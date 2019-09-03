@@ -9,6 +9,7 @@ import tempfile
 import subprocess
 import ruamel.yaml as yaml
 import argparse
+import json
 
 import papermill as pm
 import nbformat
@@ -68,10 +69,10 @@ def parse_nbline(line):
             comment=""
             
         if "=" in assignment_line:
-            name, value_str=assignment_line.split("=", 1)
+            name, value_str = assignment_line.split("=", 1)
             name = name.strip()
         else:
-            name = assignment_line
+            name = assignment_line.strip()
             value_str=None
 
         try:
@@ -150,10 +151,10 @@ class NotebookAdapter:
 
 
     def new_tmpdir(self):
-        print("tmpdir was", getattr(self,'_tmpdir',None))
+        logger.debug("tmpdir was "+getattr(self,'_tmpdir','unset'))
         self._tmpdir = None
         new_tmpdir = self.tmpdir
-        print("tmpdir became", self._tmpdir)
+        logger.debug("tmpdir became "+self._tmpdir)
 
         return self.tmpdir
 
@@ -421,6 +422,13 @@ def nbrun(nb_fn, inp):
     pars = r['request_parameters']
 
     nba.execute(pars)
+
+    r={}
+    for k,v in nba.extract_output().items():
+        r[k.strip()]=repr(v)
+
+    with open("cwl.output.json", "w") as f:
+        json.dump(r, f)
 
 def main():
     parser = argparse.ArgumentParser(description='Process some integers.')
