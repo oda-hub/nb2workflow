@@ -8,6 +8,7 @@ import time
 import tempfile
 import subprocess
 import ruamel.yaml as yaml
+import argparse
 
 import papermill as pm
 import nbformat
@@ -408,3 +409,48 @@ def find_notebooks(source):
 
     return notebook_adapters
 
+
+def nbrun(nb_fn, inp):
+    nba = NotebookAdapter(nb_fn)
+    
+    r = nba.interpret_parameters(inp)
+    
+    if r['issues'] != []:
+        raise Exception(r['issues'])
+
+    pars = r['request_parameters']
+
+    nba.execute(pars)
+
+def main():
+    parser = argparse.ArgumentParser(description='Process some integers.')
+    parser.add_argument('notebook', metavar='notebook', type=str)
+    parser.add_argument('--debug', action="store_true")
+    
+    parser.add_argument('--inp', nargs="+", action="append")
+
+    args = parser.parse_args()
+
+    handler = logging.StreamHandler()
+    handler.setLevel(logging.INFO)
+
+    root = logging.getLogger()
+
+    handler = logging.StreamHandler()
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+    root.addHandler(handler)
+
+    if args.debug:
+        root.setLevel(logging.DEBUG)
+        handler.setLevel(logging.DEBUG)
+    else:
+        root.setLevel(logging.INFO)
+        handler.setLevel(logging.INFO)
+
+
+    nbrun(args.notebook, dict(i.split("=", 1) for i in args.inp[0]))
+
+
+if __name__ == "__main__":
+    main()

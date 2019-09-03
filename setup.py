@@ -15,6 +15,7 @@ setup(name='nb2workflow',
             'nb2worker=nb2workflow.container:main',
             'nb2cwl=nb2workflow.cwl:main',
             'nb2rdf=nb2workflow.ontology:main',
+            'nbrun=nb2workflow.nbadapter:main',
             ]
       },
 

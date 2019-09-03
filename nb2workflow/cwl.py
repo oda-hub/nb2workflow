@@ -5,9 +5,16 @@ import cwlgen
 
 import nb2workflow.nbadapter as nbadapter
 
+def python_type2cwl_type(pt):
+    if pt == str:
+        return 'string'
+
+    return pt.__name__
+
 def nb2cwl(notebook_fn, cwl_fn):
     nba = nbadapter.NotebookAdapter(notebook_fn)
 
+    
     tool_object = cwlgen.CommandLineTool(
                     tool_id="papermill", 
                     base_command="echo", 
@@ -19,18 +26,32 @@ def nb2cwl(notebook_fn, cwl_fn):
                     stdout=None, 
                     path=None)
 
-    tool_object.inputs.append(
-        cwlgen.CommandInputParameter(
-                     "myParamId", 
-                     param_type="string", 
-                     label=None, 
-                     secondary_files=None, 
-                     param_format=None,
-                     streamable=None, 
-                     doc=None, 
-                     input_binding=None, 
-                     default=None)
+    for par in nba.extract_parameters().values():
+        tool_object.inputs.append(
+            cwlgen.CommandInputParameter(
+                         par['name'], 
+                         param_type=python_type2cwl_type(par['python_type']),
+                         label=None, 
+                         secondary_files=None, 
+                         param_format=None,
+                         streamable=None, 
+                         doc=None, 
+                         input_binding=None, 
+                         default=None)
+        )
+
+    tool_object.outputs.append(
+        cwlgen.CommandOutputParameter('log',
+                                      param_type='stdout',
+                                      doc='log')
     )
+
+    for n, o in nba.extract_output_declarations().items():
+        tool_object.outputs.append(
+            cwlgen.CommandOutputParameter(n,
+                                          param_type='string',
+                                          doc='lines found with the pattern')
+        )
 
     tool_object.export()
 
@@ -65,3 +86,7 @@ def main():
         handler.setLevel(logging.INFO)
 
     nb2cwl(args.notebook, args.cwl)
+
+
+if __name__ == "__main__":
+    main()
