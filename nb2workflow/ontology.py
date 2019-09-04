@@ -7,19 +7,28 @@ import nb2workflow.nbadapter as nbadapter
 logger = logging.getLogger(__name__)
 
 import rdflib
-import owlready2
-    
-xsd = owlready2.get_ontology("https://www.w3.org/2001/XMLSchema#").load()
-kees = owlready2.get_ontology("http://linkeddata.center/kees/v1#").load()
 
-fno = owlready2.get_ontology("http://ontology.odahub.io/function.rdf").load()
-fno.base_iri="https://w3id.org/function/ontology#"
+try:
+    import owlready2
+        
+    xsd = owlready2.get_ontology("https://www.w3.org/2001/XMLSchema#").load()
+    kees = owlready2.get_ontology("http://linkeddata.center/kees/v1#").load()
+
+    fno = owlready2.get_ontology("http://ontology.odahub.io/function.rdf").load()
+    fno.base_iri="https://w3id.org/function/ontology#"
+except:
+    owlready2=None
 
 def get_dda():
+    if owlready2 is None:
+        return
+
     return owlready2.get_ontology("http://ddahub.io/ontology/analysis#")
 
 
 def to_xsd_type(p):
+    if owlready2 is None:
+        return
     out_type='string'
 
     if issubclass(p['python_type'],int):
@@ -38,6 +47,8 @@ def to_xsd_type(p):
 
 
 def function_semantic_signature(dda, function_name, parameters, output):
+    if owlready2 is None:
+        return
     with dda:
         parameter_attrs={}
         for pn,pv in parameters.items():
@@ -64,6 +75,8 @@ def function_semantic_signature(dda, function_name, parameters, output):
     
 
 def service_semantic_signature(nbas, format="rdfxml"):
+    if owlready2 is None:
+        return
     dda = get_dda()
     dda.graph.destroy()
     dda = get_dda()
@@ -94,6 +107,8 @@ def service_semantic_signature(nbas, format="rdfxml"):
 
 
 def nb2rdf(notebook_fn, rdf_fn):
+    if owlready2 is None:
+        return
     nba = nbadapter.NotebookAdapter(notebook_fn)
 
     with open(rdf_fn, "wb") as f:
