@@ -3,10 +3,23 @@
 [![Build Status](https://travis-ci.org/volodymyrss/nb2workflow.svg?branch=master)](https://travis-ci.org/volodymyrss/nb2workflow)
 [![codecov](https://codecov.io/gh/volodymyrss/nb2workflow/branch/master/graph/badge.svg)](https://codecov.io/gh/volodymyrss/nb2workflow)
 
+Starts service without container:
 ```bash
 nb2service tests/testrepo/workflow-notebook.ipynb
 ```
+Builds service container and starts it:
 ```bash
 nb2worker tests/testrepo/
+```
+
+Builds one-shot container and cwl:
+
+```bash
+nb2worker tests/testrepo/ --build --job
+```
+
+Generates cwl:
+```bash
+nb2cwl tests/testrepo/
 ```
 
