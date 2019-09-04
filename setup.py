@@ -38,6 +38,7 @@ setup(name='nb2workflow',
         'flasgger',
         'owlready2',
         'rdflib',
+        'cwlgen',
       ],
 
       url = 'https://github.com/volodymyrss/nb2workflow',

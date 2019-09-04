@@ -12,13 +12,19 @@ def python_type2cwl_type(pt):
 
     return pt.__name__
 
-def nb2cwl_container(image, notebook_fn, cwl_fn):
+def nb2cwl_container(image, notebook_fn, cwl_fn, command=None):
     nba = nbadapter.NotebookAdapter(notebook_fn)
 
+    if command is None:
+        base_command = "python"
+        arguments = ["-m", "nb2workflow.nbadapter", "/repo/"+notebook_name]
+    else:
+        base_command = 'bash'
+        arguments = ['-c', command]
     
     tool_object = cwlgen.CommandLineTool(
                     tool_id=nba.name, 
-                    base_command="python",
+                    base_command=base_command,
                     label=None, 
                     doc=None,
                     cwl_version="v1.0", 
@@ -29,7 +35,7 @@ def nb2cwl_container(image, notebook_fn, cwl_fn):
 
     notebook_name = os.path.basename(notebook_fn)
 
-    tool_object.arguments=["-m", "nb2workflow.nbadapter", "/repo/"+notebook_name]
+    tool_object.arguments = arguments
 
     tool_object.requirements.append(cwlgen.DockerRequirement(docker_pull=image))
 
