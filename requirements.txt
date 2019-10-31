@@ -22,7 +22,6 @@ flask-cors
 ipykernel
 nbconvert==5.5
 #owlready2==0.11
-papermill==0.19.1
 psutil
 pytest-flask
 python-consul
@@ -30,3 +29,6 @@ rdflib
 requests
 ruamel.yaml
 cwlgen
+
+papermil
+nteract-scrapbook

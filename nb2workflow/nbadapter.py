@@ -12,6 +12,7 @@ import argparse
 import json
 
 import papermill as pm
+import scrapbook as sb
 import nbformat
 
 from nb2workflow.health import current_health
@@ -323,13 +324,13 @@ class NotebookAdapter:
         return exceptions
 
     def extract_pm_output(self):
-        nb = pm.read_notebook(self.output_notebook_fn)
+        nb = sb.read_notebook(self.output_notebook_fn)
 
         outputs=dict()
-        for i, d in nb.dataframe.iterrows():
+        for i, d in nb.scraps.dataframe.iterrows():
             logger.debug("d... %s",d)
-            if d.type == "record":
-                outputs[d['name']]=d['value']
+            #if d.dtype == "record":
+            outputs[d['name']]=d['data']
 
         return outputs
 
@@ -356,18 +357,17 @@ class NotebookAdapter:
 
         output_gather_content="""
 import papermill as pm
+import scrapbook as sb
 import base64
 import os
 
 """
         for output in outputs.keys():
             logger.debug("output: %s",output)
-            output_gather_content+="\npm.record(\"{output}\",{output})".format(output=output)
+            output_gather_content+="\nsb.glue(\"{output}\",{output})".format(output=output)
 
-            output_gather_content+="\nisinstance({output},str) and os.path.exists({output}) and pm.record(\"{output}_content\",base64.b64encode(open({output},'rb').read()))".format(output=output)
+            output_gather_content+="\nisinstance({output},str) and os.path.exists({output}) and sb.glue(\"{output}_content\",base64.b64encode(open({output},'rb').read()).decode())".format(output=output)
             output_gather_content+="\n".format(output=output)
-            #output_gather_content+="pm.record(\"{}\",dict(filename=fn,content=base64.b64encode(open(fn).read())))"
-        #"pm.record(\"{}\",dict(filename=fn,content=base64.b64encode(open(fn).read())))"
 
         newcell = nbformat.v4.new_code_cell(source=output_gather_content)
         newcell.metadata['tags'] = ['injected-gather-outputs']

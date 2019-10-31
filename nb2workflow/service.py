@@ -76,11 +76,28 @@ cache = Cache(config={'CACHE_TYPE': 'simple'})
 def create_app():
     app=Flask(__name__)
     
-    template = dict(swaggerUiPrefix=LazyString(lambda : request.environ.get('HTTP_X_FORWARDED_PREFIX', None)))
+    template = {
+                    "swaggerUiPrefix": LazyString(lambda : request.environ.get('HTTP_X_FORWARDED_PREFIX', None)),
+                    "swagger": "2.0",
+                     "info": {
+                        "title": "ODAHub API",
+                        "description": "",
+                        "contact": {
+                          "responsibleOrganization": "ODA",
+                          "responsibleDeveloper": "Volodymyr SAVCHENKO",
+                          "email": "volodymyr.savchenko@unige.ch",
+                          "url": "https://odahub.io",
+                        },
+                    "termsOfService": "http://me.com/terms",
+                    "version": "0.0.1"
+                    }
+                }
     swagger = Swagger(app, template=template)
     app.wsgi_app = ReverseProxied(app.wsgi_app)
     app.json_encoder = CustomJSONEncoder
     cache.init_app(app, config={'CACHE_TYPE': 'simple'})
+    
+
 #    CORS(app)
     return app
 
@@ -424,7 +441,7 @@ def workflow_filename(mode, target, filename):
             return jsonify(rj)
 
         if filename+'_content' in output:
-            content = base64.b64decode(base64.b64decode(output.get(filename+'_content',None)))
+            content = base64.b64decode(output.get(filename+'_content',None))
         else:
             return jsonify({'workflow_status':'anomaly', 'comment': 'searching for key '+filename+'_content'+', available: '+(", ".join(output.keys())), 'base_workflow_result':rj })
 
