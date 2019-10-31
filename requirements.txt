@@ -30,5 +30,5 @@ requests
 ruamel.yaml
 cwlgen
 
-papermil
+papermill
 nteract-scrapbook
