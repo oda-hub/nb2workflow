@@ -22,6 +22,7 @@ setup(name='nb2workflow',
             'nb2cwl=nb2workflow.cwl:main',
             'nb2rdf=nb2workflow.ontology:main',
             'nbrun=nb2workflow.nbadapter:main',
+            'nbinspect=nb2workflow.nbadapter:main_inspect',
             ]
       },
 

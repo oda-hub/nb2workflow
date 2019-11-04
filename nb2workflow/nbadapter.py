@@ -410,6 +410,11 @@ def find_notebooks(source):
 
     return notebook_adapters
 
+def nbinspect(nb_source):
+    nbas = find_notebooks(nb_source)
+
+    for n, nba in nbas.items():
+        logger.info("%s %s", n, nba.extract_parameters())
 
 def nbrun(nb_source, inp):
 
@@ -438,8 +443,37 @@ def nbrun(nb_source, inp):
     with open("cwl.output.json", "w") as f:
         json.dump(r, f)
 
+    return r
+
+def main_inspect():
+    parser = argparse.ArgumentParser(description='Inspect some notebooks') # run locally, remotely, semantically
+    parser.add_argument('notebook', metavar='notebook', type=str)
+    parser.add_argument('--debug', action="store_true")
+    
+    args = parser.parse_args()
+
+    setup_logging(args.debug)
+
+    nbinspect(args.notebook)
+
+def setup_logging(debug=False):
+    handler = logging.StreamHandler()
+    handler.setLevel(logging.INFO)
+    root = logging.getLogger()
+    handler = logging.StreamHandler()
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+    root.addHandler(handler)
+
+    if debug:
+        root.setLevel(logging.DEBUG)
+        handler.setLevel(logging.DEBUG)
+    else:
+        root.setLevel(logging.INFO)
+        handler.setLevel(logging.INFO)
+
 def main():
-    parser = argparse.ArgumentParser(description='Process some integers.')
+    parser = argparse.ArgumentParser(description='Run some notebooks') # run locally, remotely, semantically
     parser.add_argument('notebook', metavar='notebook', type=str)
     parser.add_argument('--debug', action="store_true")
     
@@ -453,23 +487,7 @@ def main():
         k,v = i.replace('--inp-','').split("=")
         inputs[k] = v
         
-
-    handler = logging.StreamHandler()
-    handler.setLevel(logging.INFO)
-
-    root = logging.getLogger()
-
-    handler = logging.StreamHandler()
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    handler.setFormatter(formatter)
-    root.addHandler(handler)
-
-    if args.debug:
-        root.setLevel(logging.DEBUG)
-        handler.setLevel(logging.DEBUG)
-    else:
-        root.setLevel(logging.INFO)
-        handler.setLevel(logging.INFO)
+    setup_logging(args.debug)
 
 
     nbrun(args.notebook, inputs)
