@@ -6,7 +6,7 @@ if {'pytest', 'test', 'ptr'}.intersection(sys.argv):
     setup_requires.append('pytest-runner')
 
 setup(name='nb2workflow',
-      version='1.0.1',
+      #version='1.0.1',
       version_format = '{tag}.dev{commitcount}+{gitsha}',
       description='convert notebook to workflow',
       author='Volodymyr Savchenko',
@@ -25,21 +25,41 @@ setup(name='nb2workflow',
             'nbinspect=nb2workflow.nbadapter:main_inspect',
             ]
       },
+      
+      extras_require={
+        "service":[
+            'flask',
+            'pytest-flask',
+            'flask-caching', #'Flask-Caching',
+            'flask-cors',
+            'flasgger',
+            'python-consul',
+            'apscheduler',
+        ],
+        "rdf":[
+            'rdflib',
+            'owlready2==0.11',
+        ],
+        "cwl":[
+            "cwlgen",
+        ],
+        "docker":[
+            'docker',
+            'checksumdir',
+        ]
+      },
 
       install_requires=[
-        'flask',
-        'pytest-flask',
         'papermill',
         'ipykernel',
-        'nbconvert',
-        'docker',
-        'checksumdir',
-        'Flask-Caching',
-        'flask-cors',
-        'flasgger',
-        'rdflib',
-        'cwlgen',
+        'nbconvert', #'nbconvert==5.5',
+        'nteract-scrapbook',
+        'psutil',
+        'diskcache',
+        'requests',
+        'ruamel.yaml',
       ],
+
 
       url = 'https://github.com/volodymyrss/nb2workflow',
       download_url = 'https://github.com/volodymyrss/nb2workflow/archive/1.0.1.tar.gz',
