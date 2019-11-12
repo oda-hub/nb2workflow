@@ -59,14 +59,15 @@ def evaluate(router, *args, **kwargs):
     key = json.dumps((router, args, OrderedDict(sorted(kwargs.items()))))
 
     ntries = kwargs.pop('_ntries', 30)
-    async_request = kwargs.pop('_async_request', 30)
+    async_request = kwargs.pop('_async_request', True)
+    cached = kwargs.pop('_cached', True)
 
 
     if logstasher:
         logstasher.set_context(dict(router=router, args=args, kwargs=kwargs))
         logstasher.log(dict(event='starting'))
 
-    if enable_cache and key in cache:
+    if cached and enable_cache and key in cache:
         v = cache.get(key)
         print("restored from cache, key:", key)
         print("restored from cache, value:", v)

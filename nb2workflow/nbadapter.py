@@ -6,6 +6,7 @@ import yaml
 import re
 import time
 import tempfile
+import pprint
 import subprocess
 import ruamel.yaml as yaml
 import argparse
@@ -344,6 +345,7 @@ class NotebookAdapter:
             if 'outputs' in cell.metadata.get('tags',[]):
                 for line in cell['source'].split("\n"):
                     p = parse_nbline(line)
+                    if p is None: continue
                     outputs[p['name']] = p
 
 
@@ -414,7 +416,7 @@ def nbinspect(nb_source):
     nbas = find_notebooks(nb_source)
 
     for n, nba in nbas.items():
-        logger.info("%s %s", n, nba.extract_parameters())
+        logger.info("%s %s", n, pprint.pprint(nba.extract_parameters(), indent=4))
 
 def nbrun(nb_source, inp):
 
