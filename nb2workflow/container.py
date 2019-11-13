@@ -51,7 +51,7 @@ def prepare_image(repo_source, from_image, service=True, nb2w_path=None, runpref
 
     dockerfile.append("ADD $REPO_PATH/requirements.txt /requirements.txt")
     dockerfile.append("RUN {} pip install --upgrade pip".format(runprefix))
-    dockerfile.append("RUN {} pip install -r /requirements.txt".format(runprefix,repo_hash))
+    dockerfile.append("RUN {} pip install -r /requirements.txt --upgrade".format(runprefix,repo_hash))
     dockerfile.append("ADD $REPO_PATH /repo")
     dockerfile.append("RUN {} touch /repo-hash-{}; pip install -r /repo/requirements.txt --upgrade".format(runprefix, repo_hash))
     dockerfile.append("RUN useradd -ms /bin/bash oda")
