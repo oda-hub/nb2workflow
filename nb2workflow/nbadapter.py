@@ -361,12 +361,20 @@ class NotebookAdapter:
 import papermill as pm
 import scrapbook as sb
 import base64
+import json
 import os
 
 """
         for output in outputs.keys():
             logger.debug("output: %s",output)
-            output_gather_content+="\nsb.glue(\"{output}\",{output})".format(output=output)
+            output_gather_content+="""
+try:
+    sb.glue("{output}",{output})
+except Exception as e:
+    print("failed to glue {output}", {output})
+    print("will glue jsonified")
+    sb.glue("{output}",json.dumps({output}))
+""".format(output=output)
 
             output_gather_content+="\nisinstance({output},str) and os.path.exists({output}) and sb.glue(\"{output}_content\",base64.b64encode(open({output},'rb').read()).decode())".format(output=output)
             output_gather_content+="\n".format(output=output)
