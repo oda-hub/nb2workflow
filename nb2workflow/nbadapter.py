@@ -436,7 +436,12 @@ def nbrun(nb_source, inp):
 
     logging.info("found parameters %s", repr(pars))
 
-    nba.execute(pars)
+    exceptions = nba.execute(pars)
+
+    if len(exceptions) == 0:
+        logging.info("execution SUCCESSFUL!")
+    else:
+        logging.info("FAILED:", exceptions)
 
     r={}
     for k,v in nba.extract_output().items():
