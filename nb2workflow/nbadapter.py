@@ -441,7 +441,7 @@ def nbrun(nb_source, inp):
     if len(exceptions) == 0:
         logging.info("execution SUCCESSFUL!")
     else:
-        logging.info("FAILED:", exceptions)
+        logging.error("FAILED: %s", exceptions)
 
     r={}
     for k,v in nba.extract_output().items():
