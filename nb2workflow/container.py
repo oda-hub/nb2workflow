@@ -9,6 +9,7 @@ import tempfile
 import checksumdir
 import subprocess
             
+from nb2workflow import version
 from nb2workflow.cwl import nb2cwl_container
 from nb2workflow.nbadapter import find_notebooks
 
@@ -57,8 +58,7 @@ def prepare_image(repo_source, from_image, service=True, nb2w_path=None, runpref
     dockerfile.append("RUN useradd -ms /bin/bash oda")
 
     if nb2w_path is None:
-        dockerfile.append("ARG nb2workflow_revision".format(from_image))
-        dockerfile.append("RUN {} git clone https://github.com/volodymyrss/nb2workflow.git /nb2workflow; cd /nb2workflow; git reset --hard $nb2workflow_revision; pip install .; rm -rf /nb2workflow".format(runprefix)) 
+        dockerfile.append("RUN {} pip install nb2workflow=={}".format(runprefix, version())) 
     else:
         subprocess.check_output(["git","clone", nb2w_path, os.path.join(tempdir,"nb2workflow")])
         dockerfile.append("ADD ./nb2workflow /nb2workflow")
