@@ -58,11 +58,11 @@ def prepare_image(repo_source, from_image, service=True, nb2w_path=None, runpref
 
     if nb2w_path is None:
         dockerfile.append("ARG nb2workflow_revision".format(from_image))
-        dockerfile.append("RUN {} git clone https://github.com/volodymyrss/nb2workflow.git /nb2workflow; cd /nb2workflow; git reset --hard $nb2workflow_revision; pip install -r requirements.txt; pip install .; rm -rf /nb2workflow".format(runprefix)) 
+        dockerfile.append("RUN {} git clone https://github.com/volodymyrss/nb2workflow.git /nb2workflow; cd /nb2workflow; git reset --hard $nb2workflow_revision; pip install .; rm -rf /nb2workflow".format(runprefix)) 
     else:
         subprocess.check_output(["git","clone", nb2w_path, os.path.join(tempdir,"nb2workflow")])
         dockerfile.append("ADD ./nb2workflow /nb2workflow")
-        dockerfile.append("RUN {} cd /nb2workflow; pip install -r requirements.txt; pip install .".format(runprefix)) 
+        dockerfile.append("RUN {} cd /nb2workflow; pip install .".format(runprefix)) 
 
     dockerfile.append("USER oda")
     dockerfile.append("WORKDIR /workdir")
