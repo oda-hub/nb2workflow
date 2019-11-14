@@ -15,6 +15,7 @@ import json
 import papermill as pm
 import scrapbook as sb
 import nbformat
+from nbconvert import HTMLExporter
 
 from nb2workflow.health import current_health
 from nb2workflow import workflows
@@ -174,8 +175,22 @@ class NotebookAdapter:
     def output_notebook_fn(self):
         return os.path.join(self.tmpdir,os.path.basename(self.notebook_fn.replace(".ipynb","_output.ipynb")))
 
+    def read(self):
+        return nbformat.reads(open(self.notebook_fn).read(), as_version=4)
+
+    def export_html(self, fn=None):
+        if fn is None:
+            fn = "{}_output.html".format(self.name)
+
+        html_exporter = HTMLExporter()
+        html_exporter.template_file = 'basic'
+        (body, resources) = html_exporter.from_notebook_node(self.read())
+        open(fn, "w").write(body)
+
+        logger.info("exported html to %s", fn)
+
     def extract_parameters(self):
-        nb=nbformat.reads(open(self.notebook_fn).read(), as_version=4)
+        nb=self.read()
 
         input_parameters = {}
         system_parameters = {}
@@ -249,6 +264,7 @@ class NotebookAdapter:
             logstasher.log(dict(origin="nb2workflow.execute", event="starting", parameters=parameters, workflow_name=notebook_short_name(self.notebook_fn), health=current_health()))
 
 
+        logger.info("starting job")
         exceptions = self._execute(parameters, progress_bar, log_output)
 
         tspent = time.time() - t0
@@ -337,7 +353,7 @@ class NotebookAdapter:
 
     
     def extract_output_declarations(self):
-        nb=nbformat.reads(open(self.notebook_fn).read(), as_version=4)
+        nb=self.read()
 
         outputs = {}
 
@@ -382,7 +398,7 @@ except Exception as e:
         newcell = nbformat.v4.new_code_cell(source=output_gather_content)
         newcell.metadata['tags'] = ['injected-gather-outputs']
 
-        nb=nbformat.reads(open(self.notebook_fn).read(), as_version=4)
+        nb=self.read()
         nb.cells = nb.cells + [newcell] 
 
         pm.iorw.write_ipynb(nb, self.preproc_notebook_fn)
@@ -451,12 +467,24 @@ def nbrun(nb_source, inp):
     else:
         logging.error("FAILED: %s", exceptions)
 
+        with open("{}_exceptions.json".format(nba.name), "w") as f:
+            json.dump(list(map(workflows.serialize_workflow_exception, exceptions)), f)
+
+        nba.export_html()
+        open("{}_output.ipynb".format(nba.name), "wb").write(open(nba.output_notebook_fn, "rb").read())
+
+        raise Exception("FAILED to execute {}: {}".format(nba.name, exceptions))
+
     r={}
     for k,v in nba.extract_output().items():
         r[k.strip()]=repr(v)
 
-    with open("cwl.output.json", "w") as f:
+    with open("{}_output.json".format(nba.name), "w") as f:
         json.dump(r, f)
+
+    open("{}_output.ipynb".format(nba.name), "wb").write(open(nba.output_notebook_fn, "rb").read())
+
+    nba.export_html()
 
     return r
 
