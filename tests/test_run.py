@@ -17,11 +17,28 @@ logger.setLevel(level=logging.DEBUG)
 
 def test_nb():
     import nb2workflow.nbadapter
-    nb2workflow.nbadapter.nbrun(test_notebook, {})
+    
+    basename = os.path.basename(test_notebook).replace(".ipynb","_output")
 
-    assert os.path.exists(os.path.dirname(test_notebook).replace(".ipynb","_output.ipynb"))
-    assert os.path.exists(os.path.dirname(test_notebook).replace(".ipynb","_output.json"))
-    assert os.path.exists(os.path.dirname(test_notebook).replace(".ipynb","_output.html"))
+    print("basename:", basename)
+
+    for p in ".ipynb", ".json", ".html":
+        print("base and prefix", basename+p)
+        if os.path.exists(basename+p):
+            os.remove(basename+p)
+
+    r = nb2workflow.nbadapter.nbrun(test_notebook, {})
+
+
+
+    for p in ".ipynb", ".json", ".html":
+        assert os.path.exists(basename+p)
+
+    assert 'output_notebook' in r
+    assert 'output_notebook_content' in r
+    assert 'output_notebook_html' in r
+    assert 'output_notebook_html_content' in r
+    
 
 def test_nb_fail():
     import nb2workflow.nbadapter

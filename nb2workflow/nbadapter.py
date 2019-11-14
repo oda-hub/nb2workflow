@@ -11,6 +11,7 @@ import subprocess
 import ruamel.yaml as yaml
 import argparse
 import json
+import base64
 
 import papermill as pm
 import scrapbook as sb
@@ -182,12 +183,17 @@ class NotebookAdapter:
         if fn is None:
             fn = "{}_output.html".format(self.name)
 
-        html_exporter = HTMLExporter()
-        html_exporter.template_file = 'basic'
-        (body, resources) = html_exporter.from_notebook_node(self.read())
-        open(fn, "w").write(body)
+        if False:
+            html_exporter = HTMLExporter()
+            html_exporter.template_file = 'basic'
+            (body, resources) = html_exporter.from_notebook_node(self.read())
+            open(fn, "w").write(body)
+        else:
+            logging.info("converting... {}".format(subprocess.check_call(["jupyter", "nbconvert", "--to", "html", self.output_notebook_fn, '--output', os.path.abspath(fn)])))
 
         logger.info("exported html to %s", fn)
+
+        return fn
 
     def extract_parameters(self):
         nb=self.read()
@@ -470,7 +476,7 @@ def nbrun(nb_source, inp):
         with open("{}_exceptions.json".format(nba.name), "w") as f:
             json.dump(list(map(workflows.serialize_workflow_exception, exceptions)), f)
 
-        nba.export_html()
+        fn = nba.export_html()
         open("{}_output.ipynb".format(nba.name), "wb").write(open(nba.output_notebook_fn, "rb").read())
 
         raise Exception("FAILED to execute {}: {}".format(nba.name, exceptions))
@@ -482,9 +488,19 @@ def nbrun(nb_source, inp):
     with open("{}_output.json".format(nba.name), "w") as f:
         json.dump(r, f)
 
-    open("{}_output.ipynb".format(nba.name), "wb").write(open(nba.output_notebook_fn, "rb").read())
+    nbdata = open(nba.output_notebook_fn, "rb").read()
+    nbfn = "{}_output.ipynb".format(nba.name)
+    open(nbfn, "wb").write(nbdata)
+        
 
-    nba.export_html()
+    r['output_notebook'] = nbfn
+    r['output_notebook_content'] = base64.b64encode(nbdata).decode()
+    
+    htmlfn = "{}_output.html".format(nba.name)
+    nba.export_html(htmlfn)
+    
+    r['output_notebook_html'] = htmlfn
+    r['output_notebook_html_content'] = base64.b64encode(open(htmlfn, "rb").read()).decode()
 
     return r
 
