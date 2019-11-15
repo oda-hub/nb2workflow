@@ -448,6 +448,7 @@ def nbinspect(nb_source):
     for n, nba in nbas.items():
         logger.info("%s %s", n, pprint.pprint(nba.extract_parameters(), indent=4))
 
+
 def nbreduce(nb_source, max_size_mb):
     cellsize_limit = None
     largest_cellsize = None
