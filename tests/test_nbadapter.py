@@ -76,3 +76,31 @@ def test_nbadapter_repo():
 
        # assert 'spectrum' in output
         
+
+def test_nbreduce():
+    from nb2workflow.nbadapter import NotebookAdapter, nbreduce, setup_logging
+
+    setup_logging()
+
+    nba=NotebookAdapter(test_notebook)
+
+    if os.path.exists(nba.output_notebook_fn):
+        os.remove(nba.output_notebook_fn)
+    
+    if os.path.exists(nba.preproc_notebook_fn):
+        os.remove(nba.preproc_notebook_fn)
+
+    nba.execute(dict())
+        
+    output=nba.extract_output()
+
+    assert len(output)==4
+
+    assert 'spectrum' in output
+
+    print("will reduce", nba.output_notebook_fn)
+
+    
+    nbreduce(nba.output_notebook_fn, os.path.getsize(nba.output_notebook_fn)/1024./1024+1.)
+    
+    nbreduce(nba.output_notebook_fn, os.path.getsize(nba.output_notebook_fn)/1024./1024*0.5)

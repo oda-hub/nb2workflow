@@ -448,6 +448,57 @@ def nbinspect(nb_source):
     for n, nba in nbas.items():
         logger.info("%s %s", n, pprint.pprint(nba.extract_parameters(), indent=4))
 
+def nbreduce(nb_source, max_size_mb):
+    cellsize_limit = None
+    largest_cellsize = None
+
+
+    while True:
+        current_size_mb = os.path.getsize(nb_source)/1024./1024
+        logging.info('notebook %s size %.4lg Mb', nb_source, current_size_mb)
+
+
+        nb = nbformat.reads(open(nb_source).read(), as_version=4)
+
+        newcells = []
+        outputs_left = 0
+        for cell in nb.cells:
+            cellsize = len(json.dumps(cell.outputs))
+            if largest_cellsize is None or largest_cellsize < cellsize:
+                largest_cellsize = cellsize
+
+            logging.info("cell size %.5lg %s", cellsize, str(cell.metadata))
+
+            if 'injected-gather-outputs' in cell.metadata.get('tags', []):
+                print("skipping")
+                continue
+
+            if cellsize_limit is not None and cellsize >= cellsize_limit:
+                #newcell = nbformat.v4.new_code_cell(source="# redacted")
+                #newcells.append(newcell)
+                logging.info('cleaning cell')
+                cell.outputs = []
+
+            if cell.outputs != []:
+                outputs_left += 1
+        
+            newcells.append(cell)
+
+        if outputs_left == 0:
+            logging.info('notebook size %.4lg Mb, and not more outputs left, cleaning aborted', current_size_mb)
+            return           
+
+        nb.cells = newcells 
+        pm.iorw.write_ipynb(nb, nb_source)
+
+        if current_size_mb < max_size_mb:
+            logging.info('notebook size %.4lg Mb is smaller than required %.5lg Mb, only cleaning gathering', current_size_mb, max_size_mb)
+            return
+        else:
+            cellsize_limit = largest_cellsize
+            logging.info('notebook size %.4lg Mb is larger than required %.5lg Mb, setting cell size limit to the largest cell %.5lg', current_size_mb, max_size_mb, cellsize_limit)
+
+
 def nbrun(nb_source, inp):
 
     nbas = find_notebooks(nb_source)
@@ -503,6 +554,18 @@ def nbrun(nb_source, inp):
     r['output_notebook_html_content'] = base64.b64encode(open(htmlfn, "rb").read()).decode()
 
     return r
+
+def main_reduce():
+    parser = argparse.ArgumentParser(description='Reduce notebook size') 
+    parser.add_argument('notebook', metavar='notebook', type=str)
+    parser.add_argument('maxsizeMb', metavar='max_size_mb', type=float)
+    parser.add_argument('--debug', action="store_true")
+    
+    args = parser.parse_args()
+
+    setup_logging(args.debug)
+
+    nbreduce(args.notebook, args.maxsizeMb)
 
 def main_inspect():
     parser = argparse.ArgumentParser(description='Inspect some notebooks') # run locally, remotely, semantically
