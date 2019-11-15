@@ -550,8 +550,8 @@ def nbrun(nb_source, inp):
     open(nbfn, "wb").write(nbdata)
         
 
-    r['output_notebook'] = nbfn
-    r['output_notebook_content'] = base64.b64encode(nbdata).decode()
+    #r['output_notebook'] = nbfn
+    #r['output_notebook_content'] = base64.b64encode(nbdata).decode()
     
     htmlfn = "{}_output.html".format(nba.name)
     nba.export_html(htmlfn)

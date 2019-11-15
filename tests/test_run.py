@@ -34,8 +34,8 @@ def test_nb():
     for p in ".ipynb", ".json", ".html":
         assert os.path.exists(basename+p)
 
-    assert 'output_notebook' in r
-    assert 'output_notebook_content' in r
+    assert 'output_notebook' not in r
+    assert 'output_notebook_content' not in r
     assert 'output_notebook_html' in r
     assert 'output_notebook_html_content' in r
     
