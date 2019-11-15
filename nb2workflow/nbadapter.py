@@ -463,7 +463,13 @@ def nbreduce(nb_source, max_size_mb):
         newcells = []
         outputs_left = 0
         for cell in nb.cells:
-            cellsize = len(json.dumps(cell.outputs))
+    
+            try:
+                cellsize = len(json.dumps(cell.outputs))
+            except AttributeError:
+                logging.info("cell has no outputs, ignoring")
+                continue
+
             if largest_cellsize is None or largest_cellsize < cellsize:
                 largest_cellsize = cellsize
 
