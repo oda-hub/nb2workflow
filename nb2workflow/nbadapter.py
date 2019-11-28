@@ -385,17 +385,19 @@ import scrapbook as sb
 import base64
 import json
 import os
+    
+from nb2workflow.nbadapter import denumpyfy
 
 """
         for output in outputs.keys():
             logger.debug("output: %s",output)
             output_gather_content+="""
 try:
-    sb.glue("{output}",{output})
+    sb.glue("{output}",denumpyfy({output}))
 except Exception as e:
     print("failed to glue {output}", {output})
     print("will glue jsonified")
-    sb.glue("{output}",json.dumps({output}))
+    sb.glue("{output}",json.dumps(denumpyfy({output})))
 """.format(output=output)
 
             output_gather_content+="\nisinstance({output},str) and os.path.exists({output}) and sb.glue(\"{output}_content\",base64.b64encode(open({output},'rb').read()).decode())".format(output=output)
@@ -561,6 +563,45 @@ def nbrun(nb_source, inp):
     r['output_notebook_html_content'] = base64.b64encode(open(htmlfn, "rb").read()).decode()
 
     return r
+
+
+def traverse_structure(structure, modifier):
+    if isinstance(structure, dict):
+        return { k:traverse_structure(v, modifier) for k,v in structure.items() }
+
+    if isinstance(structure, list):
+        return [ traverse_structure(v, modifier) for v in structure ]
+
+    return modifier(structure)
+
+
+
+def denumpyfy(data):
+    import numpy as np
+
+    def numpy_adapter(d):
+        if isinstance(d, np.bool_):
+            return bool(d)
+
+        if isinstance(d, np.ndarray):
+            return d.tolist()
+        
+        if isinstance(d, np.float16) or \
+           isinstance(d, np.float32) or \
+           isinstance(d, np.float64):
+            return float(d)
+
+        if isinstance(d, np.int16) or \
+           isinstance(d, np.int32) or \
+           isinstance(d, np.int64):
+            return int(d)
+
+        return d
+
+    return traverse_structure(
+                data,
+                numpy_adapter,
+           )
 
 def main_reduce():
     parser = argparse.ArgumentParser(description='Reduce notebook size') 

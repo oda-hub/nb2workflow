@@ -48,6 +48,9 @@ setup(name='nb2workflow',
         "docker":[
             'docker',
             'checksumdir',
+        ],
+        "numpy":[
+            'numpy',
         ]
       },
 

@@ -104,3 +104,22 @@ def test_nbreduce():
     nbreduce(nba.output_notebook_fn, os.path.getsize(nba.output_notebook_fn)/1024./1024+1.)
     
     nbreduce(nba.output_notebook_fn, os.path.getsize(nba.output_notebook_fn)/1024./1024*0.5)
+
+def test_denumpyfy():
+    import numpy as np
+    import json
+    from nb2workflow.nbadapter import denumpyfy
+
+    data = {"d":np.bool_(True), "k": np.array([1,2,3]), "dd": [1,2,np.float32(33),{'a':np.int64(10)}]}
+
+    try:
+        r = json.dumps(data)
+        print(r)
+    except TypeError as e:
+        print("failed as expected", e)
+    else:
+        raise Exception("did not fail")
+
+    r = json.dumps(denumpyfy(data))
+    print(r)
+
