@@ -547,6 +547,9 @@ def nbrun(nb_source, inp):
 
     with open("{}_output.json".format(nba.name), "w") as f:
         json.dump(r, f)
+    
+    with open("cwl.output.json", "w") as f:
+        json.dump(r, f)
 
     nbdata = open(nba.output_notebook_fn, "rb").read()
     nbfn = "{}_output.ipynb".format(nba.name)
