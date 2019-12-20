@@ -51,7 +51,8 @@ def nb2cwl_container(image, notebook_fn, cwl_fn, command=None):
                          streamable=None, 
                          doc=None, 
                          input_binding=dict(prefix="--inp-"+par['name']+"=", separate=False), 
-                         default=None)
+                         default=par['default_value'],
+                   )
         )
 
     #tool_object.outputs.append(
@@ -99,7 +100,8 @@ def nb2cwl(notebook_fn, cwl_fn):
                          streamable=None, 
                          doc=None, 
                          input_binding=dict(prefix="--inp-"+par['name']+"=", separate=False), 
-                         default=None)
+                         default=par['default_value'],
+                         )
         )
 
     #tool_object.outputs.append(
