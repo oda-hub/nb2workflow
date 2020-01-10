@@ -264,14 +264,14 @@ class NotebookAdapter:
 
         
 
-    def execute(self, parameters, progress_bar = True, log_output = True):
+    def execute(self, parameters, progress_bar = True, log_output = True, inplace=False):
         t0 = time.time()
         if logstasher is not None:
             logstasher.log(dict(origin="nb2workflow.execute", event="starting", parameters=parameters, workflow_name=notebook_short_name(self.notebook_fn), health=current_health()))
 
 
         logger.info("starting job")
-        exceptions = self._execute(parameters, progress_bar, log_output)
+        exceptions = self._execute(parameters, progress_bar, log_output, inplace)
 
         tspent = time.time() - t0
         if logstasher is not None:
@@ -285,12 +285,17 @@ class NotebookAdapter:
 
         return exceptions
 
-    def _execute(self, parameters, progress_bar = True, log_output = True):
-        tmpdir = self.new_tmpdir()
+    def _execute(self, parameters, progress_bar = True, log_output = True, inplace=False):
 
-        logger.info("new tmpdir: %s", tmpdir)
+        if not inplace :
+            tmpdir = self.new_tmpdir()
+            logger.info("new tmpdir: %s", tmpdir)
 
-        logger.info(subprocess.check_output(["git","clone",os.path.dirname(os.path.realpath(self.notebook_fn)), tmpdir]))
+            logger.info(subprocess.check_output(["git","clone",os.path.dirname(os.path.realpath(self.notebook_fn)), tmpdir]))
+        else:
+            tmpdir =os.path.dirname(os.path.realpath(self.notebook_fn))
+            logger.info("executing inplace, no tmpdir is input dir: %s", tmpdir)
+
         
         self.update_summary(state="started", parameters=parameters)
 
@@ -508,7 +513,7 @@ def nbreduce(nb_source, max_size_mb):
             logging.info('notebook size %.4lg Mb is larger than required %.5lg Mb, setting cell size limit to the largest cell %.5lg', current_size_mb, max_size_mb, cellsize_limit)
 
 
-def nbrun(nb_source, inp):
+def nbrun(nb_source, inp, inplace=False):
 
     nbas = find_notebooks(nb_source)
 
@@ -526,7 +531,7 @@ def nbrun(nb_source, inp):
 
     logging.info("found parameters %s", repr(pars))
 
-    exceptions = nba.execute(pars)
+    exceptions = nba.execute(pars, inplace=inplace)
 
     if len(exceptions) == 0:
         logging.info("execution SUCCESSFUL!")
@@ -649,6 +654,7 @@ def main():
     parser = argparse.ArgumentParser(description='Run some notebooks') # run locally, remotely, semantically
     parser.add_argument('notebook', metavar='notebook', type=str)
     parser.add_argument('--debug', action="store_true")
+    parser.add_argument('--inplace', action="store_true")
     
     parser.add_argument('inputs', nargs=argparse.REMAINDER)
 
@@ -663,7 +669,7 @@ def main():
     setup_logging(args.debug)
 
 
-    nbrun(args.notebook, inputs)
+    nbrun(args.notebook, inputs, inplace=args.inplace)
 
 
 if __name__ == "__main__":
