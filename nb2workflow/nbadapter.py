@@ -291,7 +291,11 @@ class NotebookAdapter:
             tmpdir = self.new_tmpdir()
             logger.info("new tmpdir: %s", tmpdir)
 
-            logger.info(subprocess.check_output(["git","clone",os.path.dirname(os.path.realpath(self.notebook_fn)), tmpdir]))
+            try:
+                logger.info(subprocess.check_output(["git","clone",os.path.dirname(os.path.realpath(self.notebook_fn)), tmpdir]))
+            except:
+                logger.info("git clone failed, will attempt copytree")
+                shutil.copytree(os.path.dirname(os.path.realpath(self.notebook_fn)), tmpdir)
         else:
             tmpdir =os.path.dirname(os.path.realpath(self.notebook_fn))
             logger.info("executing inplace, no tmpdir is input dir: %s", tmpdir)
