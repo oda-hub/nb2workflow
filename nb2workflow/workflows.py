@@ -16,7 +16,7 @@ try:
     from nb2workflow import logstash
     logstasher = logstash.LogStasher()
 except Exception as e:
-    print("unable to setup logstash",repr(e))
+    logging.debug("unable to setup logstash",repr(e))
 
     logstasher = None
 
@@ -26,7 +26,7 @@ try:
 except ImportError:
     sentry_sdk = None
 except Exception as e:
-    print("big problem with sentry:",repr(e))
+    logging.debug("big problem with sentry:",repr(e))
     sentry_sdk = None
 
 
