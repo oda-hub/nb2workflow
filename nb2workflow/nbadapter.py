@@ -30,7 +30,7 @@ try:
     from nb2workflow import logstash
     logstasher = logstash.LogStasher()
 except Exception as e:
-    logger.warning("unable to setup logstash %s",repr(e))
+    logger.debug("unable to setup logstash %s",repr(e))
 
     logstasher = None
 
