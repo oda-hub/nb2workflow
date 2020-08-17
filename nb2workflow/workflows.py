@@ -3,6 +3,7 @@ import os
 import requests
 import time
 import datetime
+import logging
 from collections import OrderedDict
 
 from diskcache import Cache
