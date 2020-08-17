@@ -16,7 +16,7 @@ install:
 - pip install -r requirements.txt
 - pip install pysqlite3>=3.8.3 --upgrade
 - pip install -r tests/testrepo/requirements.txt
-- pip install .[service,cwl,rdf,docker]
+- pip install .[service,cwl,rdf,docker,domains]
 script:
 - PYTHONPATH=./ TEST_NOTEBOOK=$PWD/tests/testrepo/workflow-notebook.ipynb TEST_NOTEBOOK_REPO=$PWD/tests/testrepo/ py.test . --cov=./ --maxfail=1
 after_success:

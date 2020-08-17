@@ -56,6 +56,11 @@ setup(name='nb2workflow',
         ]
       },
 
+      tests_require=[
+        'pytest',
+        'pytest-xprocess',
+      ],
+
       install_requires=[
         'papermill',
         'ipykernel',

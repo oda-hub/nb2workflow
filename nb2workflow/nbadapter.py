@@ -478,7 +478,8 @@ def nbreduce(nb_source, max_size_mb):
 
         newcells = []
         outputs_left = 0
-        for cell in nb.cells:
+        for i_cell, cell in enumerate(nb.cells):
+            logging.info('try to reduce CELL #%i', i_cell)
     
             try:
                 cellsize = len(json.dumps(cell.outputs))
@@ -489,10 +490,11 @@ def nbreduce(nb_source, max_size_mb):
             if largest_cellsize is None or largest_cellsize < cellsize:
                 largest_cellsize = cellsize
 
-            logging.info("cell size %.5lg %s", cellsize, str(cell.metadata))
+            logging.info("cell size %.5lg largest cell size %.5lg", cellsize, largest_cellsize)
+            #logging.info("cell size %.5lg largest cell size %.5lg; metadata %s", cellsize, largest_cellsize, str(cell.metadata))
 
             if 'injected-gather-outputs' in cell.metadata.get('tags', []):
-                print("skipping")
+                logging.info("is injected-gather-outputs: skipping")
                 continue
 
             if cellsize_limit is not None and cellsize >= cellsize_limit:
@@ -500,15 +502,20 @@ def nbreduce(nb_source, max_size_mb):
                 #newcells.append(newcell)
                 logging.info('cleaning cell')
                 cell.outputs = []
+                largest_cellsize = None
+
 
             if cell.outputs != []:
+                logging.info('this cell has viable outputs')
                 outputs_left += 1
         
             newcells.append(cell)
 
         if outputs_left == 0:
             logging.info('notebook size %.4lg Mb, and not more outputs left, cleaning aborted', current_size_mb)
-            return           
+            return
+        else:
+            logging.info('notebook size %.4lg Mb, still has %i outputs: cleaning may continue', current_size_mb,  outputs_left)
 
         nb.cells = newcells 
         pm.iorw.write_ipynb(nb, nb_source)
@@ -517,8 +524,8 @@ def nbreduce(nb_source, max_size_mb):
             logging.info('notebook size %.4lg Mb is smaller than required %.5lg Mb, only cleaning gathering', current_size_mb, max_size_mb)
             return
         else:
-            cellsize_limit = largest_cellsize
             logging.info('notebook size %.4lg Mb is larger than required %.5lg Mb, setting cell size limit to the largest cell %.5lg', current_size_mb, max_size_mb, cellsize_limit)
+            cellsize_limit = largest_cellsize
 
 
 def nbrun(nb_source, inp, inplace=False):
