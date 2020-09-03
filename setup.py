@@ -69,8 +69,7 @@ setup(name='nb2workflow',
         'diskcache',
         'requests',
         'ruamel.yaml',
-        'pyarrow<=0.17.1',
-        'nteract-scrapbook',
+        'nteract-scrapbook==0.3.1',
       ],
 
 
