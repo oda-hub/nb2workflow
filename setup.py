@@ -53,6 +53,9 @@ setup(name='nb2workflow',
             'numpy',
             'astropy',
             'pandas',
+        ],
+        'scrap': [
+            'nteract-scrapbook',
         ]
       },
 
@@ -65,7 +68,6 @@ setup(name='nb2workflow',
         'papermill',
         'ipykernel',
         'nbconvert', #'nbconvert==5.5',
-        'nteract-scrapbook',
         'psutil',
         'diskcache',
         'requests',
