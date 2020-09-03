@@ -54,9 +54,6 @@ setup(name='nb2workflow',
             'astropy',
             'pandas',
         ],
-        'scrap': [
-            'nteract-scrapbook',
-        ]
       },
 
       tests_require=[
@@ -72,6 +69,8 @@ setup(name='nb2workflow',
         'diskcache',
         'requests',
         'ruamel.yaml',
+        'pyarrow<=0.17.1',
+        'nteract-scrapbook',
       ],
 
 
