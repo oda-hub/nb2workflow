@@ -208,14 +208,19 @@ class NotebookAdapter:
                     par=InputParameter.from_nbline(line)
                     if par is not None:
                         input_parameters[par.name]=par.as_dict()
-                        input_parameters[par.name]=par.as_dict()
+                        input_parameters[par.name]['value']=par.as_dict()['default_value']
             
             if 'system-parameters' in cell.metadata.get('tags',[]):
                 for line in cell['source'].split("\n"):
                     par=InputParameter.from_nbline(line)
                     if par is not None:
                         system_parameters[par.name]=par.as_dict()
-                        system_parameters[par.name]=par.as_dict()
+            
+            if 'injected-parameters' in cell.metadata.get('tags',[]):
+                for line in cell['source'].split("\n"):
+                    par=InputParameter.from_nbline(line)
+                    if par is not None:
+                        input_parameters[par.name]['value']=par.as_dict()['default_value']
 
         self.system_parameters = system_parameters
 
@@ -460,8 +465,14 @@ def find_notebooks(source):
 def nbinspect(nb_source):
     nbas = find_notebooks(nb_source)
 
+    class CustomEncoder(json.JSONEncoder):
+        def default(self, obj):
+            if isinstance(obj, type):
+                return str(obj)
+            return json.JSONEncoder.default(self, obj)
+
     for n, nba in nbas.items():
-        logger.info("%s %s", n, pprint.pprint(nba.extract_parameters(), indent=4))
+        print(json.dumps(nba.extract_parameters(), indent=4, sort_keys=True, cls=CustomEncoder))
 
 
 def nbreduce(nb_source, max_size_mb):
