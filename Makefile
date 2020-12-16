@@ -4,6 +4,7 @@ image:=odahub/nb2workflow:$(nb2wrev)
 REPO?=oda
 
 build: Dockerfile
+	git push
 	docker build --build-arg nb2workflow_revision=$(nb2wrev) -t $(image) . 
 
 push: build
