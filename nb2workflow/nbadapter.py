@@ -462,7 +462,7 @@ def find_notebooks(source):
 
     return notebook_adapters
 
-def nbinspect(nb_source):
+def nbinspect(nb_source, out=True):
     nbas = find_notebooks(nb_source)
 
     class CustomEncoder(json.JSONEncoder):
