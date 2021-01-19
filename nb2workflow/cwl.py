@@ -127,7 +127,7 @@ def main():
     parser.add_argument('--publish', metavar='upstream-url', type=str, default=None)
     parser.add_argument('--publish-as', metavar='published url', type=str, default=None)
     parser.add_argument('--debug', action="store_true")
-    parser.add_argument('--container', action="store_true")
+    parser.add_argument('--container', metavar="container")
 
     args = parser.parse_args()
 
@@ -149,9 +149,9 @@ def main():
         handler.setLevel(logging.INFO)
 
     if args.container:
-        nb2cwl_container(os.path.basename(args.notebook), args.cwl)
+        nb2cwl_container(args.container, os.path.basename(args.notebook), args.cwl)
     else:
-        nb2cwl(args.image, args.notebook, args.cwl)
+        nb2cwl(args.notebook, args.cwl)
 
 
 if __name__ == "__main__":
