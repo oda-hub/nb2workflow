@@ -18,7 +18,7 @@ try:
     logstasher = logstash.LogStasher()
 except Exception as e:
     import logging
-    logging.warning("unable to setup logstash",repr(e))
+    logging.warning("unable to setup logstash %s",repr(e))
 
     logstasher = None
 

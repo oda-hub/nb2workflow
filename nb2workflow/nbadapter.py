@@ -244,7 +244,7 @@ class NotebookAdapter:
         issues=[]
 
         if len(unexpected_parameters)>0:
-            issues+=["found unexpected request parameters: "+(", ".join(unexpected_parameters))]
+            issues+=[f'found unexpected request parameters: {", ".join(unexpected_parameters)}, can be {", ".join(expected_parameters.keys())}']
             
         return dict(
                         issues=issues,
