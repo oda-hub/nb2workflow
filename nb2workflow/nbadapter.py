@@ -351,7 +351,7 @@ class NotebookAdapter:
 
             except nbformat.reader.NotJSONError:
                 ntries -= 1
-                logger.info("retrying...", ntries)
+                logger.info("retrying... %s", ntries)
                 time.sleep(2)
                 continue   
 

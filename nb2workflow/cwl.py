@@ -153,9 +153,9 @@ def main():
         handler.setLevel(logging.INFO)
 
     if args.container:
-        nb2cwl_container(args.container, os.path.basename(args.notebook), args.cwl, nbrunner_module=nbrunner_module)
+        nb2cwl_container(args.container, os.path.basename(args.notebook), args.cwl, nbrunner_module=args.nbrunner_module)
     else:
-        nb2cwl(args.notebook, args.cwl, nbrunner_module=nbrunner_module)
+        nb2cwl(args.notebook, args.cwl, nbrunner_module=args.nbrunner_module)
 
 
 if __name__ == "__main__":

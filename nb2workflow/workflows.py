@@ -29,7 +29,7 @@ except ImportError:
     sentry_sdk = None
 except Exception as e:
     import logging
-    logging.warning("big problem with sentry:",repr(e))
+    logging.debug("big problem with sentry: %s",repr(e))
     sentry_sdk = None
 
 
@@ -166,7 +166,7 @@ def evaluate(router, *args, **kwargs):
 
                 #raise
     else:
-        raise NotImplemented
+        raise NotImplementedError
 
 
     if logstasher:
