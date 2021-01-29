@@ -1,11 +1,17 @@
 import re
-import consul
-
 import logging
-
 logger = logging.getLogger('nb2workflow.publish')
 
+try:
+    import consul
+except:
+    consul = None
+
+
 def publish(upstream_url, name, service_host, service_port):
+    if consul is None:
+        return
+
     r = re.match("(.*?)://(.*?)(?:$|:)(\d*)",upstream_url)
     if r:
         scheme, host, port = r.groups()

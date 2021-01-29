@@ -12,12 +12,15 @@ def python_type2cwl_type(pt):
 
     return pt.__name__
 
-def nb2cwl_container(image, notebook_fn, cwl_fn, command=None):
+def nb2cwl_container(image, notebook_fn, cwl_fn, command=None, nbrunner_module=None):
     nba = nbadapter.NotebookAdapter(notebook_fn)
 
     if command is None:
         base_command = "python"
-        arguments = ["-m", "nb2workflow.nbadapter", "/repo/"+notebook_name]
+        if nbrunner_module is None:
+            arguments = ["-m", "nb2workflow.nbadapter", "/repo/"+notebook_name]
+        else:
+            arguments = ["-m", nbrunner_module, "/repo/"+notebook_name]
     else:
         base_command = 'bash'
         arguments = ['-c', command]
@@ -71,7 +74,7 @@ def nb2cwl_container(image, notebook_fn, cwl_fn, command=None):
     tool_object.export()
     tool_object.export(cwl_fn)
 
-def nb2cwl(notebook_fn, cwl_fn):
+def nb2cwl(notebook_fn, cwl_fn, nbrunner_module="nb2workflow.nbadapter"):
     nba = nbadapter.NotebookAdapter(notebook_fn)
 
     
@@ -86,7 +89,7 @@ def nb2cwl(notebook_fn, cwl_fn):
                     stdout=None, 
                     path=None)
 
-    tool_object.arguments=["-m","nb2workflow.nbadapter",notebook_fn]
+    tool_object.arguments=["-m", nbrunner_module, notebook_fn]
 
 
     for par in nba.extract_parameters().values():
@@ -128,6 +131,7 @@ def main():
     parser.add_argument('--publish-as', metavar='published url', type=str, default=None)
     parser.add_argument('--debug', action="store_true")
     parser.add_argument('--container', metavar="container")
+    parser.add_argument('--nbrunner-module', metavar="nbrunner_module", default="nb2workflow.nbadapter")
 
     args = parser.parse_args()
 
@@ -149,9 +153,9 @@ def main():
         handler.setLevel(logging.INFO)
 
     if args.container:
-        nb2cwl_container(args.container, os.path.basename(args.notebook), args.cwl)
+        nb2cwl_container(args.container, os.path.basename(args.notebook), args.cwl, nbrunner_module=nbrunner_module)
     else:
-        nb2cwl(args.notebook, args.cwl)
+        nb2cwl(args.notebook, args.cwl, nbrunner_module=nbrunner_module)
 
 
 if __name__ == "__main__":
