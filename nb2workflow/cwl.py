@@ -13,6 +13,8 @@ def python_type2cwl_type(pt):
     return pt.__name__
 
 def nb2cwl_container(image, notebook_fn, cwl_fn, command=None, nbrunner_module=None):
+    raise NotImplementedError
+
     nba = nbadapter.NotebookAdapter(notebook_fn)
 
     if command is None:
@@ -102,7 +104,7 @@ def nb2cwl(notebook_fn, cwl_fn, nbrunner_module="nb2workflow.nbadapter"):
                          param_format=None,
                          streamable=None, 
                          doc=None, 
-                         input_binding=dict(prefix="--inp-"+par['name']+"=", separate=False), 
+                         input_binding=dict(prefix="--inp-"+par['name'], separate=True), 
                          default=par['default_value'],
                          )
         )
