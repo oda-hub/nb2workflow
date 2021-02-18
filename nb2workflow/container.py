@@ -1,6 +1,7 @@
 from __future__ import print_function
 
 import os
+import sys
 import argparse
 import json
 import docker
@@ -137,6 +138,11 @@ def main():
 
     repo_path = args.repo
     tag_image = args.tag_image
+
+    if tag_image.lower() != tag_image:
+        print("\033[31mdocker does not accept tags with anything but lowercase!\033[0m")
+        print(f"\033[31mthis is bad: {tag_image}\033[0m")
+        sys.exit(1)
 
     if args.tag_image == "":
         tag_image = os.path.basename(os.path.abspath(repo_path))
