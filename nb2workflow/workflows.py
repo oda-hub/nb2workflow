@@ -65,6 +65,8 @@ def evaluate(router, *args, **kwargs):
     async_request = kwargs.pop('_async_request', True)
     cached = kwargs.pop('_cached', True)
 
+    print("async_request is not used here, but is set to", async_request)
+
 
     if logstasher:
         logstasher.set_context(dict(router=router, args=args, kwargs=kwargs))
@@ -105,11 +107,13 @@ def evaluate(router, *args, **kwargs):
         result = dict(output = output, exceptions = [serialize_workflow_exception(e) for e in exceptions])
 
     elif router.startswith("odahub") or router.startswith("host"):
+        workflow = args[0]
+
         if router == "odahub-staging":
-            url_template = "https://oda-workflows-"+workflow+"-staging.odahub.io/api/v1.0/get/{}"
+            url_template = f"https://oda-workflows-{workflow}-staging.odahub.io/api/v1.0/get/" + "{}"
 
         if router == "odahub":
-            url_template = "https://oda-workflows-"+workflow+".odahub.io/api/v1.0/get/{}"
+            url_template = f"https://oda-workflows-{workflow}.odahub.io/api/v1.0/get/" + "{}"
     
         if router == "host":
             url_template = args[0]+"/api/v1.0/get/{}"
