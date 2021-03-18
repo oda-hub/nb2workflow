@@ -1,0 +1,30 @@
+[[source]]
+name = "pypi"
+url = "https://pypi.org/simple"
+verify_ssl = true
+
+[dev-packages]
+
+[packages]
+flask-caching = "*"
+apscheduler = "*"
+checksumdir = "*"
+diskcache = "*"
+docker = "*"
+flasgger = "*"
+flask = "*"
+flask-cors = "*"
+ipykernel = "*"
+nbconvert = "==5.5"
+psutil = "*"
+pytest-flask = "*"
+python-consul = "*"
+rdflib = "*"
+requests = "*"
+ruamel-yaml = "*"
+cwlgen = "*"
+papermill = "*"
+nteract-scrapbook = "*"
+
+[requires]
+python_version = "3.6"
