@@ -1,0 +1,9 @@
+*png
+.eggs
+.cache
+*gpg
+log
+workflow-notebook*json
+workflow-notebook*cwl
+workflow-notebook*html
+workflow.turtle
