@@ -9,7 +9,7 @@ import time
 import tempfile
 import pprint
 import subprocess
-import ruamel.yaml as yaml
+import yaml
 import argparse
 import json
 import base64

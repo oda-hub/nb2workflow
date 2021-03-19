@@ -12,7 +12,7 @@ import hashlib
 import datetime
 import tempfile
 import nbformat
-import ruamel.yaml as yaml
+import yaml
 
 from io import BytesIO
 

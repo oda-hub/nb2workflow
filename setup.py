@@ -69,7 +69,7 @@ setup(name='nb2workflow',
         'psutil',
         'diskcache',
         'requests',
-        'ruamel.yaml',
+        'pyyaml',
         'nteract-scrapbook==0.3.1', # until pyarrow works with py3
       ],
 
