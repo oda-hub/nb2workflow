@@ -59,6 +59,7 @@ setup(name='nb2workflow',
         'pytest',
         'pytest-xprocess',
         'matplotlib',
+        'cwl-runner',
       ],
 
       install_requires=[

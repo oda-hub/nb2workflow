@@ -680,7 +680,7 @@ def get_trace_list(since=None):
             continue
                         
         try:
-            summary=yaml.load(open(os.path.join(d,"summary.yaml")))
+            summary=yaml.load(open(os.path.join(d,"summary.yaml")), Loader=yaml.Loader)
         except Exception as e:
             summary="unable to load: "+repr(e)
 
