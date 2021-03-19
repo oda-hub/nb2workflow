@@ -41,7 +41,8 @@ jobs:
 
     - name: Test with pytest
       run: |
-        export PYTHONPATH=./; py.test . --cov=./
+        python setup.py install
+        PYTHONPATH=./ py.test . --cov=./
 
     - name: Codecov
       uses: codecov/codecov-action@v1.3.1
