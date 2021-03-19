@@ -574,7 +574,7 @@ def nbrun(nb_source, inp, inplace=False):
         fn = nba.export_html()
         open("{}_output.ipynb".format(nba.name), "wb").write(open(nba.output_notebook_fn, "rb").read())
 
-        raise Exception("FAILED to execute {}: {}".format(nba.name, exceptions))
+        raise Exception(f"FAILED to execute {nba.name} {exceptions} html exported in {fn}")
 
     r={}
     for k,v in nba.extract_output().items():
@@ -589,11 +589,11 @@ def nbrun(nb_source, inp, inplace=False):
     nbdata = open(nba.output_notebook_fn, "rb").read()
     nbfn = "{}_output.ipynb".format(nba.name)
     open(nbfn, "wb").write(nbdata)
-        
 
+    #TODO: store if not too big?   
     #r['output_notebook'] = nbfn
     #r['output_notebook_content'] = base64.b64encode(nbdata).decode()
-    
+        
     htmlfn = "{}_output.html".format(nba.name)
     nba.export_html(htmlfn)
     
