@@ -34,7 +34,7 @@ verify_tls = False
 from nb2workflow.nbadapter import NotebookAdapter, find_notebooks, PapermillWorkflowIncomplete
 from nb2workflow import ontology, publish, schedule
     
-logger=logging.getLogger('nb2workflow.service')
+logger = logging.getLogger('nb2workflow.service')
 
 import queue
 
@@ -340,7 +340,7 @@ def get_view_function(url, method='GET'):
 
 def setup_routes(app):
     for target, nba in app.notebook_adapters.items():
-        target_specs=specs_dict = {
+        target_specs= {
               "parameters": [
                 {
                   "name": p_name,
@@ -388,8 +388,9 @@ def setup_routes(app):
                 funcg(target)
             )))
         except AssertionError as e:
-            logger.info("unable to add route:",e)
-            raise
+            logger.warning("unable to add route: %s, ignoring the endpoint",e)
+            continue
+
 
         schedule_interval = nba.get_system_parameter_value('schedule_interval', 0)
         if schedule_interval>0:

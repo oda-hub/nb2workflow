@@ -102,7 +102,7 @@ def nb2cwl(notebook_fn, cwl_fn, nbrunner_module="nb2workflow.nbadapter"):
                          param_format=None,
                          streamable=None, 
                          doc=None, 
-                         input_binding=dict(prefix="--inp-"+par['name'], separate=True), 
+                         input_binding=dict(prefix="--inp-"+par['name']+"=", separate=False), 
                          default=par['default_value'],
                          )
         )

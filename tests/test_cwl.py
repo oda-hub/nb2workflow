@@ -1,20 +1,23 @@
-import nb2workflow.cwl as cwl
 import os
+import subprocess
 
-def test_cwl():
-    cwl_fn="test.cwl"    
+import pytest
 
-    cwl.nb2cwl(os.environ.get("TEST_NOTEBOOK"), "test.cwl")
+import nb2workflow.cwl as cwl
 
-    import subprocess
 
-    subprocess.check_call(["cwl-runner", "test.cwl"])
+def test_cwl(test_notebook):
+    cwl_fn = "test.cwl"
 
-def test_cwl_odakb():
-    cwl_fn="test.cwl"    
+    cwl.nb2cwl(test_notebook, cwl_fn)
 
-    cwl.nb2cwl(os.environ.get("TEST_NOTEBOOK"), "test.cwl", nbrunner_module="odakb.evaluator")
+    subprocess.check_call(["cwl-runner", cwl_fn])
 
-    import subprocess
 
-    subprocess.check_call(["cwl-runner", "test.cwl"])
+@pytest.mark.xfail
+def test_cwl_odakb(test_notebook):
+    cwl_fn = "test.cwl"
+
+    cwl.nb2cwl(test_notebook, "test.cwl", nbrunner_module="odakb.evaluator")
+
+    subprocess.check_call(["cwl-runner", cwl_fn])

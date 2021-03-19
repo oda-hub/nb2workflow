@@ -64,7 +64,7 @@ setup(name='nb2workflow',
       install_requires=[
         'papermill',
         'ipykernel',
-        'nbconvert', #'nbconvert==5.5',
+        'nbconvert', 
         'psutil',
         'diskcache',
         'requests',

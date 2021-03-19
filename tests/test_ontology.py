@@ -12,7 +12,7 @@ logger=logging.getLogger("nb2workflow")
 logger.setLevel(level=logging.DEBUG)
 
 @pytest.mark.skipif(os.environ.get("TRAVIS", 'false') == "true", reason="no way of currently testing this")
-def test_nbadapter_repo():
+def test_nbadapter_repo(test_notebook_repo):
     from nb2workflow.nbadapter import NotebookAdapter, find_notebooks
     from nb2workflow import ontology
 

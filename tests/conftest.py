@@ -1,18 +1,33 @@
-from __future__ import print_function
-
+import re
+import os
 import pytest
+import signal
+import psutil
 
 import nb2workflow.service
 
 
 @pytest.fixture
-def app():
-    app = nb2workflow.service.create_app()
+def test_notebook():
+    return os.environ.get('TEST_NOTEBOOK',
+                          os.path.join(os.getcwd(), "tests/testrepo/workflow-notebook.ipynb"))
+
+
+@pytest.fixture
+def test_notebook_repo():
+    return os.environ.get('TEST_NOTEBOOK_REPO',
+                          os.path.join(os.getcwd(), 'tests/testrepo/'))
+
+
+@pytest.fixture
+def app(test_notebook):
+    app = nb2workflow.service.app
+    app.notebook_adapters = nb2workflow.nbadapter.find_notebooks(test_notebook)
+    nb2workflow.service.setup_routes(app)
+    print("creating app")
     return app
 
-import re
 
-import signal, psutil
 def kill_child_processes(parent_pid, sig=signal.SIGTERM):
     try:
         parent = psutil.Process(parent_pid)
@@ -22,28 +37,32 @@ def kill_child_processes(parent_pid, sig=signal.SIGTERM):
     except psutil.NoSuchProcess:
         return
 
-@pytest.yield_fixture
-def service_fixture(pytestconfig):
+
+@pytest.fixture
+def service_fixture(pytestconfig, test_notebook_repo):
     import subprocess
     import os
     import copy
     import time
     from threading import Thread
 
-    env=copy.deepcopy(dict(os.environ))
-    print("rootdir",str(pytestconfig.rootdir))
-    env['PYTHONPATH']=str(pytestconfig.rootdir)+":"+str(pytestconfig.rootdir)+"/tests:"+env.get('PYTHONPATH',"")
-    print("pythonpath",env['PYTHONPATH'])
+    env = copy.deepcopy(dict(os.environ))
+    print("rootdir", str(pytestconfig.rootdir))
+    env['PYTHONPATH'] = str(pytestconfig.rootdir)+":" + \
+        str(pytestconfig.rootdir)+"/tests:"+env.get('PYTHONPATH', "")
+    print("pythonpath", env['PYTHONPATH'])
 
-    p=subprocess.Popen(
-        ["python","-m","nb2workflow.service",os.environ.get("TEST_NOTEBOOK_REPO"),'--port','9292'],
+    p = subprocess.Popen(
+        ["python", "-m", "nb2workflow.service",
+            test_notebook_repo, '--port', '9292'],
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         shell=False,
         env=env,
     )
 
-    url_store=[None]
+    url_store = [None]
+
     def follow_output():
         url_store[0] = None
         for line in iter(p.stdout.readline, b''):
@@ -52,14 +71,13 @@ def service_fixture(pytestconfig):
             print("following server:", line.rstrip())
             m = re.search("Running on (.*?) \(Press CTRL\+C to quit\)", line)
             if m:
-                url_store[0] = m.group(1)[:-1]  # alaternatively get from configenv
+                # alaternatively get from configenv
+                url_store[0] = m.group(1)[:-1]
                 print("found url:", url_store[0])
 
             if re.search("\* Debugger PIN:.*?", line):
                 url_store[0] = url_store[0].replace("0.0.0.0", "127.0.0.1")
                 print("server ready, url", url_store[0])
-
-
 
     thread = Thread(target=follow_output, args=())
     thread.start()
@@ -68,17 +86,15 @@ def service_fixture(pytestconfig):
         time.sleep(0.1)
     time.sleep(0.5)
 
-    ddservice=url_store[0]
+    ddservice = url_store[0]
 
     yield ddservice
 
-    print("child:",p.pid)
-    #p.kill()
+    print("child:", p.pid)
+    # p.kill()
 
-    import os,signal
-    kill_child_processes(p.pid,signal.SIGKILL)
+    kill_child_processes(p.pid, signal.SIGKILL)
     os.kill(p.pid, signal.SIGKILL)
-
 
 
 def pytest_addoption(parser):
@@ -88,7 +104,8 @@ def pytest_addoption(parser):
 
 
 def pytest_configure(config):
-    config.addinivalue_line("markers", "service: mark test as relying on local service to run")
+    config.addinivalue_line(
+        "markers", "service: mark test as relying on local service to run")
 
 
 def pytest_collection_modifyitems(config, items):
