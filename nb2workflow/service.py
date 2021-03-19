@@ -196,13 +196,13 @@ class AsyncWorkflow:
                     output=nba.extract_output()
                     logger.info("completed, output length %s",len(output))
                     if len(output) == 0:
-                        logger.debug("output from notebook is empty, something failed, attempts left:", nretry)
+                        logger.debug("output from notebook is empty, something failed, attempts left: %s", nretry)
                     else:
                         break
-                except Exception as e:
-                    logger.debug("output notebook incomplte or does not exist", e, "attempts left:", nretry)
                 except nbformat.reader.NotJSONError as e:
-                    logger.debug("output notebook incomplte", e, "attempts left:", nretry)
+                    logger.debug("output notebook incomplete %s attempts left: %s", e, nretry)
+                except Exception as e:
+                    logger.debug("output notebook incomplte or does not exist %s attempts left: %s", e, nretry)
 
                 nretry-=1
                 time.sleep(1)
@@ -271,11 +271,11 @@ def workflow(target, background=False, async_request=False):
             try:
                 output=nba.extract_output()
                 if len(output) == 0:
-                    logger.debug("output from notebook is empty, something failed, attempts left:", nretry)
+                    logger.debug("output from notebook is empty, something failed, attempts left: %s", nretry)
                 else:
                     break
             except nbformat.reader.NotJSONError as e:
-                logger.debug("output notebook incomplte", e, "attempts left:", nretry)
+                logger.debug("output notebook incomplte %s attempts left: %s", e, nretry)
 
             nretry-=1
             time.sleep(1)

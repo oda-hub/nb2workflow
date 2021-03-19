@@ -12,11 +12,11 @@ def publish(upstream_url, name, service_host, service_port):
     if consul is None:
         return
 
-    r = re.match("(.*?)://(.*?)(?:$|:)(\d*)",upstream_url)
+    r = re.match(r"(.*?)://(.*?)(?:$|:)(\d*)",upstream_url)
     if r:
         scheme, host, port = r.groups()
     else:
-        r = re.match("(.*?)(?:$|:)(\d*)",upstream_url)
+        r = re.match(r"(.*?)(?:$|:)(\d*)",upstream_url)
         scheme = "http"
         host, port = r.groups()
     
@@ -29,7 +29,7 @@ def publish(upstream_url, name, service_host, service_port):
 
     logger.debug("found services: %s",cc.agent.services())
 
-    logger.debug("will publish as %s",service_host, service_port)
+    logger.debug("will publish as %s, %s",service_host, service_port)
     
     cc.agent.service.register(name, address = service_host, port = service_port, tags = ["nb2service", "traefik.protocol=https"])
 
