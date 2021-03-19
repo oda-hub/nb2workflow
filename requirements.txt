@@ -23,3 +23,4 @@ diskcache
 requests
 ruamel.yaml
 nteract-scrapbook==0.3.1 # until pyarrow works with py3
+matplotlib

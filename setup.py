@@ -58,6 +58,7 @@ setup(name='nb2workflow',
       tests_require=[
         'pytest',
         'pytest-xprocess',
+        'matplotlib',
       ],
 
       install_requires=[
