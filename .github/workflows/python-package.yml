@@ -40,7 +40,6 @@ jobs:
 
     - name: Test with pytest
       run: |
-        pip install --upgrade .[cwl,rdf,service]
         py.test . --cov=./
 
     - name: Codecov
