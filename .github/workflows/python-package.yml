@@ -40,7 +40,7 @@ jobs:
 
     - name: Test with pytest
       run: |
-        PYTHONPATH=./ py.test . --cov=./
+        export PYTHONPATH=./; py.test . --cov=./
 
     - name: Codecov
       uses: codecov/codecov-action@v1.3.1
