@@ -12,7 +12,7 @@ import hashlib
 import datetime
 import tempfile
 import nbformat
-import ruamel.yaml as yaml
+import yaml
 
 from io import BytesIO
 
@@ -34,7 +34,7 @@ verify_tls = False
 from nb2workflow.nbadapter import NotebookAdapter, find_notebooks, PapermillWorkflowIncomplete
 from nb2workflow import ontology, publish, schedule
     
-logger=logging.getLogger('nb2workflow.service')
+logger = logging.getLogger('nb2workflow.service')
 
 import queue
 
@@ -196,13 +196,13 @@ class AsyncWorkflow:
                     output=nba.extract_output()
                     logger.info("completed, output length %s",len(output))
                     if len(output) == 0:
-                        logger.debug("output from notebook is empty, something failed, attempts left:", nretry)
+                        logger.debug("output from notebook is empty, something failed, attempts left: %s", nretry)
                     else:
                         break
-                except Exception as e:
-                    logger.debug("output notebook incomplte or does not exist", e, "attempts left:", nretry)
                 except nbformat.reader.NotJSONError as e:
-                    logger.debug("output notebook incomplte", e, "attempts left:", nretry)
+                    logger.debug("output notebook incomplete %s attempts left: %s", e, nretry)
+                except Exception as e:
+                    logger.debug("output notebook incomplte or does not exist %s attempts left: %s", e, nretry)
 
                 nretry-=1
                 time.sleep(1)
@@ -271,11 +271,11 @@ def workflow(target, background=False, async_request=False):
             try:
                 output=nba.extract_output()
                 if len(output) == 0:
-                    logger.debug("output from notebook is empty, something failed, attempts left:", nretry)
+                    logger.debug("output from notebook is empty, something failed, attempts left: %s", nretry)
                 else:
                     break
             except nbformat.reader.NotJSONError as e:
-                logger.debug("output notebook incomplte", e, "attempts left:", nretry)
+                logger.debug("output notebook incomplte %s attempts left: %s", e, nretry)
 
             nretry-=1
             time.sleep(1)
@@ -340,7 +340,7 @@ def get_view_function(url, method='GET'):
 
 def setup_routes(app):
     for target, nba in app.notebook_adapters.items():
-        target_specs=specs_dict = {
+        target_specs= {
               "parameters": [
                 {
                   "name": p_name,
@@ -388,8 +388,9 @@ def setup_routes(app):
                 funcg(target)
             )))
         except AssertionError as e:
-            logger.info("unable to add route:",e)
-            raise
+            logger.warning("unable to add route: %s, ignoring the endpoint",e)
+            continue
+
 
         schedule_interval = nba.get_system_parameter_value('schedule_interval', 0)
         if schedule_interval>0:
@@ -679,7 +680,7 @@ def get_trace_list(since=None):
             continue
                         
         try:
-            summary=yaml.load(open(os.path.join(d,"summary.yaml")))
+            summary=yaml.load(open(os.path.join(d,"summary.yaml")), Loader=yaml.Loader)
         except Exception as e:
             summary="unable to load: "+repr(e)
 

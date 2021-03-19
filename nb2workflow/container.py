@@ -19,7 +19,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def build_python(dockefile):
+def build_python(dockerfile):
     dockerfile.append("RUN yum install -y python")
     dockerfile.append("RUN curl https://bootstrap.pypa.io/get-pip.py | python")
 

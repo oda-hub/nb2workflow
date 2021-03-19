@@ -6,8 +6,7 @@ if {'pytest', 'test', 'ptr'}.intersection(sys.argv):
     setup_requires.append('pytest-runner')
 
 setup(name='nb2workflow',
-      #version='1.0.1',
-      version_format = '{tag}.dev{commitcount}+{gitsha}',
+      version = '1.3.4',
       description='convert notebook to workflow',
       author='Volodymyr Savchenko',
       author_email='contact@volodymyrsavchenko.com',
@@ -59,16 +58,18 @@ setup(name='nb2workflow',
       tests_require=[
         'pytest',
         'pytest-xprocess',
+        'matplotlib',
+        'cwl-runner',
       ],
 
       install_requires=[
         'papermill',
         'ipykernel',
-        'nbconvert', #'nbconvert==5.5',
+        'nbconvert', 
         'psutil',
         'diskcache',
         'requests',
-        'ruamel.yaml',
+        'pyyaml',
         'nteract-scrapbook==0.3.1', # until pyarrow works with py3
       ],
 
