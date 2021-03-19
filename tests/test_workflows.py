@@ -4,27 +4,22 @@ import logging
 import os
 import pytest
 import base64
-from imp import reload
+from importlib import reload
 
 from nb2workflow import service
 import nb2workflow.nbadapter
 from flask import url_for
-
-test_notebook=os.environ.get('TEST_NOTEBOOK')
-test_notebook_repo=os.environ.get('TEST_NOTEBOOK_REPO')
-
-#logger=logging.getLogger("nb2workflow")
 
 FORMAT = '%(asctime)-15s %(message)s'
 logging.basicConfig(format=FORMAT)
 logger=logging.getLogger("nb2workflow")
 logger.setLevel(level=logging.DEBUG)
 
-def test_workflow_localfile():
+def test_workflow_localfile(test_notebook_repo):
     
     from nb2workflow import workflows
 
-    result = workflows.evaluate("localfile", os.environ.get("TEST_NOTEBOOK_REPO"), "workflow-notebook")
+    result = workflows.evaluate("localfile", test_notebook_repo, "workflow-notebook")
 
     print(result)
     assert result['output']
@@ -33,11 +28,12 @@ def test_workflow_localfile():
 
     assert 'spectrum' in result['output']
 
-def test_workflow_exception_localfile():
+@pytest.mark.xfail
+def test_workflow_exception_localfile(test_notebook):
     
     from nb2workflow import workflows
 
-    result = workflows.evaluate("localfile", os.environ.get("TEST_NOTEBOOK_REPO"), "workflow-notebook", scwid="66500220010.001")
+    result = workflows.evaluate("localfile", test_notebook, "workflow-notebook", scwid="66500220010.001")
 
     print(result)
     assert len(result['output']) == 0

@@ -9,7 +9,7 @@ import time
 import tempfile
 import pprint
 import subprocess
-import ruamel.yaml as yaml
+import yaml
 import argparse
 import json
 import base64
@@ -83,7 +83,7 @@ def parse_nbline(line):
         try:
             value=literal_eval(value_str.strip())
             python_type = type(value)
-        except Exception as e:
+        except Exception:
             value = value_str
             python_type = str
 
@@ -421,12 +421,15 @@ except Exception as e:
             output_gather_content+="\nisinstance({output},str) and os.path.exists({output}) and sb.glue(\"{output}_content\",base64.b64encode(open({output},'rb').read()).decode())".format(output=output)
             output_gather_content+="\n".format(output=output)
 
+        nb = self.read()
+
         newcell = nbformat.v4.new_code_cell(source=output_gather_content)
         newcell.metadata['tags'] = ['injected-gather-outputs']
 
         nb=self.read()
         nb.cells = nb.cells + [newcell] 
 
+        logger.info("stored preprocecsed notebook as %s", self.preproc_notebook_fn)
         pm.iorw.write_ipynb(nb, self.preproc_notebook_fn)
 
     def get_system_parameter_value(self, name, default):
@@ -502,15 +505,12 @@ def nbreduce(nb_source, max_size_mb):
                 largest_cellsize = cellsize
 
             logging.info("cell size %.5lg largest cell size %.5lg", cellsize, largest_cellsize)
-            #logging.info("cell size %.5lg largest cell size %.5lg; metadata %s", cellsize, largest_cellsize, str(cell.metadata))
-
+            
             if 'injected-gather-outputs' in cell.metadata.get('tags', []):
                 logging.info("is injected-gather-outputs: skipping")
                 continue
 
             if cellsize_limit is not None and cellsize >= cellsize_limit:
-                #newcell = nbformat.v4.new_code_cell(source="# redacted")
-                #newcells.append(newcell)
                 logging.info('cleaning cell')
                 cell.outputs = []
                 largest_cellsize = None
@@ -535,7 +535,11 @@ def nbreduce(nb_source, max_size_mb):
             logging.info('notebook size %.4lg Mb is smaller than required %.5lg Mb, only cleaning gathering', current_size_mb, max_size_mb)
             return
         else:
-            logging.info('notebook size %.4lg Mb is larger than required %.5lg Mb, setting cell size limit to the largest cell %.5lg', current_size_mb, max_size_mb, cellsize_limit)
+            logging.info('notebook size %.4lg Mb is larger than required %.5lg Mb, setting cell size limit to the largest cell %s', 
+                         current_size_mb, 
+                         max_size_mb, 
+                         cellsize_limit)
+
             cellsize_limit = largest_cellsize
 
 

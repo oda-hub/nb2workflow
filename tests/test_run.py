@@ -4,9 +4,6 @@ import base64
 import os
 import logging
 
-test_notebook=os.environ.get('TEST_NOTEBOOK')
-test_notebook_repo=os.environ.get('TEST_NOTEBOOK_REPO')
-
 #logger=logging.getLogger("nb2workflow")
 
 FORMAT = '%(asctime)-15s %(message)s'
@@ -15,7 +12,7 @@ logger=logging.getLogger("nb2workflow")
 logger.setLevel(level=logging.DEBUG)
 
 
-def test_nb():
+def test_nb(test_notebook):
     import nb2workflow.nbadapter
     
     basename = os.path.basename(test_notebook).replace(".ipynb","_output")
@@ -40,7 +37,7 @@ def test_nb():
     assert 'output_notebook_html_content' in r
     
 
-def test_nb_fail():
+def test_nb_fail(test_notebook):
     import nb2workflow.nbadapter
 
     try:
