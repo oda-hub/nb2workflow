@@ -20,3 +20,8 @@ test.txt
 test.cwl
 *_output.ipynb
 .ipynb_checkpoints
+.vscode
+tests/testrepo
+dist
+cwl.output.json
+code
