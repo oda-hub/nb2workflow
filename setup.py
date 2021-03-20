@@ -70,7 +70,7 @@ setup(name='nb2workflow',
         'diskcache',
         'requests',
         'pyyaml',
-        'nteract-scrapbook==0.3.1', # until pyarrow works with py3
+        'nteract-scrapbook', 
       ],
 
 
