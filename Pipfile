@@ -6,14 +6,10 @@ verify_ssl = true
 [dev-packages]
 
 [packages]
-flask-caching = "*"
-apscheduler = "*"
 checksumdir = "*"
 diskcache = "*"
 docker = "*"
 flasgger = "*"
-flask = "*"
-flask-cors = "*"
 ipykernel = "*"
 nbconvert = "==5.5"
 psutil = "*"
@@ -21,10 +17,27 @@ pytest-flask = "*"
 python-consul = "*"
 rdflib = "*"
 requests = "*"
-ruamel-yaml = "*"
 cwlgen = "*"
 papermill = "*"
 nteract-scrapbook = "*"
+pytest = "*"
+numpy = "*"
+astropy = "*"
+pandas = "*"
+pytest-xprocess = "*"
+matplotlib = "*"
+Flask-Caching = "*"
+APScheduler = "*"
+Flask = "*"
+Flask-Cors = "*"
+"ruamel.yaml" = "*"
+Owlready2 = "==0.11"
+PyYAML = "*"
+cwl_runner = "*"
+nb2workflow = {path = "."}
 
 [requires]
 python_version = "3.6"
+
+[pipenv]
+allow_prereleases = true
