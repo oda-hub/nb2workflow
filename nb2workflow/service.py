@@ -80,7 +80,7 @@ def create_app():
     app = Flask(__name__)
 
     template = {
-        "swaggerUiPrefix": LazyString(lambda: request.environ.get('HTTP_X_FORWARDED_PREFIX', None)),
+        "swaggerUiPrefix": LazyString(lambda: request.environ.get('HTTP_X_FORWARDED_PREFIX', '')),
         "swagger": "2.0",
         "info": {
             "title": "ODAHub API",
