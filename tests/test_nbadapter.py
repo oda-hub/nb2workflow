@@ -1,5 +1,8 @@
 import os
+import json
 import logging
+import pytest
+import tempfile
 
 
 # this can be also set in pytest call
@@ -8,18 +11,40 @@ logging.basicConfig(format=FORMAT)
 logger = logging.getLogger("nb2workflow")
 logger.setLevel(level=logging.DEBUG)
 
+def _mimick_convert_minor_version(nb_fn, version):
+    j = json.load(open(nb_fn))
+    j['nbformat_minor'] = version
 
-def test_nbadapter(test_notebook):
+    fn = nb_fn.replace(".ipynb", f"_mock_downgraded_to_{version}.ipynb")
+
+    json.dump(j, open(fn, "w"))
+
+    return fn
+
+@pytest.mark.parametrize("morph_notebook", ["mimick_convert_minor_version", "vanilla"])
+def test_nbadapter(test_notebook, morph_notebook, caplog):
     from nb2workflow.nbadapter import NotebookAdapter
 
-    nba = NotebookAdapter(test_notebook)
+    if morph_notebook == "mimick_convert_minor_version":
+        fn = _mimick_convert_minor_version(test_notebook, 2)
+    elif morph_notebook == "vanilla":
+        fn = test_notebook
+    else:
+        raise NotImplementedError
+
+
+    nba = NotebookAdapter(fn)
     parameters = nba.extract_parameters()
 
-    print(parameters)
-    assert len(parameters) == 4
+    for k, v in parameters.items():
+        print("\033[31m", k, ":", v, "\033[0m")
+
+    assert len(parameters) == 5
 
     assert 'comment' in parameters['scwid']
     assert parameters['scwid']['owl_type'] == "http://odahub.io/ontology/integral#ScWID"
+
+    assert parameters['enabled']['owl_type'] == "http://www.w3.org/2001/XMLSchema#bool"
 
     outputs = nba.extract_output_declarations()
     print("outputs", outputs)
@@ -35,6 +60,11 @@ def test_nbadapter(test_notebook):
     nba.execute(dict())
 
     output = nba.extract_output()
+
+    if morph_notebook == "mimick_convert_minor_version":
+        assert 'will attempt to convert, but expect other warnings' in caplog.text
+
+        os.remove(fn)
 
     print(output)
     assert len(output) == 4
@@ -55,7 +85,7 @@ def test_nbadapter_repo(test_notebook_repo):
         parameters = nba.extract_parameters()
 
         print(parameters)
-        assert len(parameters) == 4
+        assert len(parameters) == 5
 
         if os.path.exists(nba.output_notebook_fn):
             os.remove(nba.output_notebook_fn)

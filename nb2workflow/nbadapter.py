@@ -158,8 +158,7 @@ class NotebookAdapter:
     def new_tmpdir(self):
         logger.debug("tmpdir was "+getattr(self,'_tmpdir','unset'))
         self._tmpdir = None
-        new_tmpdir = self.tmpdir
-        logger.debug("tmpdir became "+self._tmpdir)
+        logger.debug("tmpdir became %s", self._tmpdir)
 
         return self.tmpdir
 
@@ -298,9 +297,10 @@ class NotebookAdapter:
             logger.info("new tmpdir: %s", tmpdir)
 
             try:
-                logger.info(subprocess.check_output(["git","clone",os.path.dirname(os.path.realpath(self.notebook_fn)), tmpdir]))
-            except:
-                logger.info("git clone failed, will attempt copytree")
+                output = subprocess.check_output(["git","clone",os.path.dirname(os.path.realpath(self.notebook_fn)), tmpdir])
+                logger.info("git clone output: %s", output)
+            except Exception as e:
+                logger.warning("git clone failed: %s, will attempt copytree", e)
 
                 os.rmdir(tmpdir)
 
@@ -426,10 +426,32 @@ except Exception as e:
         newcell = nbformat.v4.new_code_cell(source=output_gather_content)
         newcell.metadata['tags'] = ['injected-gather-outputs']
 
-        nb=self.read()
+        nb = self.read()
+
+        if nbformat.current_nbformat !=  nb.nbformat:
+            logger.error("we assume nbformat version %s, but provided notebook is version %s, refusing!", 
+                          nbformat.current_nbformat,
+                          nb.nbformat)
+            raise RuntimeError("incompatabile notebook major version")
+
+        logger.info("provided notebook nbformat version minor %s while nbformat package minor version %s",
+                    nb.nbformat_minor, nbformat.current_nbformat_minor)
+                
+        if nbformat.current_nbformat_minor == nb.nbformat_minor:
+            logger.info("versions of notebook and environment match")
+        elif nbformat.current_nbformat_minor < nb.nbformat_minor:
+            logger.warn("notebook is newer than envionment package! please update your system or expect warnings")
+        elif  nbformat.current_nbformat_minor > nb.nbformat_minor:
+            logger.warning("will attempt to convert, but expect other warnings!")                            
+
+            nb = nbformat.v4.convert.upgrade(nb, from_minor=nb.nbformat_minor)
+        else:
+            raise NotImplementedError
+
+
         nb.cells = nb.cells + [newcell] 
 
-        logger.info("stored preprocecsed notebook as %s", self.preproc_notebook_fn)
+        logger.info("stored pre-processed notebook as %s", self.preproc_notebook_fn)
         pm.iorw.write_ipynb(nb, self.preproc_notebook_fn)
 
     def get_system_parameter_value(self, name, default):
@@ -574,7 +596,7 @@ def nbrun(nb_source, inp, inplace=False):
         fn = nba.export_html()
         open("{}_output.ipynb".format(nba.name), "wb").write(open(nba.output_notebook_fn, "rb").read())
 
-        raise Exception("FAILED to execute {}: {}".format(nba.name, exceptions))
+        raise Exception(f"FAILED to execute {nba.name} {exceptions} html exported in {fn}")
 
     r={}
     for k,v in nba.extract_output().items():
@@ -589,11 +611,11 @@ def nbrun(nb_source, inp, inplace=False):
     nbdata = open(nba.output_notebook_fn, "rb").read()
     nbfn = "{}_output.ipynb".format(nba.name)
     open(nbfn, "wb").write(nbdata)
-        
 
+    #TODO: store if not too big?   
     #r['output_notebook'] = nbfn
     #r['output_notebook_content'] = base64.b64encode(nbdata).decode()
-    
+        
     htmlfn = "{}_output.html".format(nba.name)
     nba.export_html(htmlfn)
     
