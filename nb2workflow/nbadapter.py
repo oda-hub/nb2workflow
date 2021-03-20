@@ -158,8 +158,7 @@ class NotebookAdapter:
     def new_tmpdir(self):
         logger.debug("tmpdir was "+getattr(self,'_tmpdir','unset'))
         self._tmpdir = None
-        new_tmpdir = self.tmpdir
-        logger.debug("tmpdir became "+self._tmpdir)
+        logger.debug("tmpdir became %s", self._tmpdir)
 
         return self.tmpdir
 
@@ -426,7 +425,19 @@ except Exception as e:
         newcell = nbformat.v4.new_code_cell(source=output_gather_content)
         newcell.metadata['tags'] = ['injected-gather-outputs']
 
-        nb=self.read()
+        nb = self.read()
+
+        if nbformat.current_nbformat !=  nb.nbformat:
+            logger.error("we assume nbformat version %s, but provided notebook is version %s, refusing!", 
+                          nbformat.current_nbformat,
+                          nb.nbformat)
+            raise RuntimeError("incompatabile notebook major version")
+
+        if nbformat.current_nbformat_minor != nb.nbformat_minor:
+            logger.warning("provided notebook nbformat version minor %s differs from nbformat package minor version %s, expect other warnings!",
+                            nb.nbformat_minor, nbformat.current_nbformat_minor)
+
+
         nb.cells = nb.cells + [newcell] 
 
         logger.info("stored preprocecsed notebook as %s", self.preproc_notebook_fn)
