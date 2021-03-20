@@ -297,9 +297,10 @@ class NotebookAdapter:
             logger.info("new tmpdir: %s", tmpdir)
 
             try:
-                logger.info(subprocess.check_output(["git","clone",os.path.dirname(os.path.realpath(self.notebook_fn)), tmpdir]))
-            except:
-                logger.info("git clone failed, will attempt copytree")
+                output = subprocess.check_output(["git","clone",os.path.dirname(os.path.realpath(self.notebook_fn)), tmpdir])
+                logger.info("git clone output: %s", output)
+            except Exception as e:
+                logger.warning("git clone failed: %s, will attempt copytree", e)
 
                 os.rmdir(tmpdir)
 
@@ -433,14 +434,24 @@ except Exception as e:
                           nb.nbformat)
             raise RuntimeError("incompatabile notebook major version")
 
-        if nbformat.current_nbformat_minor != nb.nbformat_minor:
-            logger.warning("provided notebook nbformat version minor %s differs from nbformat package minor version %s, expect other warnings!",
-                            nb.nbformat_minor, nbformat.current_nbformat_minor)
+        logger.info("provided notebook nbformat version minor %s while nbformat package minor version %s",
+                    nb.nbformat_minor, nbformat.current_nbformat_minor)
+                
+        if nbformat.current_nbformat_minor == nb.nbformat_minor:
+            logger.info("versions of notebook and environment match")
+        elif nbformat.current_nbformat_minor < nb.nbformat_minor:
+            logger.warn("notebook is newer than envionment package! please update your system or expect warnings")
+        elif  nbformat.current_nbformat_minor > nb.nbformat_minor:
+            logger.warning("will attempt to convert, but expect other warnings!")                            
+
+            nb = nbformat.v4.convert.upgrade(nb, from_minor=nb.nbformat_minor)
+        else:
+            raise NotImplementedError
 
 
         nb.cells = nb.cells + [newcell] 
 
-        logger.info("stored preprocecsed notebook as %s", self.preproc_notebook_fn)
+        logger.info("stored pre-processed notebook as %s", self.preproc_notebook_fn)
         pm.iorw.write_ipynb(nb, self.preproc_notebook_fn)
 
     def get_system_parameter_value(self, name, default):
