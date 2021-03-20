@@ -1,4 +1,5 @@
 import os
+import json
 import logging
 
 
@@ -15,11 +16,15 @@ def test_nbadapter(test_notebook):
     nba = NotebookAdapter(test_notebook)
     parameters = nba.extract_parameters()
 
-    print(parameters)
-    assert len(parameters) == 4
+    for k, v in parameters.items():
+        print("\033[31m", k, ":", v, "\033[0m")
+
+    assert len(parameters) == 5
 
     assert 'comment' in parameters['scwid']
     assert parameters['scwid']['owl_type'] == "http://odahub.io/ontology/integral#ScWID"
+
+    assert parameters['enabled']['owl_type'] == "http://www.w3.org/2001/XMLSchema#bool"
 
     outputs = nba.extract_output_declarations()
     print("outputs", outputs)
@@ -55,7 +60,7 @@ def test_nbadapter_repo(test_notebook_repo):
         parameters = nba.extract_parameters()
 
         print(parameters)
-        assert len(parameters) == 4
+        assert len(parameters) == 5
 
         if os.path.exists(nba.output_notebook_fn):
             os.remove(nba.output_notebook_fn)

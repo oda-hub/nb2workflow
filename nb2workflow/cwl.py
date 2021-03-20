@@ -10,6 +10,8 @@ import nb2workflow.nbadapter as nbadapter
 def python_type2cwl_type(pt):
     if pt == str:
         return 'string'
+    elif pt == bool:
+        return 'boolean'
 
     return pt.__name__
 
