@@ -1,6 +1,8 @@
 import os
 import json
 import logging
+import pytest
+import tempfile
 
 
 # this can be also set in pytest call
@@ -9,11 +11,29 @@ logging.basicConfig(format=FORMAT)
 logger = logging.getLogger("nb2workflow")
 logger.setLevel(level=logging.DEBUG)
 
+def _mimick_convert_minor_version(nb_fn, version):
+    j = json.load(open(nb_fn))
+    j['nbformat_minor'] = version
 
-def test_nbadapter(test_notebook):
+    fn = nb_fn.replace(".ipynb", f"_mock_downgraded_to_{version}.ipynb")
+
+    json.dump(j, open(fn, "w"))
+
+    return fn
+
+@pytest.mark.parametrize("morph_notebook", ["mimick_convert_minor_version", "vanilla"])
+def test_nbadapter(test_notebook, morph_notebook, caplog):
     from nb2workflow.nbadapter import NotebookAdapter
 
-    nba = NotebookAdapter(test_notebook)
+    if morph_notebook == "mimick_convert_minor_version":
+        fn = _mimick_convert_minor_version(test_notebook, 2)
+    elif morph_notebook == "vanilla":
+        fn = test_notebook
+    else:
+        raise NotImplementedError
+
+
+    nba = NotebookAdapter(fn)
     parameters = nba.extract_parameters()
 
     for k, v in parameters.items():
@@ -40,6 +60,11 @@ def test_nbadapter(test_notebook):
     nba.execute(dict())
 
     output = nba.extract_output()
+
+    if morph_notebook == "mimick_convert_minor_version":
+        assert 'will attempt to convert, but expect other warnings' in caplog.text
+
+        os.remove(fn)
 
     print(output)
     assert len(output) == 4

@@ -12,6 +12,10 @@ def test_notebook():
     return os.environ.get('TEST_NOTEBOOK',
                           os.path.join(os.getcwd(), "tests/testrepo/workflow-notebook.ipynb"))
 
+@pytest.fixture
+def test_notebook_old():
+    return os.environ.get('TEST_NOTEBOOK',
+                          os.path.join(os.getcwd(), "tests/testrepo/workflow-notebook.ipynb"))
 
 @pytest.fixture
 def test_notebook_repo():
