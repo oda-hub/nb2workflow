@@ -34,7 +34,8 @@ def import_repo(repo_source, target):
     return checksumdir.dirhash(target)
 
 
-def prepare_image(repo_source, from_image, service=True, nb2w_path=None, runprefix="", entrypoint=None, extra_docker_commands=[]):
+def prepare_image(repo_source, from_image, service=True, nb2w_path=None, runprefix="", 
+        entrypoint=None, extra_docker_commands=[]):
 
     tempdir = tempfile.mkdtemp()
 
@@ -92,15 +93,19 @@ def prepare_image(repo_source, from_image, service=True, nb2w_path=None, runpref
     return tempdir
 
 
-def build_image(tempdir, tag_image, nb2workflow_revision):
+def build_image(tempdir, tag_image, nb2workflow_revision, extra_arguments=None):
     cli = docker.from_env()
+
+    buildargs=dict(nb2workflow_revision=nb2workflow_revision)
+    if extra_arguments is not None:
+        buildargs.update(extra_arguments)
 
     print("-- building image, tagging as", tag_image)
     r = cli.api.build(
         path=tempdir,
         tag=tag_image,
         quiet=False,
-        buildargs=dict(nb2workflow_revision=nb2workflow_revision),
+        buildargs=buildargs,
         # stream=True,
         rm=True,
     )
@@ -136,6 +141,7 @@ def main():
     parser.add_argument('--docker-command', type=str, default=None)
     parser.add_argument('--entrypoint', type=str, default=None)
     parser.add_argument('--extra-docker-commands', type=str, default=None)
+    parser.add_argument('--extra-build-arguments', type=str, default=None)
 
     args = parser.parse_args()
 
@@ -152,6 +158,7 @@ def main():
 
     extra_docker_commands=[]
     if args.extra_docker_commands != None:
+        #print("Extra Docker command is ", args.extra_docker_commands)
         extra_docker_commands= args.extra_docker_commands.split(';')
 
     tempdir = prepare_image(
@@ -160,6 +167,7 @@ def main():
         nb2w_path=args.nb2wpath,
         runprefix=args.docker_run_prefix,
         entrypoint=args.entrypoint,
+        extra_docker_commands=extra_docker_commands
     )
 
     if args.store_dockerfile:
@@ -167,7 +175,10 @@ def main():
         print("\033[31mstored Dockerfile as\033[0m", args.store_dockerfile)
 
     if args.build:
-        build_result = build_image(tempdir, tag_image, args.nb2wrev)
+        extra_build_arguments=None
+        if args.extra_build_arguments is not None:
+            extra_build_arguments = json.loads(args.extra_build_arguments)
+        build_result = build_image(tempdir, tag_image, args.nb2wrev, extra_build_arguments)
 
         if build_result is None:
             raise Exception("failed to build")
