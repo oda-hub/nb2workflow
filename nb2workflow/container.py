@@ -34,7 +34,7 @@ def import_repo(repo_source, target):
     return checksumdir.dirhash(target)
 
 
-def prepare_image(repo_source, from_image, service=True, nb2w_path=None, runprefix="", entrypoint=None):
+def prepare_image(repo_source, from_image, service=True, nb2w_path=None, runprefix="", entrypoint=None, extra_docker_commands=[]):
 
     tempdir = tempfile.mkdtemp()
 
@@ -47,6 +47,8 @@ def prepare_image(repo_source, from_image, service=True, nb2w_path=None, runpref
 
     dockerfile.append("FROM {}".format(from_image))
     dockerfile.append("ARG REPO_PATH=./{}".format(rel_repo_path))
+    for ec in extra_docker_commands:
+        dockerfile.append(ec)
 
     pipconf = os.path.join(repo_path, 'pip.conf')
     logger.info("using %s", pipconf)
@@ -133,6 +135,7 @@ def main():
                         metavar='location', type=str, default=None)
     parser.add_argument('--docker-command', type=str, default=None)
     parser.add_argument('--entrypoint', type=str, default=None)
+    parser.add_argument('--extra-docker-commands', type=str, default=None)
 
     args = parser.parse_args()
 
@@ -146,6 +149,10 @@ def main():
 
     if args.tag_image == "":
         tag_image = os.path.basename(os.path.abspath(repo_path))
+
+    extra_docker_commands=[]
+    if args.extra_docker_commands != None:
+        extra_docker_commands= args.extra_docker_commands.split(';')
 
     tempdir = prepare_image(
         repo_path, args.from_image,
