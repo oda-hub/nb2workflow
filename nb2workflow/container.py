@@ -157,7 +157,7 @@ def main():
         tag_image = os.path.basename(os.path.abspath(repo_path))
 
     extra_docker_commands=[]
-    if args.extra_docker_commands != None:
+    if args.extra_docker_commands is not None:
         #print("Extra Docker command is ", args.extra_docker_commands)
         extra_docker_commands= args.extra_docker_commands.split(';')
 
