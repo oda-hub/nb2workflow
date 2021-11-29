@@ -1,4 +1,5 @@
 from __future__ import print_function
+import re
 from werkzeug.routing import RequestRedirect, MethodNotAllowed, NotFound
 import queue
 from nb2workflow import ontology, publish, schedule
@@ -133,19 +134,21 @@ class AsyncWorker(threading.Thread):
 
     def run(self):
         while True:
-            logger.info("worker_id %s", self.worker_id)
-            async_workflow = async_queue.get(block=True)
-
-            async_workflow.run()
+            self.run_one()
 
             time.sleep(5)
 
+    def run_one(self):
+        logger.info("worker_id %s", self.worker_id)
+        async_workflow = async_queue.get(block=True)
+        async_workflow.run()
 
 class AsyncWorkflow:
-    def __init__(self, key, target, params):
+    def __init__(self, key, target, params, callback=None):
         self.key = key
         self.target = target
         self.params = params
+        self.callback = callback
 
     def run(self):
         try:
@@ -223,11 +226,35 @@ class AsyncWorkflow:
         app.async_workflows[self.key] = dict(output=output, exceptions=list(
             map(serialize_workflow_exception, exceptions)), jobdir=nba.tmpdir)
 
+        self.perform_callback()
+
+    def perform_callback(self):
+        if self.callback is None:
+            logger.debug('no callback registered, skipping')
+            return
+
+        result = app.async_workflows[self.key]
+
+        callback_payload = dict(
+            status='done'
+        )
+        
+        if re.match('^file://', self.callback):
+            with open(self.callback.replace('file://', ''), "w") as f:
+                 json.dump(callback_payload, f)
+
+        elif re.match('^https?://', self.callback):
+            requests.get(self.callback, params=callback_payload)
+        
+        else:
+            raise NotImplementedError
+
 
 def workflow(target, background=False, async_request=False):
     issues = []
 
     async_request = request.args.get('_async_request', async_request)
+    async_request_callback = request.args.get('_async_request_callback', None)
 
     logger.debug("target %s", target)
 
@@ -238,6 +265,7 @@ def workflow(target, background=False, async_request=False):
     nba = NotebookAdapter(template_nba.notebook_fn)
 
     if nba is None:
+        interpreted_parameters = None
         issues.append("target not known: %s; available targets: %s" %
                       (target, app.notebook_adapters.keys()))
     else:
@@ -252,7 +280,7 @@ def workflow(target, background=False, async_request=False):
     # async
     if async_request:
         key = hashlib.sha224(json.dumps(
-            dict(target=target, params=interpreted_parameters)).encode('utf-8')).hexdigest()
+            dict(target=target, params=interpreted_parameters, callback=async_request_callback)).encode('utf-8')).hexdigest()
 
         value = app.async_workflows.get(key, None)
 
@@ -260,7 +288,7 @@ def workflow(target, background=False, async_request=False):
 
         if value is None:
             async_task = AsyncWorkflow(
-                key=key, target=target, params=interpreted_parameters)
+                key=key, target=target, params=interpreted_parameters, callback=async_request_callback)
 
             async_queue.put(async_task)
 

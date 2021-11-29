@@ -1,6 +1,7 @@
 from __future__ import print_function
 
 import os
+import json
 import pytest
 import base64
 
@@ -88,3 +89,44 @@ def test_service_repo(client):
     print(r.json)
 
     open("output.png","wb").write(base64.b64decode(r.json['output']['spectrum_png_content']))
+
+
+
+def test_service_async_repo(client):
+    
+    r=client.get('/api/v1.0/options')
+    
+    service_signature=r.json['workflow-notebook']
+    print(service_signature)
+
+    assert len(service_signature['parameters']) == 5
+
+    callback_fn = 'callback.json'
+    
+    r=client.get('/api/v1.0/get/workflow-notebook',
+                 query_string=dict(
+                     emin=20., 
+                     _async_request='yes', 
+                     _async_request_callback='file://' + callback_fn))
+
+    assert r.status_code == 201
+
+    print(r.json)
+
+    from nb2workflow.service import AsyncWorker
+
+    AsyncWorker('test-worker').run_one()
+
+    callback_json = json.load(open(callback_fn))
+
+    assert callback_json['status'] == 'done'
+
+    r=client.get('/api/v1.0/get/workflow-notebook',
+                query_string=dict(
+                    emin=20., 
+                    _async_request='yes', 
+                    _async_request_callback='file://' + callback_fn))
+
+    assert r.json['workflow_status'] == 'done'
+
+    open("output.png","wb").write(base64.b64decode(r.json['data']['output']['spectrum_png_content']))
