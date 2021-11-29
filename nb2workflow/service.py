@@ -135,7 +135,6 @@ class AsyncWorker(threading.Thread):
     def run(self):
         while True:
             self.run_one()
-
             time.sleep(5)
 
     def run_one(self):
@@ -154,7 +153,11 @@ class AsyncWorkflow:
         try:
             self._run()
         except Exception as e:
-            print("failed", e)
+            logger.error("run failed unexplicably: %s", repr(e))
+            app.async_workflows[self.key] = dict(
+                output={}, 
+                exceptions=[serialize_workflow_exception(e)]
+            )
 
     def note(self, *args, **kwargs):
         if not hasattr(self, 'notes'):

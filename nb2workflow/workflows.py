@@ -37,11 +37,18 @@ class WorkflowException(Exception):
     pass
 
 def serialize_workflow_exception(e):
-    return dict(
-                ename = e[0].ename,
-                evalue = e[0].evalue,
-                edump = e[1][0],
-            )
+    try:
+        return dict(
+                    ename = e[0].ename,
+                    evalue = e[0].evalue,
+                    edump = e[1][0],
+                )
+    except TypeError:
+        return dict(
+                    ename = repr(e),
+                    evalue = "",
+                    edump = repr(e)
+                )
 
     
 def reroute(router, *args, **kwargs):
