@@ -99,7 +99,7 @@ def create_app():
     swagger = Swagger(app, template=template)
     app.wsgi_app = ReverseProxied(app.wsgi_app)
     app.json_encoder = CustomJSONEncoder
-    cache.init_app(app, config={'CACHE_TYPE': 'simple'})
+    cache.init_app(app, config={'CACHE_TYPE': 'SimpleCache'})
 
 
 #    CORS(app)
@@ -120,12 +120,6 @@ def after_request(response):
     response.headers.add('Access-Control-Allow-Methods',
                          'GET,PUT,POST,DELETE,OPTIONS')
     return response
-
-
-def make_key():
-    """Make a key that includes GET parameters."""
-    return request.full_path
-
 
 class AsyncWorker(threading.Thread):
     def __init__(self, worker_id):
@@ -223,7 +217,7 @@ class AsyncWorkflow:
                 nretry -= 1
                 time.sleep(1)
 
-        logger.error("output: %s", output)
+        logger.debug("output: %s", output)
 
         logger.info("updating key %s", self.key)
         app.async_workflows[self.key] = dict(output=output, exceptions=list(
@@ -239,7 +233,7 @@ class AsyncWorkflow:
         result = app.async_workflows[self.key]
 
         callback_payload = dict(
-            status='done'
+            action='done'
         )
         
         if re.match('^file://', self.callback):
@@ -283,7 +277,7 @@ def workflow(target, background=False, async_request=False):
     # async
     if async_request:
         key = hashlib.sha224(json.dumps(
-            dict(target=target, params=interpreted_parameters, callback=async_request_callback)).encode('utf-8')).hexdigest()
+            dict(target=target, params=interpreted_parameters)).encode('utf-8')).hexdigest()
 
         value = app.async_workflows.get(key, None)
 
@@ -436,7 +430,7 @@ def setup_routes(app):
         try:
             app.route('/api/v1.0/get/'+target, methods=['GET'], endpoint=endpoint)(
                 swag_from(target_specs)(
-                    cache.cached(timeout=cache_timeout, key_prefix=make_key, response_filter=response_filter, query_string=True)(
+                    cache.cached(timeout=cache_timeout, response_filter=response_filter, query_string=True)(
                         funcg(target)
                     )))
         except AssertionError as e:
