@@ -119,7 +119,7 @@ def test_service_async_repo(client):
 
     callback_json = json.load(open(callback_fn))
 
-    assert callback_json['status'] == 'done'
+    assert callback_json['action'] == 'done'
 
     r=client.get('/api/v1.0/get/workflow-notebook',
                 query_string=dict(
