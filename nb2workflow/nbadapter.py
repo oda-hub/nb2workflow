@@ -47,7 +47,7 @@ def cast_parameter(x,par):
         elif x in ['true', 'True', 1, '1']:
             return True
         else:
-            raise ValueError(f"Boolean parameter {par['name']} has wrong value {x}.")
+            raise ValueError(f'Parameter {par['name']} value "{x}" can not be interpreted as boolean.')
     return par['python_type'](x)
 
 def understand_comment_references(comment):
