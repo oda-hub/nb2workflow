@@ -41,6 +41,13 @@ class PapermillWorkflowIncomplete(Exception):
 
 def cast_parameter(x,par):
     logger.debug("cast %s %s",x,par)
+    if par['python_type'] is bool:
+        if x in ['false', 'False', 0, '0', '']:
+            return False
+        elif x in ['true', 'True', 1, '1']:
+            return True
+        else:
+            raise ValueError(f'Parameter {par["name"]} value "{x}" can not be interpreted as boolean.')
     return par['python_type'](x)
 
 def understand_comment_references(comment):
@@ -154,7 +161,6 @@ class NotebookAdapter:
         logger.debug("notebook adapter for %s",notebook_fn)
         logger.debug(self.extract_parameters())
 
-
     def new_tmpdir(self):
         logger.debug("tmpdir was "+getattr(self,'_tmpdir','unset'))
         self._tmpdir = None
@@ -230,17 +236,20 @@ class NotebookAdapter:
         request_parameters=dict()
 
         unexpected_parameters=[]
+        issues=[]
+
         for arg in parameters:
             if arg.startswith("_"): continue
 
             logger.info("request arg %s",parameters[arg])
             if arg in expected_parameters:
-                request_parameters[arg]=cast_parameter(parameters.get(arg),expected_parameters.get(arg))
-                logger.info("request arg %s provided as %s",parameters[arg],request_parameters[arg])
+                try:
+                    request_parameters[arg]=cast_parameter(parameters.get(arg),expected_parameters.get(arg))
+                    logger.info("request arg %s provided as %s",parameters[arg],request_parameters[arg])
+                except ValueError as e:
+                    issues.append(e.args[0])
             else:
                 unexpected_parameters.append(arg)
-
-        issues=[]
 
         if len(unexpected_parameters)>0:
             issues+=[f'found unexpected request parameters: {", ".join(unexpected_parameters)}, can be {", ".join(expected_parameters.keys())}']
@@ -274,10 +283,9 @@ class NotebookAdapter:
         if logstasher is not None:
             logstasher.log(dict(origin="nb2workflow.execute", event="starting", parameters=parameters, workflow_name=notebook_short_name(self.notebook_fn), health=current_health()))
 
-
         logger.info("starting job")
         exceptions = self._execute(parameters, progress_bar, log_output, inplace)
-
+            
         tspent = time.time() - t0
         if logstasher is not None:
             logstasher.log(dict(origin="nb2workflow.execute", 
