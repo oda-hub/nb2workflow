@@ -227,8 +227,11 @@ class AsyncWorkflow:
 
     def perform_callback(self):
         if self.callback is None:
-            logger.debug('no callback registered, skipping')
+            logger.info('no callback registered, skipping')
             return
+
+        logger.info('will perform callback: %s', self.callback)
+
 
         result = app.async_workflows[self.key]
 
@@ -239,9 +242,11 @@ class AsyncWorkflow:
         if re.match('^file://', self.callback):
             with open(self.callback.replace('file://', ''), "w") as f:
                  json.dump(callback_payload, f)
+            logger.info('stored callback in a file %s', self.callback)
 
         elif re.match('^https?://', self.callback):
-            requests.get(self.callback, params=callback_payload)
+            r = requests.get(self.callback, params=callback_payload)
+            logger.info('callback %s returns %s : %s', self.callback, r, r.text)
         
         else:
             raise NotImplementedError
