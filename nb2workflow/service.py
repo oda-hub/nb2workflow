@@ -143,6 +143,8 @@ class AsyncWorkflow:
         self.params = params
         self.callback = callback
 
+        logger.info("initializing %s, callback", self, callback)
+
     def run(self):
         try:
             self._run()
