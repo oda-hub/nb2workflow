@@ -23,3 +23,8 @@ Generates cwl:
 nb2cwl tests/testrepo/
 ```
 
+Deploys a service
+
+```bash
+nb2deploy https://renkulab.io/gitlab/vladimir.savchenko/oda-sdss legacysurvey
+```
