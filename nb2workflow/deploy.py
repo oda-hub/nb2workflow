@@ -1,10 +1,11 @@
+import argparse
 import json
 import pathlib
 import subprocess
 import tempfile
 import time
 
-def deploy(git_origin, deployment_base_name):
+def deploy(git_origin, deployment_base_name, namespace="oda-staging"):
     with tempfile.TemporaryDirectory() as tmpdir:        
         subprocess.check_call( # cli is more stable than python API
             ["git", "clone", git_origin, "nb-repo"],
@@ -45,7 +46,7 @@ ENTRYPOINT nb2service /repo/ --host 0.0.0.0 --port 8000
         deployment_name = deployment_base_name + "-backend"
         try:
             subprocess.check_call(
-                ["kubectl", "patch", "deployment", deployment_name, "-n", "oda-staging",
+                ["kubectl", "patch", "deployment", deployment_name, "-n", namespace,
                 "-p", 
                 json.dumps(
                     {"spec":{"template":{"spec":{"containers":[{"image": image, "name": deployment_name}]}}}})
@@ -56,3 +57,18 @@ ENTRYPOINT nb2service /repo/ --host 0.0.0.0 --port 8000
             subprocess.check_call(
                 ["kubectl", "create", "deployment", deployment_name, "-n", "oda-staging", "--image=" + image]
             )
+
+
+def main():
+    parser = argparse.ArgumentParser(description='')
+    parser.add_argument('repository', metavar='repository', type=str)
+    parser.add_argument('deployment_name', metavar='deployment_name', type=str)
+    parser.add_argument('--namespace', metavar='namespace', type=str)
+    
+    args = parser.parse_args()
+    
+    deploy(args.repository, args.deployment_name)
+
+
+if __name__ == "__main__":
+    main()
