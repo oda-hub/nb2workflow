@@ -6,15 +6,28 @@ import subprocess
 import tempfile
 import time
 import ruamel.yaml as yaml
+from . import version
 
 default_config = {
     "notebook_dir": "notebooks",
+    "extra_data": [],
     "use_repo_base_image": False
 }
 
+
+def determine_origin(repo):
+    if os.path.isdir(repo):
+        return subprocess.check_output(
+            ["git", "remote", "get-url", "origin"],
+            cwd=repo).decode().strip()
+    else:
+        return repo
+
 def deploy(git_origin, deployment_base_name, namespace="oda-staging"):
+    git_origin = determine_origin(git_origin)
+
     with tempfile.TemporaryDirectory() as tmpdir:        
-        subprocess.check_call( # cli is more stable than python API
+        subprocess.check_call(# cli is more stable than python API
             ["git", "clone", git_origin, "nb-repo"],
             cwd=tmpdir)
 
@@ -41,17 +54,17 @@ RUN pip install -r requirements.txt
 
         # we could use completely new image too. but lets keep renku etc in it
         open(pathlib.Path(tmpdir) / "Dockerfile", "a").write(f"""
-RUN pip install nb2workflow[cwl,service,rdf]
+RUN pip install nb2workflow[cwl,service,rdf]=={version()}
 
-ADD nb-repo/{config['notebook_dir']}/*.ipynb /repo/
+COPY nb-repo/{config['notebook_dir']}/ /repo/
 
 RUN curl -o /usr/bin/jq -L https://github.com/stedolan/jq/releases/download/jq-1.5/jq-linux64; chmod +x /usr/bin/jq
 RUN for nn in /repo/*.ipynb; do mv $nn $nn-tmp;  jq '.metadata.kernelspec.name |= "python3"' $nn-tmp > $nn ; rm $nn-tmp ; done
 
-ENTRYPOINT nb2service /repo/ --host 0.0.0.0 --port 8000
+ENTRYPOINT nb2service /repo/ --host 0.0.0.0 --port 8000 | cut -c1-500
 """)
 
-        image = f"odahub/nb-{pathlib.Path(git_origin).name}:{descr}-{time.strftime(r'%y%m%d%H%M%S')}"
+        image = f"odahub/nb-{pathlib.Path(git_origin).name}:{descr}-nb2w{version()}" # {time.strftime(r'%y%m%d%H%M%S')}"
 
         subprocess.check_call( # cli is more stable than python API
             ["docker", "build", ".", "-t", image],
@@ -81,7 +94,7 @@ def main():
     parser = argparse.ArgumentParser(description='')
     parser.add_argument('repository', metavar='repository', type=str)
     parser.add_argument('deployment_name', metavar='deployment_name', type=str)
-    parser.add_argument('--namespace', metavar='namespace', type=str)
+    parser.add_argument('--namespace', metavar='namespace', type=str, default="oda-staging")
     
     args = parser.parse_args()
     
