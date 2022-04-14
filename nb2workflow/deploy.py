@@ -86,7 +86,7 @@ ENTRYPOINT nb2service /repo/ --host 0.0.0.0 --port 8000 | cut -c1-500
             )
         except Exception as e:
             subprocess.check_call(
-                ["kubectl", "create", "deployment", deployment_name, "-n", "oda-staging", "--image=" + image]
+                ["kubectl", "create", "deployment", deployment_name, "-n", namespace, "--image=" + image]
             )
 
 
