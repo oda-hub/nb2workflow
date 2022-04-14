@@ -98,7 +98,7 @@ def main():
     
     args = parser.parse_args()
     
-    deploy(args.repository, args.deployment_name)
+    deploy(args.repository, args.deployment_name, namespace=args.namespace)
 
 
 if __name__ == "__main__":
