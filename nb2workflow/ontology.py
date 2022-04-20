@@ -1,6 +1,9 @@
 import io
 import logging
 import argparse
+from typing import Optional
+
+from pyparsing import Opt
 
 import nb2workflow.nbadapter as nbadapter
 
@@ -55,7 +58,7 @@ def to_xsd_type(p):
 
 #TODO: return owl option as an option
 
-def function_semantic_signature(function_name, location, parameters, output):
+def function_semantic_signature(function_name, location, parameters, output, domains):
     G = rdflib.Graph()
     
     wfl = rdflib.URIRef(f'http://odahub.io/workflows#{function_name}')    
@@ -75,11 +78,15 @@ def function_semantic_signature(function_name, location, parameters, output):
         p_uri = wfl_p_ns[pn]
         G.add((p_uri, rdf_ns['type'], rdflib.URIRef(to_xsd_type(pv))))
         G.add((wfl, oda_ns['expects'], p_uri))
+
+    if domains is not None:
+        for domain in domains:
+            G.add((wfl, oda_ns['domain'], oda_ns[domain[0]]))
                     
     return G
 
 
-def service_semantic_signature(nbas, format="xml") -> str:
+def service_semantic_signature(nbas, format="xml", domains=None) -> str:
     G = rdflib.Graph()
 
     for target, nba in nbas.items():
@@ -88,7 +95,9 @@ def service_semantic_signature(nbas, format="xml") -> str:
                                     nba.unique_name,
                                     location=nba.notebook_origin,
                                     parameters=nba.extract_parameters(),
-                                    output=nba.extract_output_declarations())
+                                    output=nba.extract_output_declarations(),
+                                    domains=domains
+                                    )
 
         for t in S_G:
             G.add(t)
@@ -135,10 +144,10 @@ def service_semantic_signature_owl(nbas, format="rdfxml"):
 
 
 
-def nb2rdf(notebook_fn: str) -> str:
+def nb2rdf(notebook_fn: str, domains: Optional[list]=None) -> str:
     nba = nbadapter.NotebookAdapter(notebook_fn)
 
-    rdf = service_semantic_signature(dict(local=nba), format="turtle")
+    rdf = service_semantic_signature(dict(local=nba), format="turtle", domains=domains)
             
     logging.getLogger().info("rdf: %s", rdf)
 
@@ -149,6 +158,7 @@ def main():
     parser = argparse.ArgumentParser(description='Process some integers.')
     parser.add_argument('notebook', metavar='notebook', type=str)
     parser.add_argument('--out-rdf', metavar='rdf', type=str)
+    parser.add_argument('--domain', dest='domain', nargs="*", action='append')
     parser.add_argument('--publish', action="store_true")
     parser.add_argument('--debug', action="store_true")
 
@@ -171,7 +181,9 @@ def main():
         root.setLevel(logging.INFO)
         handler.setLevel(logging.INFO)
 
-    rdf = nb2rdf(args.notebook)
+    logger.error('domain %s', args)
+
+    rdf = nb2rdf(args.notebook, domains=args.domain)
 
     if args.out_rdf:
         with open(args.out_rdf, "wt") as f:
