@@ -1,4 +1,5 @@
 from ast import literal_eval
+import hashlib
 import os
 import sys
 import glob
@@ -184,6 +185,25 @@ class NotebookAdapter:
 
     def read(self):
         return nbformat.reads(open(self.notebook_fn).read(), as_version=4)
+
+    _notebook_origin = None
+
+    @property
+    def notebook_origin(self):
+        if self._notebook_origin is None:
+            notebook_dir = os.path.dirname(self.notebook_fn)
+            logger.info('notebook_dir: %s', notebook_dir)
+
+            url = subprocess.check_output(["git", "remote", "get-url", "origin"], cwd=notebook_dir).decode().strip()
+            revision = subprocess.check_output(["git", "describe", "--always", "--tags"], cwd=notebook_dir).decode().strip()
+
+            self._notebook_origin = f"{url}#{revision}"
+        
+        return self._notebook_origin
+
+    @property
+    def unique_name(self):
+        return f"{self.name}_{hashlib.md5(self.notebook_origin.encode()).hexdigest()[:8]}"
 
     def export_html(self, fn=None):
         if fn is None:

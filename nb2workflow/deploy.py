@@ -88,6 +88,11 @@ ENTRYPOINT nb2service /repo/ --host 0.0.0.0 --port 8000 | cut -c1-500
             subprocess.check_call(
                 ["kubectl", "create", "deployment", deployment_name, "-n", namespace, "--image=" + image]
             )
+            subprocess.check_call(
+                ["kubectl", "expose", "deployment", deployment_name, "--name", deployment_name, 
+                 "--port", "8000", "-n", namespace]
+            )
+            
 
 
 def main():

@@ -190,7 +190,8 @@ class AsyncWorkflow:
             self.blocked_until = time.time() + 10
 
             async_queue.put(self)
-            app.async_workflows[self.key] = 'submitted'
+            app.async_workflows[self.key] = 'submitted'            
+
             return
 
         logger.info("exceptions: %s", repr(exceptions))
