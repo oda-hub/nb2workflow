@@ -41,6 +41,7 @@ setup(name='nb2workflow',
         "rdf":[
             'rdflib',
             'owlready2==0.11',
+            'oda-knowledge-base',
         ],
         "cwl":[
             "cwlgen",
