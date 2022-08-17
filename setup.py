@@ -73,6 +73,7 @@ setup(name='nb2workflow',
         'requests',
         'pyyaml',
         'nteract-scrapbook', 
+        'werkzeug==2.1.2'
       ],
 
 

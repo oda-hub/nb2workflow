@@ -80,9 +80,13 @@ ENTRYPOINT nb2service /repo/ --host 0.0.0.0 --port 8000 | cut -c1-500
         try:
             subprocess.check_call(
                 ["kubectl", "patch", "deployment", deployment_name, "-n", namespace,
+                 "--type", "merge",
                 "-p", 
                 json.dumps(
-                    {"spec":{"template":{"spec":{"containers":[{"image": image, "name": deployment_name}]}}}})
+                    {"spec":{"template":{"spec":{
+                        "containers":[
+                            {"name": deployment_name, "image": image}
+                        ]}}}})
                 ]
             )
         except Exception as e:
