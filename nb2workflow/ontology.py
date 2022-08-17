@@ -3,15 +3,17 @@ import logging
 import argparse
 from typing import Optional
 
-from pyparsing import Opt
-
 import nb2workflow.nbadapter as nbadapter
 
 logger = logging.getLogger(__name__)
 
 import requests
 import rdflib
-import odakb.sparql
+
+try:
+    import odakb.sparql
+except Exception:
+    logger.error("some error")
 
 try:
     import owlready2
