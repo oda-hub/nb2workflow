@@ -27,3 +27,4 @@ nteract-scrapbook
 matplotlib
 cwl-runner
 pytest
+werkzeug==2.1.2

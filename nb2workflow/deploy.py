@@ -9,7 +9,8 @@ import ruamel.yaml as yaml
 from . import version
 
 default_config = {
-    "notebook_dir": "notebooks",
+    "config_schema_version": "0.1.0",
+    "notebook_patterns": ["notebooks/*", "*.ipynb"],
     "extra_data": [],
     "use_repo_base_image": False
 }
@@ -56,7 +57,7 @@ RUN pip install -r requirements.txt
         open(pathlib.Path(tmpdir) / "Dockerfile", "a").write(f"""
 RUN pip install nb2workflow[cwl,service,rdf]=={version()}
 
-COPY nb-repo/{config['notebook_dir']}/ /repo/
+COPY {" ".join(["nb-repo/" + p for p in config['notebook_patterns']])} /repo/
 
 RUN curl -o /usr/bin/jq -L https://github.com/stedolan/jq/releases/download/jq-1.5/jq-linux64; chmod +x /usr/bin/jq
 RUN for nn in /repo/*.ipynb; do mv $nn $nn-tmp;  jq '.metadata.kernelspec.name |= "python3"' $nn-tmp > $nn ; rm $nn-tmp ; done
