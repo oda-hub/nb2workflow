@@ -40,8 +40,9 @@ def get_dda():
 
 
 def to_xsd_type(p):
-    if owlready2 is None:
-        return
+    # if owlready2 is None:
+    #     return
+
     out_type='string'
 
     if issubclass(p['python_type'],int):
@@ -55,7 +56,7 @@ def to_xsd_type(p):
 
     logger.debug("owl type cast from %s to %s",p,repr(out_type))
     
-    return p.get('owl_type',"http://www.w3.org/2001/XMLSchema#"+out_type)
+    return p.get('owl_type', "http://www.w3.org/2001/XMLSchema#"+out_type)
 
 
 #TODO: return owl option as an option
@@ -77,7 +78,9 @@ def function_semantic_signature(function_name, location, parameters, output, dom
     G.add((wfl, oda_ns['location'], rdflib.Literal(location)))
 
     for pn, pv in parameters.items():
+        logger.info('function_semantic_signature parameter pn=%s pv=%s', pn, pv)
         p_uri = wfl_p_ns[pn]
+        logger.info('function_semantic_signature parameter p_uri=%s', p_uri)
         G.add((p_uri, rdf_ns['type'], rdflib.URIRef(to_xsd_type(pv))))
         G.add((wfl, oda_ns['expects'], p_uri))
 

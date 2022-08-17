@@ -24,7 +24,7 @@ def determine_origin(repo):
     else:
         return repo
 
-def deploy(git_origin, deployment_base_name, namespace="oda-staging"):
+def deploy(git_origin, deployment_base_name, namespace="oda-staging", local=False):
     git_origin = determine_origin(git_origin)
 
     with tempfile.TemporaryDirectory() as tmpdir:        
@@ -62,7 +62,7 @@ COPY nb-repo/ /repo/
 RUN curl -o /usr/bin/jq -L https://github.com/stedolan/jq/releases/download/jq-1.5/jq-linux64; chmod +x /usr/bin/jq
 RUN for nn in /repo/*.ipynb; do mv $nn $nn-tmp;  jq '.metadata.kernelspec.name |= "python3"' $nn-tmp > $nn ; rm $nn-tmp ; done
 
-ENTRYPOINT nb2service /repo/ --host 0.0.0.0 --port 8000 | cut -c1-500
+ENTRYPOINT nb2service --debug /repo/ --host 0.0.0.0 --port 8000 | cut -c1-500
 """)
 
         image = f"odahub/nb-{pathlib.Path(git_origin).name}:{descr}-nb2w{version()}" # {time.strftime(r'%y%m%d%H%M%S')}"
@@ -71,32 +71,37 @@ ENTRYPOINT nb2service /repo/ --host 0.0.0.0 --port 8000 | cut -c1-500
             ["docker", "build", ".", "-t", image],
             cwd=tmpdir)
 
-        subprocess.check_call( # cli is more stable than python API
-            ["docker", "push", image],
-            cwd=tmpdir)
+        if local:
+            subprocess.check_call( # cli is more stable than python API
+                ["docker", "run", image],
+                cwd=tmpdir)
+        else:
+            subprocess.check_call( # cli is more stable than python API
+                ["docker", "push", image],
+                cwd=tmpdir)
 
 
-        deployment_name = deployment_base_name + "-backend"
-        try:
-            subprocess.check_call(
-                ["kubectl", "patch", "deployment", deployment_name, "-n", namespace,
-                 "--type", "merge",
-                "-p", 
-                json.dumps(
-                    {"spec":{"template":{"spec":{
-                        "containers":[
-                            {"name": deployment_name, "image": image}
-                        ]}}}})
-                ]
-            )
-        except Exception as e:
-            subprocess.check_call(
-                ["kubectl", "create", "deployment", deployment_name, "-n", namespace, "--image=" + image]
-            )
-            subprocess.check_call(
-                ["kubectl", "expose", "deployment", deployment_name, "--name", deployment_name, 
-                 "--port", "8000", "-n", namespace]
-            )
+            deployment_name = deployment_base_name + "-backend"
+            try:
+                subprocess.check_call(
+                    ["kubectl", "patch", "deployment", deployment_name, "-n", namespace,
+                    "--type", "merge",
+                    "-p", 
+                    json.dumps(
+                        {"spec":{"template":{"spec":{
+                            "containers":[
+                                {"name": deployment_name, "image": image}
+                            ]}}}})
+                    ]
+                )
+            except Exception as e:
+                subprocess.check_call(
+                    ["kubectl", "create", "deployment", deployment_name, "-n", namespace, "--image=" + image]
+                )
+                subprocess.check_call(
+                    ["kubectl", "expose", "deployment", deployment_name, "--name", deployment_name, 
+                    "--port", "8000", "-n", namespace]
+                )
             
 
 
@@ -105,10 +110,11 @@ def main():
     parser.add_argument('repository', metavar='repository', type=str)
     parser.add_argument('deployment_name', metavar='deployment_name', type=str)
     parser.add_argument('--namespace', metavar='namespace', type=str, default="oda-staging")
+    parser.add_argument('--local', action="store_true", default=False)
     
     args = parser.parse_args()
     
-    deploy(args.repository, args.deployment_name, namespace=args.namespace)
+    deploy(args.repository, args.deployment_name, namespace=args.namespace, local=args.local)
 
 
 if __name__ == "__main__":
