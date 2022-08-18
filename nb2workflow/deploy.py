@@ -37,6 +37,11 @@ def deploy(git_origin, deployment_base_name, namespace="oda-staging", local=Fals
         descr = subprocess.check_output( # cli is more stable than python API
             ["git", "describe", "--always", "--tags"],
             cwd=local_repo_path ).decode().strip()
+        
+        author = subprocess.check_output( 
+            ["git", "log", "-1", "--pretty=format:'%an <%ae>'"], # could use all authors too, but it's inside anyway
+            cwd=local_repo_path ).decode().strip()
+            
 
         config_fn = local_repo_path / "mmoda.yaml"
 
@@ -56,6 +61,9 @@ RUN pip install -r requirements.txt
         # we could use completely new image too. but lets keep renku etc in it
         open(pathlib.Path(tmpdir) / "Dockerfile", "a").write(f"""
 RUN pip install nb2workflow[cwl,service,rdf]=={version()}
+
+ENV ODA_WORKFLOW_VERSION="{descr}"
+ENV ODA_WORKFLOW_LAST_AUTHOR="{author}"
 
 COPY nb-repo/ /repo/
 
