@@ -116,6 +116,14 @@ ENTRYPOINT nb2service --debug /repo/ --host 0.0.0.0 --port 8000 | cut -c1-500
                     "--port", "8000", "-n", namespace]
                 )
             
+            return {
+                "deployment_name": deployment_name,
+                "namespace": namespace,
+                "description": descr,
+                "image": image,
+                "author": author,
+                "last_change_time": last_change_time
+            }
 
 
 def main():
