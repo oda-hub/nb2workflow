@@ -42,6 +42,10 @@ def deploy(git_origin, deployment_base_name, namespace="oda-staging", local=Fals
             ["git", "log", "-1", "--pretty=format:'%an <%ae>'"], # could use all authors too, but it's inside anyway
             cwd=local_repo_path ).decode().strip()
             
+        last_change_time = subprocess.check_output( 
+            ["git", "log", "-1", "--pretty=format:'%ai'"], # could use all authors too, but it's inside anyway
+            cwd=local_repo_path ).decode().strip()
+            
 
         config_fn = local_repo_path / "mmoda.yaml"
 
@@ -64,6 +68,7 @@ RUN pip install nb2workflow[cwl,service,rdf]=={version()}
 
 ENV ODA_WORKFLOW_VERSION="{descr}"
 ENV ODA_WORKFLOW_LAST_AUTHOR="{author}"
+ENV ODA_WORKFLOW_LAST_CHANGED="{last_change_time}"
 
 COPY nb-repo/ /repo/
 

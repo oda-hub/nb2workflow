@@ -643,7 +643,12 @@ def root():
     issues = []
 
     if len(issues) == 0:
-        return "all is ok!"
+        return {
+                    "message": "all is ok!",
+                    "versiom": os.getenv("ODA_WORKFLOW_VERSION"),
+                    "last_author": os.getenv("ODA_WORKFLOW_LAST_AUTHOR"),
+                    "last_changed": os.getenv("ODA_WORKFLOW_LAST_CHANGED")                    
+            }
     else:
         return make_response(jsonify(issues=issues), 500)
 
