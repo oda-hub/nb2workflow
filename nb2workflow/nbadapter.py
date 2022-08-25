@@ -156,10 +156,10 @@ class InputParameter:
 
 
 class NotebookAdapter:
-    def __init__(self,notebook_fn):
-        self.notebook_fn = notebook_fn
+    def __init__(self, notebook_fn):
+        self.notebook_fn = os.path.abspath(notebook_fn)
         self.name = notebook_short_name(notebook_fn)
-        logger.debug("notebook adapter for %s",notebook_fn)
+        logger.debug("notebook adapter for %s", self.notebook_fn)
         logger.debug(self.extract_parameters())
 
     def new_tmpdir(self):
