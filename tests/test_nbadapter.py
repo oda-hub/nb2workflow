@@ -39,7 +39,7 @@ def test_nbadapter(test_notebook, morph_notebook, caplog):
     for k, v in parameters.items():
         print("\033[31m", k, ":", v, "\033[0m")
 
-    assert len(parameters) == 5
+    assert len(parameters) == 6
 
     assert 'comment' in parameters['scwid']
     assert parameters['scwid']['owl_type'] == "http://odahub.io/ontology/integral#ScWID"
@@ -85,7 +85,7 @@ def test_nbadapter_repo(test_notebook_repo):
         parameters = nba.extract_parameters()
 
         print(parameters)
-        assert len(parameters) == 5
+        assert len(parameters) == 6
 
         if os.path.exists(nba.output_notebook_fn):
             os.remove(nba.output_notebook_fn)

@@ -5,7 +5,7 @@ import pytest
 
 import nb2workflow.cwl as cwl
 
-@pytest.mark.xfail
+@pytest.mark.cwl
 def test_cwl(test_notebook):
     cwl_fn = "test.cwl"
 
@@ -14,7 +14,7 @@ def test_cwl(test_notebook):
     subprocess.check_call(["cwl-runner", cwl_fn])
 
 
-@pytest.mark.xfail
+@pytest.mark.cwl
 def test_cwl_odakb(test_notebook):
     cwl_fn = "test.cwl"
 

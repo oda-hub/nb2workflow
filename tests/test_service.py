@@ -18,7 +18,7 @@ def test_service(client):
     service_name,service_signature=sorted(r.json.items())[0]
     logger.info(service_signature)
 
-    assert len(service_signature['parameters']) == 5
+    assert len(service_signature['parameters']) == 6
 
     #TODO: assert here paremeters
 
@@ -73,7 +73,7 @@ def test_service_repo(client):
     service_signature=r.json['workflow-notebook']
     logger.info(service_signature)
 
-    assert len(service_signature['parameters']) == 5
+    assert len(service_signature['parameters']) == 6
 
     r=client.get('/api/v1.0/get/workflow-notebook',query_string=dict(eminFAKE=20.))
     assert r.status_code == 400

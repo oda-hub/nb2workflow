@@ -42,7 +42,7 @@ jobs:
     - name: Test with pytest
       run: |
         pip install .[rdf,service]
-        PYTHONPATH=./ py.test . --cov=./ -k 'not cwl'
+        PYTHONPATH=./ tox -- --cov=./ 
 
     - name: Codecov
       uses: codecov/codecov-action@v1.3.1
