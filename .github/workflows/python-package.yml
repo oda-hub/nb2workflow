@@ -15,15 +15,15 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: [3.7, 3.8, 3.9]
+        python-version-env: [py39]
 
     steps:
     - uses: actions/checkout@v2
 
-    - name: Set up Python ${{ matrix.python-version }}
+    - name: Set up Python 3.9
       uses: actions/setup-python@v2
       with:
-        python-version: ${{ matrix.python-version }}
+        python-version: 3.9
 
     - name: Install dependencies
       run: |
@@ -42,7 +42,7 @@ jobs:
     - name: Test with pytest
       run: |
         pip install .[rdf,service]
-        PYTHONPATH=./ tox -- --cov=./ 
+        PYTHONPATH=./ tox -e ${{ matrix.python-version-env }} -- --cov=./ 
 
     - name: Codecov
       uses: codecov/codecov-action@v1.3.1
