@@ -1,5 +1,6 @@
+import pytest
 
-
+@pytest.mark.deploy
 def test_deploy():
     from nb2workflow.deploy import deploy
 
