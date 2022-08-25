@@ -42,7 +42,7 @@ jobs:
     - name: Test with pytest
       run: |
         pip install .[rdf,service]
-        PYTHONPATH=./ tox -e ${{ matrix.python-version-env }} -- --cov=./ 
+        PYTHONPATH=./ tox -e ${{ matrix.python-version-env }} 
 
     - name: Codecov
       uses: codecov/codecov-action@v1.3.1
