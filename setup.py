@@ -32,7 +32,7 @@ setup(name='nb2workflow',
         "service":[
             'flask',
             'pytest-flask',
-            'flask-caching', #'Flask-Caching',
+            'flask-caching', 
             'flask-cors',
             'flasgger',
             'python-consul',
