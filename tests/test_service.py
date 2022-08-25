@@ -60,7 +60,7 @@ def test_service(client):
     
     r=client.get('/trace/'+job)
 
-    logger.info("job", r.json)
+    logger.info("job %s", r.json)
 
 #    open("output.png","wb").write(base64.b64decode(r.json['output']['spectrum_png_content']))
 
