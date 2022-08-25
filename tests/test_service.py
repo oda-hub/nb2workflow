@@ -1,40 +1,40 @@
 from __future__ import print_function
 
-import os
 import json
-import pytest
+import os
+import threading
 import base64
+import time
 
-import nb2workflow.service
-import nb2workflow.nbadapter
 from flask import url_for
 
+import logging
 
-
+logger = logging.getLogger(__name__)
 
 def test_service(client):
     r=client.get('/api/v1.0/options')
     
     service_name,service_signature=sorted(r.json.items())[0]
-    print(service_signature)
+    logger.info(service_signature)
 
-    assert len(service_signature['parameters']) == 5
+    assert len(service_signature['parameters']) == 6
 
     #TODO: assert here paremeters
 
-    print('get: /api/v1.0/get/'+service_name)
+    logger.info('get: /api/v1.0/get/'+service_name)
 
     r=client.get('/api/v1.0/get/'+service_name,query_string=dict(eminFAKE=20.))
     assert r.status_code == 400
     
-    print(r.json['issues'])
+    logger.info(r.json['issues'])
     assert len(r.json['issues'])==1
 
 
     r=client.get('/api/v1.0/get/'+service_name,query_string=dict(emin=20.))
     assert r.status_code == 200
 
-    print(r.json)
+    logger.info(r.json)
 
     open("output.png","wb").write(base64.b64decode(r.json['output']['spectrum_png_content']))
 
@@ -43,24 +43,24 @@ def test_service(client):
     
     service_name,service_signature=sorted(r.json.items())[0]
 
-    print('get: /api/v1.0/get/'+service_name)
+    logger.info('get: /api/v1.0/get/'+service_name)
 
     r=client.get('/api/v1.0/get/'+service_name,query_string=dict(emin=20.))
     assert r.status_code == 200
 
-    print(r.json)
+    logger.info(r.json)
     
     r=client.get('/trace/list')
     assert r.status_code == 200
 
     for l in sorted(r.json, key=lambda x:x['ctime']):
-        print(l)
+        logger.info(l)
 
     job = r.json[-1]['fn'].split("/")[-1]
     
     r=client.get('/trace/'+job)
 
-    print("job", r.json)
+    logger.info("job %s", r.json)
 
 #    open("output.png","wb").write(base64.b64decode(r.json['output']['spectrum_png_content']))
 
@@ -71,22 +71,22 @@ def test_service_repo(client):
     r=client.get('/api/v1.0/options')
     
     service_signature=r.json['workflow-notebook']
-    print(service_signature)
+    logger.info(service_signature)
 
-    assert len(service_signature['parameters']) == 5
+    assert len(service_signature['parameters']) == 6
 
     r=client.get('/api/v1.0/get/workflow-notebook',query_string=dict(eminFAKE=20.))
     assert r.status_code == 400
     
-    print(r.json)
-    print(r.json['issues'])
+    logger.info(r.json)
+    logger.info(r.json['issues'])
     assert len(r.json['issues'])==1
 
 
     r=client.get('/api/v1.0/get/workflow-notebook',query_string=dict(emin=20.))
     assert r.status_code == 200
 
-    print(r.json)
+    logger.info(r.json)
 
     open("output.png","wb").write(base64.b64decode(r.json['output']['spectrum_png_content']))
 
@@ -94,12 +94,12 @@ def test_service_repo(client):
 
 def test_service_async_repo(client):
     
-    r=client.get('/api/v1.0/options')
+    r = client.get('/api/v1.0/options')
     
     service_signature=r.json['workflow-notebook']
-    print(service_signature)
+    logger.info(service_signature)
 
-    assert len(service_signature['parameters']) == 5
+    assert len(service_signature['parameters']) == 6
 
     callback_fn = 'callback.json'
     
@@ -111,22 +111,41 @@ def test_service_async_repo(client):
 
     assert r.status_code == 201
 
-    print(r.json)
+    logger.info(r.json)
 
     from nb2workflow.service import AsyncWorker
 
-    AsyncWorker('test-worker').run_one()
+    def test_worker_run():
+        AsyncWorker('test-worker').run_one()
 
-    callback_json = json.load(open(callback_fn))
+    test_worker_thread = threading.Thread(target=test_worker_run)
+    test_worker_thread.start()
 
-    assert callback_json['action'] == 'done'
 
-    r=client.get('/api/v1.0/get/workflow-notebook',
-                query_string=dict(
-                    emin=20., 
-                    _async_request='yes', 
-                    _async_request_callback='file://' + callback_fn))
 
-    assert r.json['workflow_status'] == 'done'
+    while True:
+        if os.path.exists(callback_fn):
+            callback_json = json.load(open(callback_fn))
+            # assert callback_json['action'] == 'done'
+        
+        options = client.get('/api/v1.0/options')
+        logger.info('\033[31moptions returns %s %s\033[0m', options, options.json)
+        assert options.status_code == 200
+    
+        r = client.get('/api/v1.0/get/workflow-notebook',
+                    query_string=dict(
+                        emin=20., 
+                        _async_request='yes', 
+                        _async_request_callback='file://' + callback_fn))
+
+        logger.info('service returns %s %s', r, r.json)
+
+        if r.json['workflow_status'] == 'done':
+            logger.info('workflow done!')
+            break
+
+        time.sleep(0.1)
+
+    test_worker_thread.join()
 
     open("output.png","wb").write(base64.b64decode(r.json['data']['output']['spectrum_png_content']))

@@ -156,10 +156,10 @@ class InputParameter:
 
 
 class NotebookAdapter:
-    def __init__(self,notebook_fn):
-        self.notebook_fn = notebook_fn
+    def __init__(self, notebook_fn):
+        self.notebook_fn = os.path.abspath(notebook_fn)
         self.name = notebook_short_name(notebook_fn)
-        logger.debug("notebook adapter for %s",notebook_fn)
+        logger.debug("notebook adapter for %s", self.notebook_fn)
         logger.debug(self.extract_parameters())
 
     def new_tmpdir(self):
@@ -173,15 +173,17 @@ class NotebookAdapter:
     def tmpdir(self):
         if getattr(self,'_tmpdir', None) is None:
             self._tmpdir = tempfile.mkdtemp(prefix="nb2w-")
+        if self._tmpdir is None:
+            raise RuntimeError("can no create tempdif")
         return self._tmpdir
     
     @property
     def preproc_notebook_fn(self):
-        return os.path.join(self.tmpdir,os.path.basename(self.notebook_fn.replace(".ipynb","_preproc.ipynb")))
+        return os.path.join(self.tmpdir, os.path.basename(self.notebook_fn.replace(".ipynb","_preproc.ipynb")))
 
     @property
     def output_notebook_fn(self):
-        return os.path.join(self.tmpdir,os.path.basename(self.notebook_fn.replace(".ipynb","_output.ipynb")))
+        return os.path.join(self.tmpdir, os.path.basename(self.notebook_fn.replace(".ipynb","_output.ipynb")))
 
     def read(self):
         if not os.path.exists(self.notebook_fn):

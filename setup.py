@@ -32,7 +32,7 @@ setup(name='nb2workflow',
         "service":[
             'flask',
             'pytest-flask',
-            'flask-caching', #'Flask-Caching',
+            'flask-caching', 
             'flask-cors',
             'flasgger',
             'python-consul',
@@ -54,6 +54,7 @@ setup(name='nb2workflow',
             'numpy',
             'astropy',
             'pandas',
+            'matplotlib'
         ],
       },
 
@@ -62,6 +63,7 @@ setup(name='nb2workflow',
         'pytest-xprocess',
         'matplotlib',
         'cwl-runner',
+        'psutil'
       ],
 
       install_requires=[

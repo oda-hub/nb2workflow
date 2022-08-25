@@ -29,3 +29,4 @@ code
 .vscode
 data
 example.ipynb
+.tox

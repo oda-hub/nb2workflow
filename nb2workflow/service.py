@@ -1,4 +1,5 @@
 from __future__ import print_function
+import pickle
 import re
 from werkzeug.routing import RequestRedirect, MethodNotAllowed, NotFound
 import queue
@@ -143,7 +144,7 @@ class AsyncWorkflow:
         self.params = params
         self.callback = callback
 
-        logger.info("initializing %s, callback", self, callback)
+        logger.info("%s initializing callback %s", self, callback)
 
     def run(self):
         try:
@@ -431,7 +432,13 @@ def setup_routes(app):
                 logger.info("NOT caching response %s", rv)
                 return False
             else:
-                logger.info("caching response %s", rv)
+                logger.info("should cache response %s", rv)                
+                try:
+                    pickle.dumps(rv)
+                except pickle.PicklingError as e:
+                    logger.info("the response can not be pickled and cached %s", e)
+                    return False
+
                 return True
 
         cache_timeout = nba.get_system_parameter_value('cache_timeout', 0)
@@ -465,10 +472,10 @@ def setup_routes(app):
 def workflow_options():
     return jsonify(dict([
         (
-                        target,
-                        dict(output=nba.extract_output_declarations(),
-                             parameters=nba.extract_parameters()),
-                        )
+            target,
+            dict(output=nba.extract_output_declarations(),
+                    parameters=nba.extract_parameters()),
+            )
         for target, nba in app.notebook_adapters.items()
     ]))
 
