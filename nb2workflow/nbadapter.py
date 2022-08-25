@@ -184,6 +184,9 @@ class NotebookAdapter:
         return os.path.join(self.tmpdir,os.path.basename(self.notebook_fn.replace(".ipynb","_output.ipynb")))
 
     def read(self):
+        if not os.path.exists(self.notebook_fn):
+            raise RuntimeError(f"notebook {self.notebook_fn} not found in {os.getcwd()}")
+
         return nbformat.reads(open(self.notebook_fn).read(), as_version=4)
 
     _notebook_origin = None
