@@ -54,6 +54,7 @@ setup(name='nb2workflow',
             'numpy',
             'astropy',
             'pandas',
+            'matplotlib'
         ],
       },
 
