@@ -10,16 +10,14 @@ from diskcache import Cache
 
 from nb2workflow import nbadapter
 
-cache = Cache('data/default-cache')
+cache = Cache('.nb2workflow/cache')
 enable_cache = False
 
 try:
     from nb2workflow import logstash
-    logstasher = logstash.LogStasher()
+    logstasher = logstash.LogStasher()    
 except Exception as e:
-    import logging
-    logging.warning("unable to setup logstash %s",repr(e))
-
+    logging.debug("unable to setup logstash %s", repr(e))
     logstasher = None
 
 try:

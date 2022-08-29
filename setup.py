@@ -56,6 +56,9 @@ setup(name='nb2workflow',
             'pandas',
             'matplotlib'
         ],
+        "mmoda":[
+            #'dispatcher-plugin-nb2workflow'
+        ]
       },
 
       tests_require=[
@@ -74,7 +77,7 @@ setup(name='nb2workflow',
         'diskcache',
         'requests',
         'pyyaml',
-        'nteract-scrapbook', 
+        'scrapbook', 
         'werkzeug==2.0.3'
       ],
 

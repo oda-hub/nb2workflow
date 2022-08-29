@@ -36,6 +36,16 @@ except Exception as e:
     logstasher = None
 
 
+def run(notebook_fn, params: dict):
+    nba = NotebookAdapter(notebook_fn)
+    nba.execute(
+        params,
+        log_output=True,
+        progress_bar=False
+    )
+    validate_oda_dispatcher(nba)
+    return nba.extract_output()
+
 class PapermillWorkflowIncomplete(Exception):
     pass
 
@@ -497,10 +507,18 @@ except Exception as e:
 def notebook_short_name(ipynb_fn):
     return os.path.basename(ipynb_fn).replace(".ipynb","")
 
-def find_notebooks(source):
+def find_notebooks(source, tests=False):
+
+    base_filter = lambda fn: "output" not in fn and "preproc" not in fn
+
+    if tests:
+        filt = lambda fn: base_filter(fn) and "/test_" in fn
+    else:
+        filt = lambda fn: base_filter(fn) and "/test_" not in fn
 
     if os.path.isdir(source):
-        notebooks=[ fn for fn in glob.glob(source+"/*ipynb") if "output" not in fn and "preproc" not in fn ]
+        notebooks=[ fn for fn in glob.glob(source+"/*ipynb") if filt(fn) ]
+
         logger.debug("found notebooks: %s",notebooks)
 
         if len(notebooks)==0:
@@ -598,7 +616,45 @@ def nbreduce(nb_source, max_size_mb):
             cellsize_limit = largest_cellsize
 
 
-def nbrun(nb_source, inp, inplace=False):
+def validate_oda_dispatcher(nba: NotebookAdapter, optional=True):
+    logger.info('validating with ODA dispatcher plugin')
+
+    try:
+        from dispatcher_plugin_nb2workflow.queries import NB2WProductQuery
+    except Exception as e:
+        logger.warning("unable to import dispatcher_plugin_nb2workflow.queries.NB2WProductQuery: %s", e)
+        if not optional:
+            logger.warning("dispatcher validation is not optional!")
+            raise
+    else:
+        nbpq = NB2WProductQuery('testname', 
+                        'testproduct', 
+                        nba.extract_parameters(),
+                        nba.extract_output_declarations())
+
+        output = nba.extract_output()
+
+        logger.info(json.dumps(output, indent=4))
+
+        class MockRes:
+            @staticmethod
+            def json():
+                return {
+                    'data': {
+                        'output': output
+                    }
+                }
+
+        logger.info("parameters as interpreted by dispatcher: %s", json.dumps(json.loads(nbpq.get_parameters_list_as_json()), indent=4))
+
+        prod_list = nbpq.build_product_list(instrument=None, res=MockRes, out_dir=None)
+
+        for prod in prod_list:
+            logger.info("product: %s", prod)
+
+    
+
+def nbrun(nb_source, inp, inplace=False, optional_dispather=True):
 
     nbas = find_notebooks(nb_source)
 
@@ -606,6 +662,8 @@ def nbrun(nb_source, inp, inplace=False):
         nba = nbas[inp.pop('notebook')]
     elif len(nbas) == 1:
         nba = list(nbas.values())[0]
+    else:
+        RuntimeError()
 
     r = nba.interpret_parameters(inp)
     
@@ -654,6 +712,8 @@ def nbrun(nb_source, inp, inplace=False):
     
     r['output_notebook_html'] = htmlfn
     r['output_notebook_html_content'] = base64.b64encode(open(htmlfn, "rb").read()).decode()
+
+    validate_oda_dispatcher(nba, optional=optional_dispather)
 
     return r
 
@@ -740,6 +800,7 @@ def main():
     parser.add_argument('notebook', metavar='notebook', type=str)
     parser.add_argument('--debug', action="store_true")
     parser.add_argument('--inplace', action="store_true")
+    parser.add_argument('--mmoda-validation', action="store_true")        
     
     parser.add_argument('inputs', nargs=argparse.REMAINDER)
 
@@ -754,7 +815,7 @@ def main():
     setup_logging(args.debug)
 
 
-    nbrun(args.notebook, inputs, inplace=args.inplace)
+    nbrun(args.notebook, inputs, inplace=args.inplace, optional_dispather=not args.mmoda_validation)
 
 
 if __name__ == "__main__":
