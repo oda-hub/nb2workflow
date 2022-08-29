@@ -86,7 +86,7 @@ ENTRYPOINT nb2service --debug /repo/ --host 0.0.0.0 --port 8000 | cut -c1-500
 
         if local:
             subprocess.check_call( # cli is more stable than python API
-                ["docker", "run", image],
+                ["docker", "run", '-p', '8000:8000', image],
                 cwd=tmpdir)
         else:
             subprocess.check_call( # cli is more stable than python API
