@@ -85,6 +85,7 @@ ENTRYPOINT nb2service --debug /repo/ --host 0.0.0.0 --port 8000 | cut -c1-500
             cwd=tmpdir)
 
         if run_tests: 
+            # TODO: run tests too
             out = subprocess.check_output(
                     ["docker", "run", '--rm', '--entrypoint', 'bash', image, '-c', 
                      ('pip install nb2workflow[rdf,mmoda,service];'
