@@ -5,7 +5,7 @@ import pathlib
 import subprocess
 import tempfile
 import time
-import ruamel.yaml as yaml
+import pyyaml as yaml
 from . import version
 
 default_config = {

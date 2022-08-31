@@ -57,7 +57,7 @@ setup(name='nb2workflow',
             'matplotlib'
         ],
         "mmoda":[
-            #'dispatcher-plugin-nb2workflow'
+            'dispatcher-plugin-nb2workflow'
         ]
       },
 
