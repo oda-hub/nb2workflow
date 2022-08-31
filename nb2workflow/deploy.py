@@ -5,7 +5,7 @@ import pathlib
 import subprocess
 import tempfile
 import time
-import pyyaml as yaml
+import yaml
 from . import version
 
 default_config = {
