@@ -78,7 +78,8 @@ setup(name='nb2workflow',
         'requests',
         'pyyaml',
         'scrapbook', 
-        'werkzeug==2.0.3'
+        'werkzeug==2.0.3',
+        'sentry_sdk'
       ],
 
 
