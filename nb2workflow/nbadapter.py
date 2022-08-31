@@ -526,7 +526,7 @@ def find_notebooks(source, tests=False):
 
     return notebook_adapters
 
-def nbinspect(nb_source, out=True):
+def nbinspect(nb_source, out=True, machine_readable=False):
     nbas = find_notebooks(nb_source)
 
     class CustomEncoder(json.JSONEncoder):
@@ -535,8 +535,17 @@ def nbinspect(nb_source, out=True):
                 return str(obj)
             return json.JSONEncoder.default(self, obj)
 
+    summary = []
+
     for n, nba in nbas.items():
-        print(json.dumps(nba.extract_parameters(), indent=4, sort_keys=True, cls=CustomEncoder))
+        summary.append({
+                "parameters": nba.extract_parameters(),
+                "outputs": nba.extract_output_declarations()
+            })
+        print(json.dumps(summary[-1], indent=4, sort_keys=True, cls=CustomEncoder))
+
+    if machine_readable:
+        print("WORKFLOW-NB-SIGNATURE:", json.dumps(summary, cls=CustomEncoder))
 
 
 def nbreduce(nb_source, max_size_mb):
@@ -604,7 +613,7 @@ def nbreduce(nb_source, max_size_mb):
             cellsize_limit = largest_cellsize
 
 
-def validate_oda_dispatcher(nba: NotebookAdapter, optional=True):
+def validate_oda_dispatcher(nba: NotebookAdapter, optional=True, machine_readable=False):
     logger.info('validating with ODA dispatcher plugin')
 
     try:
@@ -635,7 +644,9 @@ def validate_oda_dispatcher(nba: NotebookAdapter, optional=True):
 
         logger.debug("parameters as interpreted by dispatcher: %s", json.dumps(json.loads(nbpq.get_parameters_list_as_json()), indent=4))
 
-        for parameter in json.loads(nbpq.get_parameters_list_as_json()):
+        dispatcher_parameters = json.loads(nbpq.get_parameters_list_as_json())
+
+        for parameter in dispatcher_parameters:
             logger.info("\033[32mODA dispatcher parameter \033[0m: %s", parameter)
 
         prod_list = nbpq.build_product_list(instrument=None, res=MockRes, out_dir=None)
@@ -643,9 +654,15 @@ def validate_oda_dispatcher(nba: NotebookAdapter, optional=True):
         for prod in prod_list:
             logger.info("\033[33mworkflow the output produces ODA product \033[0m: \033[31m%s\033[0m (%s) %s", prod.name, prod.type_key, prod)
 
+        if machine_readable:
+            print("WORKFLOW-DISPATCHER-SIGNATURE:", json.dumps([
+                        {"parameters": dispatcher_parameters,
+                         "outputs": [{'name': prod.name, 'type': prod.type_key, 'class_name': prod.__class__.__name__} for prod in prod_list]
+                        }]))
+        
     
 
-def nbrun(nb_source, inp, inplace=False, optional_dispather=True):
+def nbrun(nb_source, inp, inplace=False, optional_dispather=True, machine_readable=False):
 
     nbas = find_notebooks(nb_source)
 
@@ -704,7 +721,7 @@ def nbrun(nb_source, inp, inplace=False, optional_dispather=True):
     r['output_notebook_html'] = htmlfn
     r['output_notebook_html_content'] = base64.b64encode(open(htmlfn, "rb").read()).decode()
 
-    validate_oda_dispatcher(nba, optional=optional_dispather)
+    validate_oda_dispatcher(nba, optional=optional_dispather, machine_readable=machine_readable)
 
     return r
 
@@ -763,12 +780,13 @@ def main_inspect():
     parser = argparse.ArgumentParser(description='Inspect some notebooks') # run locally, remotely, semantically
     parser.add_argument('notebook', metavar='notebook', type=str)
     parser.add_argument('--debug', action="store_true")
+    parser.add_argument('--machine-readable', action="store_true")        
     
     args = parser.parse_args()
 
     setup_logging(args.debug)
 
-    nbinspect(args.notebook)
+    nbinspect(args.notebook, machine_readable=args.machine_readable)
 
 
 def main():
@@ -777,6 +795,7 @@ def main():
     parser.add_argument('--debug', action="store_true")
     parser.add_argument('--inplace', action="store_true")
     parser.add_argument('--mmoda-validation', action="store_true")        
+    parser.add_argument('--machine-readable', action="store_true")        
     
     parser.add_argument('inputs', nargs=argparse.REMAINDER)
 
@@ -790,7 +809,7 @@ def main():
         
     setup_logging(args.debug)
 
-    nbrun(args.notebook, inputs, inplace=args.inplace, optional_dispather=not args.mmoda_validation)
+    nbrun(args.notebook, inputs, inplace=args.inplace, optional_dispather=not args.mmoda_validation, machine_readable=args.machine_readable)
 
 
 if __name__ == "__main__":

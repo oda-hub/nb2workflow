@@ -24,7 +24,7 @@ def determine_origin(repo):
     else:
         return repo
 
-def deploy(git_origin, deployment_base_name, namespace="oda-staging", local=False):
+def deploy(git_origin, deployment_base_name, namespace="oda-staging", local=False, run_tests=True):
     git_origin = determine_origin(git_origin)
 
     with tempfile.TemporaryDirectory() as tmpdir:        
@@ -83,6 +83,20 @@ ENTRYPOINT nb2service --debug /repo/ --host 0.0.0.0 --port 8000 | cut -c1-500
         subprocess.check_call( # cli is more stable than python API
             ["docker", "build", ".", "-t", image],
             cwd=tmpdir)
+
+        if run_tests: 
+            out = subprocess.check_output(
+                    ["docker", "run", '--rm', '--entrypoint', 'bash', image, '-c', 
+                     ('pip install nb2workflow[rdf,mmoda,service];'
+                      'for a in /repo/*ipynb; do'
+                      '  nbinspect $a;'
+                      '  nbrun $a;'
+                      'done')
+                     ],
+                    cwd=tmpdir)
+
+            # WORKFLOW-DISPATCHER-SIGNATURE:
+            # WORKFLOW-NB-SIGNATURE:
 
         if local:
             subprocess.check_call( # cli is more stable than python API
