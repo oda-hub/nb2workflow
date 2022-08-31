@@ -22,6 +22,7 @@ from nbconvert import HTMLExporter
 
 from nb2workflow.health import current_health
 from nb2workflow import workflows
+from nb2workflow.logging_setup import setup_logging
 
 import logging
 logger=logging.getLogger(__name__)
@@ -358,19 +359,6 @@ class NotebookAdapter:
         self.inject_output_gathering()
         exceptions = []
 
-        
-#        root = logging.getLogger()
-#        root.setLevel(logging.DEBUG)
-
-#        handler = logging.StreamHandler()
-#        handler.setLevel(logging.DEBUG)
-#        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-#        handler.setFormatter(formatter)
-#        root.addHandler(handler)
-
-#        root.info("towards excution")
-
-
         ntries = 10
         while ntries > 0:
             try:
@@ -624,7 +612,7 @@ def validate_oda_dispatcher(nba: NotebookAdapter, optional=True):
     except Exception as e:
         logger.warning("unable to import dispatcher_plugin_nb2workflow.queries.NB2WProductQuery: %s", e)
         if not optional:
-            logger.warning("dispatcher validation is not optional!")
+            logger.error("dispatcher validation is not optional!")
             raise
     else:
         nbpq = NB2WProductQuery('testname', 
@@ -634,7 +622,7 @@ def validate_oda_dispatcher(nba: NotebookAdapter, optional=True):
 
         output = nba.extract_output()
 
-        logger.info(json.dumps(output, indent=4))
+        logger.debug(json.dumps(output, indent=4))
 
         class MockRes:
             @staticmethod
@@ -645,12 +633,15 @@ def validate_oda_dispatcher(nba: NotebookAdapter, optional=True):
                     }
                 }
 
-        logger.info("parameters as interpreted by dispatcher: %s", json.dumps(json.loads(nbpq.get_parameters_list_as_json()), indent=4))
+        logger.debug("parameters as interpreted by dispatcher: %s", json.dumps(json.loads(nbpq.get_parameters_list_as_json()), indent=4))
+
+        for parameter in json.loads(nbpq.get_parameters_list_as_json()):
+            logger.info("\033[32mODA dispatcher parameter \033[0m: %s", parameter)
 
         prod_list = nbpq.build_product_list(instrument=None, res=MockRes, out_dir=None)
 
         for prod in prod_list:
-            logger.info("product: %s", prod)
+            logger.info("\033[33mworkflow the output produces ODA product \033[0m: \033[31m%s\033[0m (%s) %s", prod.name, prod.type_key, prod)
 
     
 
@@ -779,21 +770,6 @@ def main_inspect():
 
     nbinspect(args.notebook)
 
-def setup_logging(debug=False):
-    handler = logging.StreamHandler()
-    handler.setLevel(logging.INFO)
-    root = logging.getLogger()
-    handler = logging.StreamHandler()
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    handler.setFormatter(formatter)
-    root.addHandler(handler)
-
-    if debug:
-        root.setLevel(logging.DEBUG)
-        handler.setLevel(logging.DEBUG)
-    else:
-        root.setLevel(logging.INFO)
-        handler.setLevel(logging.INFO)
 
 def main():
     parser = argparse.ArgumentParser(description='Run some notebooks') # run locally, remotely, semantically
@@ -813,7 +789,6 @@ def main():
         inputs[k] = v
         
     setup_logging(args.debug)
-
 
     nbrun(args.notebook, inputs, inplace=args.inplace, optional_dispather=not args.mmoda_validation)
 
