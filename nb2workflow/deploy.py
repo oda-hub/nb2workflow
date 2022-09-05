@@ -2,6 +2,7 @@ import argparse
 import json
 import os
 import pathlib
+import re
 import subprocess
 import tempfile
 import time
@@ -82,22 +83,25 @@ ENTRYPOINT nb2service --debug /repo/ --host 0.0.0.0 --port 8000 | cut -c1-500
 
         subprocess.check_call( # cli is more stable than python API
             ["docker", "build", ".", "-t", image],
-            cwd=tmpdir)
+            cwd=tmpdir)        
 
         if run_tests: 
             # TODO: run tests too
             out = subprocess.check_output(
                     ["docker", "run", '--rm', '--entrypoint', 'bash', image, '-c', 
-                     ('pip install nb2workflow[rdf,mmoda,service];'
-                      'for a in /repo/*ipynb; do'
-                      '  nbinspect $a;'
-                      '  nbrun $a;'
+                     ('pip install nb2workflow[rdf,mmoda,service] --upgrade;'
+                      'for a in $(ls /repo/*ipynb | grep -v test_); do'
+                      '  nbinspect --machine-readable $a;'
+                      '  nbrun --machine-readable $a;'
                       'done')
                      ],
                     cwd=tmpdir)
 
-            # WORKFLOW-DISPATCHER-SIGNATURE:
-            # WORKFLOW-NB-SIGNATURE:
+            workflow_dispatcher_signature = json.loads(re.search(rb"^WORKFLOW-DISPATCHER-SIGNATURE: (.*?)$", out, re.M).group(1).decode())
+            workflow_nb_signature = json.loads(re.search(rb"^WORKFLOW-NB-SIGNATURE: (.*?)$", out, re.M).group(1).decode())
+        else:
+            workflow_dispatcher_signature = None
+            workflow_nb_signature = None
 
         if local:
             subprocess.check_call( # cli is more stable than python API
@@ -137,7 +141,9 @@ ENTRYPOINT nb2service --debug /repo/ --host 0.0.0.0 --port 8000 | cut -c1-500
                 "description": descr,
                 "image": image,
                 "author": author,
-                "last_change_time": last_change_time
+                "last_change_time": last_change_time,
+                "workflow_dispatcher_signature": workflow_dispatcher_signature,
+                "workflow_nb_signature": workflow_nb_signature
             }
 
 

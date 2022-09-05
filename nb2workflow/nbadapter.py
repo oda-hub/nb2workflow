@@ -28,14 +28,15 @@ import logging
 logger=logging.getLogger(__name__)
 
 
-try:
-    from nb2workflow import logstash
-    logstasher = logstash.LogStasher()
-except Exception as e:
-    logger.debug("unable to setup logstash %s",repr(e))
+# try:
+#     from nb2workflow import logstash
+#     logstasher = logstash.LogStasher()
+# except Exception as e:
+#     logger.debug("unable to setup logstash %s",repr(e))
 
-    logstasher = None
+#     logstasher = None
 
+logstasher = None
 
 def run(notebook_fn, params: dict):
     nba = NotebookAdapter(notebook_fn)
@@ -495,7 +496,7 @@ except Exception as e:
 def notebook_short_name(ipynb_fn):
     return os.path.basename(ipynb_fn).replace(".ipynb","")
 
-def find_notebooks(source, tests=False):
+def find_notebooks(source, tests=False) -> dict[str, NotebookAdapter]:
 
     base_filter = lambda fn: "output" not in fn and "preproc" not in fn
 

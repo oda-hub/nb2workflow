@@ -28,7 +28,7 @@ def main():
 
     setup_logging(args.debug)
 
-    nbtest(args.notebook)
+    nbtest(args.repository)
 
 
 if __name__ == "__main__":
