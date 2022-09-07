@@ -1,5 +1,6 @@
 import argparse
 import json
+import logging
 import os
 import pathlib
 import re
@@ -25,7 +26,7 @@ def determine_origin(repo):
     else:
         return repo
 
-def deploy(git_origin, deployment_base_name, namespace="oda-staging", local=False, run_tests=True):
+def deploy(git_origin, deployment_base_name, namespace="oda-staging", local=False, run_tests=True, check_live=True):
     git_origin = determine_origin(git_origin)
 
     with tempfile.TemporaryDirectory() as tmpdir:        
@@ -134,6 +135,49 @@ ENTRYPOINT nb2service --debug /repo/ --host 0.0.0.0 --port 8000 | cut -c1-500
                     ["kubectl", "expose", "deployment", deployment_name, "--name", deployment_name, 
                     "--port", "8000", "-n", namespace]
                 )
+
+            # try:
+            #     cmd = ["kubectl", "create", "ingress", "annotated",  
+            #          f'--rule="{deployment_name}-workflow-backend.obsuks1.unige.ch={deployment_name}/*:8000"',
+            #          "--annotation", "traefik.ingress.kubernetes.io/router.entrypoints=websecure",
+            #          "--annotation", "traefik.ingress.kubernetes.io/router.tls=true",
+            #          ]
+
+            #     print(" ".join(cmd))
+            #     subprocess.check_call(
+            #         cmd
+            #     )
+            # except Exception:
+            #     raise
+
+            if check_live:
+                print("\033[31mwill check live\033[0m")
+                while True:
+                    try:
+                        p = subprocess.Popen([
+                            "kubectl",
+                            "exec",
+                            "-it",
+                            "deployments/oda-dispatcher",
+                            "-n",
+                            "oda-staging",
+                            "--",
+                            "bash", "-c",
+                            f"curl {deployment_name}:8000"], stdout=subprocess.PIPE)
+                        print("p", p)
+                        p.wait()
+                        if p.stdout is not None:
+                            service_output_json = p.stdout.read()
+                    except Exception as e:
+                        print("problem getting response from the service:", service_output_json)
+                        time.sleep(3)
+                    else:
+                        print("got valid output:", service_output_json)
+                        service_output = json.loads(service_output_json.decode())
+                        print("got valid output json:", service_output)
+                        break
+            else:
+                service_output = {}
             
             return {
                 "deployment_name": deployment_name,
@@ -143,7 +187,8 @@ ENTRYPOINT nb2service --debug /repo/ --host 0.0.0.0 --port 8000 | cut -c1-500
                 "author": author,
                 "last_change_time": last_change_time,
                 "workflow_dispatcher_signature": workflow_dispatcher_signature,
-                "workflow_nb_signature": workflow_nb_signature
+                "workflow_nb_signature": workflow_nb_signature,
+                "service_output": service_output
             }
 
 
