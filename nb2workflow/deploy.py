@@ -56,7 +56,7 @@ def deploy(git_origin, deployment_base_name, namespace="oda-staging", local=Fals
             config.update(yaml.load(open(config_fn)))
 
         if not config['use_repo_base_image']: 
-            notebook_fullpath_in_container = pathlib.Path(('/repo') / (config['notebook_path'].strip("/"))
+            notebook_fullpath_in_container = pathlib.Path('/repo') / (config['notebook_path'].strip("/"))
 
             open(pathlib.Path(tmpdir) / "Dockerfile", "a").write(f"""
 FROM python:3.9
