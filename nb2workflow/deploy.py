@@ -8,7 +8,10 @@ import subprocess
 import tempfile
 import time
 import yaml
+from .logging_setup import setup_logging
 from . import version
+
+logger = logging.getLogger(__name__)
 
 default_config = {
     "config_schema_version": "0.1.0",
@@ -18,6 +21,7 @@ default_config = {
 }
 
 
+#TODO: probably want an option to really use the dir
 def determine_origin(repo):
     if os.path.isdir(repo):
         return subprocess.check_output(
@@ -53,10 +57,17 @@ def deploy(git_origin, deployment_base_name, namespace="oda-staging", local=Fals
 
         config = default_config.copy()
         if os.path.exists(config_fn):
-            config.update(yaml.load(open(config_fn)))
+            extra_config = yaml.safe_load(open(config_fn))
+            logger.info("extra config from %s: %s", config_fn, extra_config)
+            config.update(extra_config)
+        else:
+            logger.info("no extra config in %s", config_fn)
+        logger.info("complete config: %s", config)
 
         if not config['use_repo_base_image']: 
             notebook_fullpath_in_container = pathlib.Path('/repo') / (config['notebook_path'].strip("/"))
+
+            logger.info("using notebook_fullpath_in_container: %s", notebook_fullpath_in_container)
 
             open(pathlib.Path(tmpdir) / "Dockerfile", "a").write(f"""
 FROM python:3.9
@@ -73,13 +84,14 @@ RUN pip install nb2workflow[cwl,service,rdf]=={version()}
 ENV ODA_WORKFLOW_VERSION="{descr}"
 ENV ODA_WORKFLOW_LAST_AUTHOR="{author}"
 ENV ODA_WORKFLOW_LAST_CHANGED="{last_change_time}"
+ENV ODA_WORKFLOW_NOTEBOOK_PATH="{notebook_fullpath_in_container}"
 
 COPY nb-repo/ /repo/
 
 RUN curl -o /usr/bin/jq -L https://github.com/stedolan/jq/releases/download/jq-1.5/jq-linux64; chmod +x /usr/bin/jq
-RUN for nn in {notebook_fullpath_in_container}/*.ipynb; do mv $nn $nn-tmp;  jq '.metadata.kernelspec.name |= "python3"' $nn-tmp > $nn ; rm $nn-tmp ; done
+RUN for nn in $ODA_WORKFLOW_NOTEBOOK_PATH/*.ipynb; do mv $nn $nn-tmp;  jq '.metadata.kernelspec.name |= "python3"' $nn-tmp > $nn ; rm $nn-tmp ; done
 
-ENTRYPOINT nb2service --debug {notebook_fullpath_in_container} --host 0.0.0.0 --port 8000 | cut -c1-500
+ENTRYPOINT nb2service --debug $ODA_WORKFLOW_NOTEBOOK_PATH --host 0.0.0.0 --port 8000 | cut -c1-500
 """)
 
         image = f"odahub/nb-{pathlib.Path(git_origin).name}:{descr}-nb2w{version()}" # {time.strftime(r'%y%m%d%H%M%S')}"
@@ -93,7 +105,7 @@ ENTRYPOINT nb2service --debug {notebook_fullpath_in_container} --host 0.0.0.0 --
             out = subprocess.check_output(
                     ["docker", "run", '--rm', '--entrypoint', 'bash', image, '-c', 
                      ('pip install nb2workflow[rdf,mmoda,service] --upgrade;'
-                      'for a in $(ls /repo/*ipynb | grep -v test_); do'
+                      'for a in $(ls $ODA_WORKFLOW_NOTEBOOK_PATH/*ipynb | grep -v test_); do'
                       '  nbinspect --machine-readable $a;'
                       '  nbrun --machine-readable $a;'
                       'done')
@@ -145,7 +157,7 @@ ENTRYPOINT nb2service --debug {notebook_fullpath_in_container} --host 0.0.0.0 --
             #          "--annotation", "traefik.ingress.kubernetes.io/router.tls=true",
             #          ]
 
-            #     print(" ".join(cmd))
+            #     logger.info(" ".join(cmd))
             #     subprocess.check_call(
             #         cmd
             #     )
@@ -202,6 +214,9 @@ def main():
     parser.add_argument('--local', action="store_true", default=False)
     
     args = parser.parse_args()
+
+    logging.basicConfig
+    setup_logging()
     
     deploy(args.repository, args.deployment_name, namespace=args.namespace, local=args.local)
 
