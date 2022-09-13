@@ -12,7 +12,7 @@ from . import version
 
 default_config = {
     "config_schema_version": "0.1.0",
-    "notebook_patterns": ["notebooks/*", "*.ipynb"],
+    "notebook_path": "", # or "notebooks"
     "extra_data": [],
     "use_repo_base_image": False
 }
@@ -56,6 +56,8 @@ def deploy(git_origin, deployment_base_name, namespace="oda-staging", local=Fals
             config.update(yaml.load(open(config_fn)))
 
         if not config['use_repo_base_image']: 
+            notebook_fullpath_in_container = pathlib.Path(('/repo') / (config['notebook_path'].strip("/"))
+
             open(pathlib.Path(tmpdir) / "Dockerfile", "a").write(f"""
 FROM python:3.9
 
@@ -75,9 +77,9 @@ ENV ODA_WORKFLOW_LAST_CHANGED="{last_change_time}"
 COPY nb-repo/ /repo/
 
 RUN curl -o /usr/bin/jq -L https://github.com/stedolan/jq/releases/download/jq-1.5/jq-linux64; chmod +x /usr/bin/jq
-RUN for nn in /repo/*.ipynb; do mv $nn $nn-tmp;  jq '.metadata.kernelspec.name |= "python3"' $nn-tmp > $nn ; rm $nn-tmp ; done
+RUN for nn in {notebook_fullpath_in_container}/*.ipynb; do mv $nn $nn-tmp;  jq '.metadata.kernelspec.name |= "python3"' $nn-tmp > $nn ; rm $nn-tmp ; done
 
-ENTRYPOINT nb2service --debug /repo/ --host 0.0.0.0 --port 8000 | cut -c1-500
+ENTRYPOINT nb2service --debug {notebook_fullpath_in_container} --host 0.0.0.0 --port 8000 | cut -c1-500
 """)
 
         image = f"odahub/nb-{pathlib.Path(git_origin).name}:{descr}-nb2w{version()}" # {time.strftime(r'%y%m%d%H%M%S')}"
