@@ -56,6 +56,9 @@ setup(name='nb2workflow',
             'pandas',
             'matplotlib'
         ],
+        "mmoda":[
+            'oda_api'
+        ]
       },
 
       tests_require=[

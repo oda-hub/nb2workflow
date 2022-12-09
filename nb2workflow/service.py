@@ -29,7 +29,11 @@ from flask_caching import Cache
 from flask_cors import CORS
 
 from flasgger import LazyJSONEncoder, LazyString, Swagger, swag_from
-
+try:
+    from oda_api.json import CustomJSONEncoder as MMODAJSONEncoder
+    oda_encoder = True
+except (ModuleNotFoundError, ImportError):
+    oda_encoder = False
 
 from nb2workflow.workflows import serialize_workflow_exception
 
@@ -63,7 +67,7 @@ class ReverseProxied(object):
 
 
 class CustomJSONEncoder(LazyJSONEncoder):
-    def default(self, obj, *args, **kwargs):
+    def default(self, obj):
         try:
             if isinstance(obj, type):
                 return dict(type_object=repr(obj))
@@ -72,7 +76,13 @@ class CustomJSONEncoder(LazyJSONEncoder):
             pass
         else:
             return list(iterable)
-        return JSONEncoder.default(self, obj)
+        
+        if oda_encoder:
+            try:
+                return MMODAJSONEncoder.default(self, obj)
+            except (TypeError, RuntimeError): 
+                pass
+        return super().default(obj)
 
 
 cache = Cache(config={'CACHE_TYPE': 'simple'})
