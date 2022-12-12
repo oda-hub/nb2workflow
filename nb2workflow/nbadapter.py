@@ -22,6 +22,7 @@ from nbconvert import HTMLExporter
 
 from nb2workflow.health import current_health
 from nb2workflow import workflows
+from nb2workflow.json import CustomJSONEncoder
 
 import logging
 logger=logging.getLogger(__name__)
@@ -438,6 +439,7 @@ import json
 import os
     
 from nb2workflow.nbadapter import denumpyfy
+from nb2workflow.json import CustomJSONEncoder
 
 """
         for output in outputs.keys():
@@ -448,7 +450,7 @@ try:
 except Exception as e:
     print("failed to glue {output}", {output})
     print("will glue jsonified")
-    sb.glue("{output}",json.dumps(denumpyfy({output})))
+    sb.glue("{output}",json.dumps(denumpyfy({output}), cls=CustomJSONEncoder))
 """.format(output=output)
 
             output_gather_content+="\nisinstance({output},str) and os.path.exists({output}) and sb.glue(\"{output}_content\",base64.b64encode(open({output},'rb').read()).decode())".format(output=output)
@@ -523,14 +525,14 @@ def find_notebooks(source):
 def nbinspect(nb_source, out=True):
     nbas = find_notebooks(nb_source)
 
-    class CustomEncoder(json.JSONEncoder):
-        def default(self, obj):
-            if isinstance(obj, type):
-                return str(obj)
-            return json.JSONEncoder.default(self, obj)
+    # class CustomEncoder(json.JSONEncoder):
+    #     def default(self, obj):
+    #         if isinstance(obj, type):
+    #             return str(obj)
+    #         return json.JSONEncoder.default(self, obj)
 
     for n, nba in nbas.items():
-        print(json.dumps(nba.extract_parameters(), indent=4, sort_keys=True, cls=CustomEncoder))
+        print(json.dumps(nba.extract_parameters(), indent=4, sort_keys=True, cls=CustomJSONEncoder))
 
 
 def nbreduce(nb_source, max_size_mb):

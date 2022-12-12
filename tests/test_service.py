@@ -5,11 +5,6 @@ import os
 import threading
 import base64
 import time
-from oda_api.data_products import ODAAstropyTable
-from nb2workflow.service import CustomJSONEncoder
-import numpy as np
-from astropy.table import Table
-from io import StringIO
 
 
 from flask import url_for
@@ -155,17 +150,4 @@ def test_service_async_repo(client):
     test_worker_thread.join()
 
     open("output.png","wb").write(base64.b64decode(r.json['data']['output']['spectrum_png_content']))
-
-def test_oda_astropy_table_encoding():
-    data = np.zeros((10, 2))
-    data[:,0] = range(len(data))
-    data[:,1] = range(len(data), 0, -1)
-    atable = Table(data, names=['a', 'b'])
-    tabp = ODAAstropyTable(atable)
     
-    with StringIO() as fd:
-        atable.write(fd, format='ascii.ecsv')
-        ascii_repr = fd.getvalue()
-    
-    encoded_table = CustomJSONEncoder().encode(tabp)
-    assert json.loads(encoded_table)['ascii'] == ascii_repr
