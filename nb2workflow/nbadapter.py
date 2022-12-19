@@ -20,23 +20,19 @@ import scrapbook as sb
 import nbformat
 from nbconvert import HTMLExporter
 
+from . import logstash
+
 from nb2workflow.health import current_health
 from nb2workflow import workflows
 from nb2workflow.logging_setup import setup_logging
+from nb2workflow.json import CustomJSONEncoder
 
 import logging
+
 logger=logging.getLogger(__name__)
 
+logstasher = logstash.LogStasher()
 
-# try:
-#     from nb2workflow import logstash
-#     logstasher = logstash.LogStasher()
-# except Exception as e:
-#     logger.debug("unable to setup logstash %s",repr(e))
-
-#     logstasher = None
-
-logstasher = None
 
 def run(notebook_fn, params: dict):
     nba = NotebookAdapter(notebook_fn)
@@ -317,21 +313,19 @@ class NotebookAdapter:
 
     def execute(self, parameters, progress_bar = True, log_output = True, inplace=False):
         t0 = time.time()
-        if logstasher is not None:
-            logstasher.log(dict(origin="nb2workflow.execute", event="starting", parameters=parameters, workflow_name=notebook_short_name(self.notebook_fn), health=current_health()))
+        logstasher.log(dict(origin="nb2workflow.execute", event="starting", parameters=parameters, workflow_name=notebook_short_name(self.notebook_fn), health=current_health()))
 
         logger.info("starting job")
         exceptions = self._execute(parameters, progress_bar, log_output, inplace)
             
         tspent = time.time() - t0
-        if logstasher is not None:
-            logstasher.log(dict(origin="nb2workflow.execute", 
-                                event="done", 
-                                parameters=parameters, 
-                                workflow_name=notebook_short_name(self.notebook_fn), 
-                                exceptions=list(map(workflows.serialize_workflow_exception, exceptions)),
-                                health=current_health(), 
-                                time_spent=tspent))
+        logstasher.log(dict(origin="nb2workflow.execute", 
+                            event="done", 
+                            parameters=parameters, 
+                            workflow_name=notebook_short_name(self.notebook_fn), 
+                            exceptions=list(map(workflows.serialize_workflow_exception, exceptions)),
+                            health=current_health(), 
+                            time_spent=tspent))
 
         return exceptions
 
@@ -437,6 +431,7 @@ import json
 import os
     
 from nb2workflow.nbadapter import denumpyfy
+from nb2workflow.json import CustomJSONEncoder
 
 """
         for output in outputs.keys():
@@ -447,7 +442,7 @@ try:
 except Exception as e:
     print("failed to glue {output}", {output})
     print("will glue jsonified")
-    sb.glue("{output}",json.dumps(denumpyfy({output})))
+    sb.glue("{output}",json.dumps(denumpyfy({output}), cls=CustomJSONEncoder))
 """.format(output=output)
 
             output_gather_content+="\nisinstance({output},str) and os.path.exists({output}) and sb.glue(\"{output}_content\",base64.b64encode(open({output},'rb').read()).decode())".format(output=output)
@@ -530,15 +525,16 @@ def find_notebooks(source, tests=False) -> dict[str, NotebookAdapter]:
 def nbinspect(nb_source, out=True, machine_readable=False):
     nbas = find_notebooks(nb_source)
 
-    class CustomEncoder(json.JSONEncoder):
-        def default(self, obj):
-            if isinstance(obj, type):
-                return str(obj)
-            return json.JSONEncoder.default(self, obj)
+    # class CustomEncoder(json.JSONEncoder):
+    #     def default(self, obj):
+    #         if isinstance(obj, type):
+    #             return str(obj)
+    #         return json.JSONEncoder.default(self, obj)
 
     summary = []
 
     for n, nba in nbas.items():
+<<<<<<< HEAD
         summary.append({
                 "parameters": nba.extract_parameters(),
                 "outputs": nba.extract_output_declarations()
@@ -547,6 +543,9 @@ def nbinspect(nb_source, out=True, machine_readable=False):
 
     if machine_readable:
         print("WORKFLOW-NB-SIGNATURE:", json.dumps(summary, cls=CustomEncoder))
+=======
+        print(json.dumps(nba.extract_parameters(), indent=4, sort_keys=True, cls=CustomJSONEncoder))
+>>>>>>> master
 
 
 def nbreduce(nb_source, max_size_mb):

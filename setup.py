@@ -57,7 +57,11 @@ setup(name='nb2workflow',
             'matplotlib'
         ],
         "mmoda":[
+<<<<<<< HEAD
             'dispatcher-plugin-nb2workflow'
+=======
+            'oda_api'
+>>>>>>> master
         ]
       },
 

@@ -6,6 +6,7 @@ import threading
 import base64
 import time
 
+
 from flask import url_for
 
 import logging
@@ -149,3 +150,4 @@ def test_service_async_repo(client):
     test_worker_thread.join()
 
     open("output.png","wb").write(base64.b64decode(r.json['data']['output']['spectrum_png_content']))
+    

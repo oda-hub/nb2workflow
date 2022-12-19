@@ -5,6 +5,7 @@ import time
 import datetime
 import logging
 from collections import OrderedDict
+from . import logstash
 
 from diskcache import Cache
 
@@ -13,22 +14,17 @@ from nb2workflow import nbadapter
 cache = Cache('.nb2workflow/cache')
 enable_cache = False
 
-# try:
-#     from nb2workflow import logstash
-#     logstasher = logstash.LogStasher()    
-# except Exception as e:
-#     logging.debug("unable to setup logstash %s", repr(e))
-#     logstasher = None
+try:
+    import sentry_sdk
+    sentry_sdk.init(os.environ.get("SENTRY_URI", open("/cdci-resources/sentry-uri").read().strip()))
+except ImportError:
+    sentry_sdk = None
+except Exception as e:
+    import logging
+    logging.debug("big problem with sentry: %s",repr(e))
+    sentry_sdk = None
 
-# try:
-#     import sentry_sdk
-#     sentry_sdk.init(os.environ.get("SENTRY_URI", open("/cdci-resources/sentry-uri").read().strip()))
-# except ImportError:
-#     sentry_sdk = None
-# except Exception as e:
-#     logging.debug("big problem with sentry: %s",repr(e))
-#     sentry_sdk = None
-
+logstasher = logstash.LogStasher()
 
 class WorkflowException(Exception):
     pass
@@ -72,9 +68,8 @@ def evaluate(router, *args, **kwargs):
     print("async_request is not used here, but is set to", async_request)
 
 
-    if logstasher:
-        logstasher.set_context(dict(router=router, args=args, kwargs=kwargs))
-        logstasher.log(dict(event='starting'))
+    logstasher.set_context(dict(router=router, args=args, kwargs=kwargs))
+    logstasher.log(dict(event='starting'))
 
     if cached and enable_cache and key in cache:
         v = cache.get(key)
@@ -177,8 +172,7 @@ def evaluate(router, *args, **kwargs):
         raise NotImplementedError
 
 
-    if logstasher:
-        logstasher.log(dict(event='done'))
+    logstasher.log(dict(event='done'))
 
     cache.set(key, result)
     print("stored to cache", key)

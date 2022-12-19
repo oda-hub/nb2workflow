@@ -118,6 +118,25 @@ ENTRYPOINT nb2service --debug $ODA_WORKFLOW_NOTEBOOK_PATH --host 0.0.0.0 --port 
             workflow_dispatcher_signature = None
             workflow_nb_signature = None
 
+        if run_tests: 
+            # TODO: run tests too
+            out = subprocess.check_output(
+                    ["docker", "run", '--rm', '--entrypoint', 'bash', image, '-c', 
+                     ('pip install nb2workflow[rdf,mmoda,service] --upgrade;'
+                      'for a in $(ls $ODA_WORKFLOW_NOTEBOOK_PATH/*ipynb | grep -v test_); do'
+                      '  nbinspect --machine-readable $a;'
+                      '  nbrun --machine-readable $a;'
+                      'done')
+                     ],
+                    stderr=subprocess.PIPE,
+                    cwd=tmpdir)
+
+            workflow_dispatcher_signature = json.loads(re.search(rb"^WORKFLOW-DISPATCHER-SIGNATURE: (.*?)$", out, re.M).group(1).decode())
+            workflow_nb_signature = json.loads(re.search(rb"^WORKFLOW-NB-SIGNATURE: (.*?)$", out, re.M).group(1).decode())
+        else:
+            workflow_dispatcher_signature = None
+            workflow_nb_signature = None
+
         if local:
             subprocess.check_call( # cli is more stable than python API
                 ["docker", "run", '-p', '8000:8000', image],

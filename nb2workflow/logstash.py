@@ -21,34 +21,29 @@ def flatten(d, parent_key='', sep='.'):
 
 class LogStasher:
     def __init__(self, url=None):
-        if url is None:
-            self.url = os.environ.get("LOGSTASH_ENTRYPOINT", open("/cdci-resources/logstash-entrypoint").read().strip())
-        else:
-            self.url = url
+        self.url = url
 
+        if self.url is None:
+            self.url = os.environ.get("LOGSTASH_ENTRYPOINT", None)
+            
         self.context = {}
 
     def set_context(self, c):
         self.context = c
     
     def log(self, msg):
-        HOST, PORT = self.url.split(":")
-        PORT = int(PORT)
+        if self.url is not None:
+            HOST, PORT = self.url.split(":")
+            PORT = int(PORT)
 
-        msg = flatten(dict(list(self.context.items()) + list(msg.items())))
+            msg = flatten(dict(list(self.context.items()) + list(msg.items())))
 
 
-        try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        except Exception as e:
-            print("[ERROR] %s\n" % repr(e)) 
-            
+            try:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.connect((HOST, PORT))
+                sock.send(json.dumps(msg).encode())
+                sock.close()
+            except Exception as e:
+                print("[ERROR] %s\n" % repr(e)) 
 
-        try:
-            sock.connect((HOST, PORT))
-        except Exception as e:
-            print("[ERROR] %s\n" % repr(e)) 
-
-        sock.send(json.dumps(msg).encode())
-
-        sock.close()

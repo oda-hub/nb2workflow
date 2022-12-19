@@ -24,14 +24,13 @@ from io import BytesIO
 
 
 from flask import Flask, make_response, jsonify, request, url_for, send_file, Response
-from flask.json import JSONEncoder
 from flask_caching import Cache
 from flask_cors import CORS
 
-from flasgger import LazyJSONEncoder, LazyString, Swagger, swag_from
-
+from flasgger import LazyString, Swagger, swag_from
 
 from nb2workflow.workflows import serialize_workflow_exception
+from nb2workflow.json import CustomJSONEncoder
 
 import threading
 
@@ -60,19 +59,6 @@ class ReverseProxied(object):
         if scheme:
             environ['wsgi.url_scheme'] = scheme
         return self.app(environ, start_response)
-
-
-class CustomJSONEncoder(LazyJSONEncoder):
-    def default(self, obj, *args, **kwargs):
-        try:
-            if isinstance(obj, type):
-                return dict(type_object=repr(obj))
-            iterable = iter(obj)
-        except TypeError:
-            pass
-        else:
-            return list(iterable)
-        return JSONEncoder.default(self, obj)
 
 
 cache = Cache(config={'CACHE_TYPE': 'simple'})
