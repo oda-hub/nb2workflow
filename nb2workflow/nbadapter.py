@@ -20,6 +20,8 @@ import scrapbook as sb
 import nbformat
 from nbconvert import HTMLExporter
 
+from . import logstash
+
 from nb2workflow.health import current_health
 from nb2workflow import workflows
 from nb2workflow.json import CustomJSONEncoder
@@ -27,15 +29,17 @@ from nb2workflow.json import CustomJSONEncoder
 import logging
 logger=logging.getLogger(__name__)
 
+logstasher = logstash.LogStasher()
 
-try:
-    from nb2workflow import logstash
-    logstasher = logstash.LogStasher()
-except Exception as e:
-    logger.debug("unable to setup logstash %s",repr(e))
-
-    logstasher = None
-
+def run(notebook_fn, params: dict):
+    nba = NotebookAdapter(notebook_fn)
+    nba.execute(
+        params,
+        log_output=True,
+        progress_bar=False
+    )
+    validate_oda_dispatcher(nba)
+    return nba.extract_output()
 
 class PapermillWorkflowIncomplete(Exception):
     pass
@@ -306,21 +310,19 @@ class NotebookAdapter:
 
     def execute(self, parameters, progress_bar = True, log_output = True, inplace=False):
         t0 = time.time()
-        if logstasher is not None:
-            logstasher.log(dict(origin="nb2workflow.execute", event="starting", parameters=parameters, workflow_name=notebook_short_name(self.notebook_fn), health=current_health()))
+        logstasher.log(dict(origin="nb2workflow.execute", event="starting", parameters=parameters, workflow_name=notebook_short_name(self.notebook_fn), health=current_health()))
 
         logger.info("starting job")
         exceptions = self._execute(parameters, progress_bar, log_output, inplace)
             
         tspent = time.time() - t0
-        if logstasher is not None:
-            logstasher.log(dict(origin="nb2workflow.execute", 
-                                event="done", 
-                                parameters=parameters, 
-                                workflow_name=notebook_short_name(self.notebook_fn), 
-                                exceptions=list(map(workflows.serialize_workflow_exception, exceptions)),
-                                health=current_health(), 
-                                time_spent=tspent))
+        logstasher.log(dict(origin="nb2workflow.execute", 
+                            event="done", 
+                            parameters=parameters, 
+                            workflow_name=notebook_short_name(self.notebook_fn), 
+                            exceptions=list(map(workflows.serialize_workflow_exception, exceptions)),
+                            health=current_health(), 
+                            time_spent=tspent))
 
         return exceptions
 
