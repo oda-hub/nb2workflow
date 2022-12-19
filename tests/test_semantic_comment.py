@@ -33,3 +33,8 @@ def test_semantic_comments():
     assert r['owl_type'] == "http://odahub.io/ontology#limits_3integer_limits_30integer_energyMin"
     assert normalize(r['extra_ttl']) == "@prefix oda: <http://odahub.io/ontology#> . @prefix xsd: <http://www.w3.org/2001/XMLSchema#> . oda:limits_3integer_limits_30integer_energyMin a oda:energyMin ; oda:limits 3, 30 ."
 
+
+    # r = understand_comment_references("oda:limits 3, 30")
+    # assert r['owl_type'] == "http://odahub.io/ontology#limits_3integer_limits_30integer"
+    # assert normalize(r['extra_ttl']) == "@prefix oda: <http://odahub.io/ontology#> . @prefix xsd: <http://www.w3.org/2001/XMLSchema#> . oda:limits_3integer_limits_30integer oda:limits 3, 30 ."
+
