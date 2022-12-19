@@ -184,7 +184,7 @@ ENTRYPOINT nb2service --debug $ODA_WORKFLOW_NOTEBOOK_PATH --host 0.0.0.0 --port 
             #     raise
 
             if check_live:
-                print("\033[31mwill check live\033[0m")
+                logging.info("will check live")
                 while True:
                     try:
                         p = subprocess.Popen([
@@ -197,18 +197,16 @@ ENTRYPOINT nb2service --debug $ODA_WORKFLOW_NOTEBOOK_PATH --host 0.0.0.0 --port 
                             "--",
                             "bash", "-c",
                             f"curl {deployment_name}:8000"], stdout=subprocess.PIPE)
-                        print("p", p)
                         p.wait()
                         if p.stdout is not None:
                             service_output_json = p.stdout.read()
+                            logger.info("got valid output: %s", service_output_json)
+                            service_output = json.loads(service_output_json.decode())
+                            logger.info("got valid output json: %s", service_output)
+                            break
                     except Exception as e:
-                        print("problem getting response from the service:", service_output_json)
-                        time.sleep(3)
-                    else:
-                        print("got valid output:", service_output_json)
-                        service_output = json.loads(service_output_json.decode())
-                        print("got valid output json:", service_output)
-                        break
+                        logging.info("problem getting response from the service: %s", e)
+                        time.sleep(3)                    
             else:
                 service_output = {}
             
