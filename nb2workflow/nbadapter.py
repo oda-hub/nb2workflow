@@ -26,7 +26,7 @@ from nb2workflow.health import current_health
 from nb2workflow import workflows
 from nb2workflow.json import CustomJSONEncoder
 
-from nb2workflow.ontology import understand_comment_references
+from nb2workflow.semantics import understand_comment_references
 
 import logging
 logger=logging.getLogger(__name__)
