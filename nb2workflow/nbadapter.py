@@ -534,19 +534,15 @@ def nbinspect(nb_source, out=True, machine_readable=False):
     summary = []
 
     for n, nba in nbas.items():
-<<<<<<< HEAD
         summary.append({
                 "parameters": nba.extract_parameters(),
                 "outputs": nba.extract_output_declarations()
             })
-        print(json.dumps(summary[-1], indent=4, sort_keys=True, cls=CustomEncoder))
+        print(json.dumps(summary[-1], indent=4, sort_keys=True, cls=CustomJSONEncoder))
 
     if machine_readable:
-        print("WORKFLOW-NB-SIGNATURE:", json.dumps(summary, cls=CustomEncoder))
-=======
-        print(json.dumps(nba.extract_parameters(), indent=4, sort_keys=True, cls=CustomJSONEncoder))
->>>>>>> master
-
+        print("WORKFLOW-NB-SIGNATURE:", json.dumps(summary, cls=CustomJSONEncoder))
+    
 
 def nbreduce(nb_source, max_size_mb):
     cellsize_limit = None
