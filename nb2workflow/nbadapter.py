@@ -81,33 +81,32 @@ def parse_nbline(line):
         return None
     else:
         if "#" in line:
-            assignment_line,comment=line.split("#",1)
+            assignment_line, comment = line.split("#",1)
         else:
-            assignment_line=line
-            comment=""
+            assignment_line = line
+            comment = ""
             
         if "=" in assignment_line:
             name, value_str = assignment_line.split("=", 1)
             name = name.strip()
+            value_str = value_str.strip()
         else:
             name = assignment_line.strip()
-            value_str=None
+            value_str = None
 
         try:
-            value=literal_eval(value_str.strip())
+            value = literal_eval(value_str)
             python_type = type(value)
         except Exception:
             value = value_str
             python_type = str
-
-        comment=comment
 
         return dict(
                     name = name,
                     value = value,
                     python_type = python_type,
                     comment = comment,
-                    owl_type = understand_comment_references(comment).get('owl_type',None),
+                    owl_type = understand_comment_references(comment).get('owl_type', None),
                 )
 
 
