@@ -26,6 +26,8 @@ from nb2workflow.health import current_health
 from nb2workflow import workflows
 from nb2workflow.json import CustomJSONEncoder
 
+from nb2workflow.ontology import understand_comment_references
+
 import logging
 logger=logging.getLogger(__name__)
 
@@ -56,21 +58,6 @@ def cast_parameter(x,par):
             raise ValueError(f'Parameter {par["name"]} value "{x}" can not be interpreted as boolean.')
     return par['python_type'](x)
 
-def understand_comment_references(comment):
-    logger.debug("treating comment %s",comment)
-
-    oda_ontology_prefix = "http://odahub.io/ontology"
-    r = re.search(r"\b("+oda_ontology_prefix+r".*?)(?:\s+|$)", comment)
-    if r:
-        owl_type = r.groups()[0]
-        logger.debug("comment contains owl references: %s",owl_type)
-    else:
-        owl_type = None
-        logger.debug("no references in this comment")
-
-    return dict(
-        owl_type = owl_type,
-    )
 
 
 def parse_nbline(line):
@@ -101,12 +88,15 @@ def parse_nbline(line):
             value = value_str
             python_type = str
 
+        parsed_comment = understand_comment_references(comment).get('owl_type', None)
+
         return dict(
                     name = name,
                     value = value,
                     python_type = python_type,
                     comment = comment,
-                    owl_type = understand_comment_references(comment).get('owl_type', None),
+                    owl_type = parsed_comment['owl_type'],
+                    extra_ttl = parsed_comment['extra_ttl'],
                 )
 
 
@@ -143,8 +133,9 @@ class InputParameter:
         if self.comment.strip() != "":
             references =  understand_comment_references(self.comment)
 
-            if references.get('owl_type',None):
+            if references.get('owl_type', None):
                 self.owl_type = references.get('owl_type')
+                self.extra_ttl = references.get('extra_ttl')
 
         if self.owl_type is None:
             self.owl_type = "http://www.w3.org/2001/XMLSchema#"+self.python_type.__name__ # also use this if already defined
@@ -156,6 +147,7 @@ class InputParameter:
                     name=self.name,
                     comment=self.comment,
                     owl_type=self.owl_type,
+                    extra_ttl=self.extra_ttl
                 )
 
 

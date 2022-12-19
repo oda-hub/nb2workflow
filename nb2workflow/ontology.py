@@ -153,64 +153,72 @@ def service_semantic_signature_owl(nbas, format="rdfxml"):
     return str(owl_str)
 
 
+# TODO: register this function as versioned rdf-generating workflow
 def understand_comment_references(comment, inline=True):
     comment = comment.strip()
 
     logger.debug("treating %s comment %s", "inline" if inline else "free-line", comment)
 
-    oda_uri_pattern = re.compile(r"\b("+oda_ontology_prefix+r".*?)(?:\s+|$)")
+    comment = re.sub(r"\b("+oda_ontology_prefix+r".*?)(?:\s+|$)", r"<\1>", comment)
+    
+    a = rdflib.URIRef('http://www.w3.org/1999/02/22-rdf-syntax-ns#type')
+    param_uri = rdflib.URIRef(f"{oda_ontology_prefix}{uuid.uuid1().hex}")
+    combined_ttl = f"@prefix oda: <{oda_ontology_prefix}> . {param_uri.n3()} a {comment} ."
+    logger.info("combined turtle: %s", combined_ttl)
 
-    if r:=oda_uri_pattern.match(comment):
-        owl_type = r.group(1)
-        extra_ttl = ""
-        logger.debug("comment is a strict owl reference: %s",owl_type)
+    G = rdflib.Graph()
+    G.bind("oda", rdflib.Namespace(oda_ontology_prefix))        
+
+    G.parse(data=combined_ttl, 
+            format="turtle")
+    logger.info("interpreted turtle: %s", G.serialize(format="turtle"))
+
+    
+    owl_types = list(G.objects(param_uri, a))
+    predicate_objects = list(G.predicate_objects(param_uri))
+    
+    logger.info("types: %s", owl_types)
+
+    for p, o in predicate_objects:
+        logger.info("extra predicate %s: %s", p, o)
+    
+    if len(owl_types) == 1 and len(predicate_objects) == 1:
+        owl_type = owl_types[0]
+
+        G.remove((param_uri, a, owl_type))
+
+        extra_ttl = G.serialize(format="turtle")
+
+    elif len(predicate_objects) > 1:
+        factors = []
+
+        for p, o in sorted(predicate_objects):
+            for t in p, o:
+                t = t.n3()
+                for common_ns in ["http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
+                                  "http://www.w3.org/2001/XMLSchema#",
+                                  oda_ontology_prefix]:
+                    t = t.replace(common_ns, "")
+
+                t = re.sub("[^a-zA-Z0-9_]", "", t)
+                
+                if t!="":
+                    factors.append(t)
+            
+        # it does not matter exactly how this is formatted as long as it is unique
+        # it is good that it is readable
+        merged_type = oda_ontology_prefix + "_".join(factors)
+        
+        logger.info("merged type %s", merged_type)
+        owl_type = merged_type
+
+        for p, o in sorted(predicate_objects):
+            G.remove((param_uri, p, o))
+            G.add((rdflib.URIRef(merged_type), p, o))
+
+        extra_ttl = G.serialize(format="turtle")
     else:
-        a = rdflib.URIRef('http://www.w3.org/1999/02/22-rdf-syntax-ns#type')
-        param_uri = rdflib.URIRef(f"{oda_ontology_prefix}{uuid.uuid1().hex}")
-        combined_ttl = f"@prefix oda: <{oda_ontology_prefix}> . {param_uri.n3()} a {comment} ."
-        logger.info("combined turtle: %s", combined_ttl)
-
-        G = rdflib.Graph()
-        G.bind("oda", rdflib.Namespace(oda_ontology_prefix))        
-
-        G.parse(data=combined_ttl, 
-                format="turtle")
-        logger.info("interpreted turtle: %s", G.serialize(format="turtle"))
-
-        
-        owl_types = list(G.objects(param_uri, a))
-        logger.info("types: %s", owl_types)
-        
-        if len(owl_types) == 1:
-            owl_type = owl_types[0]
-
-            G.remove((param_uri, a, owl_type))
-
-            extra_ttl = G.serialize(format="turtle")
-
-        elif len(owl_types) > 1:
-            if all([str(u).startswith(oda_ontology_prefix) for u in owl_types]):
-                merged_type = oda_ontology_prefix + ("".join(sorted([str(u).replace(oda_ontology_prefix, "") for u in owl_types])))
-                logger.info("merged type %s", merged_type)
-                owl_type = merged_type
-
-                for u in owl_types:
-                    G.remove((param_uri, a, u))
-                    G.add((rdflib.URIRef(merged_type), a, rdflib.URIRef(u)))                
-
-                extra_ttl = G.serialize(format="turtle")
-            else:
-                NotImplementedError(f"parameter annotated with multiple types ({owl_types}) which can not be combined")
-        else:
-            raise NotImplementedError
-
-        
-        # if r:=oda_uri_pattern.search(comment):
-        #     owl_type = r.group(1)
-        #     logger.debug("comment contains owl references: %s",owl_type)
-        # else:
-        #     owl_type = None
-        #     logger.debug("no references in this comment")
+        raise NotImplementedError("no semantic annotation found")
 
     return dict(
         owl_type = str(owl_type),
