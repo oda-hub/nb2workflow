@@ -88,15 +88,15 @@ def parse_nbline(line):
             value = value_str
             python_type = str
 
-        parsed_comment = understand_comment_references(comment).get('owl_type', None)
+        parsed_comment = understand_comment_references(comment)
 
         return dict(
                     name = name,
                     value = value,
                     python_type = python_type,
                     comment = comment,
-                    owl_type = parsed_comment['owl_type'],
-                    extra_ttl = parsed_comment['extra_ttl'],
+                    owl_type = parsed_comment.get('owl_type', None),
+                    extra_ttl = parsed_comment.get('extra_ttl', None),
                 )
 
 
@@ -120,10 +120,11 @@ class InputParameter:
             obj.python_type = p['python_type']
             obj.comment = p['comment']
             obj.owl_type = p['owl_type']
+            obj.extra_ttl = p['extra_ttl']
 
             obj.choose_owl_type()
             
-            logger.debug("%s %s %s comment: %s",obj.name,obj.default_value.__class__,obj.default_value,obj.comment)
+            logger.info("interpreted %s %s %s comment: %s",obj.name,obj.default_value.__class__,obj.default_value,obj.comment)
             return obj
     
 

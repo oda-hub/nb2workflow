@@ -1,8 +1,10 @@
 import re
 import os
+import shutil
 import pytest
 import signal
 import psutil
+import subprocess
 
 import nb2workflow.service
 
@@ -19,8 +21,14 @@ def test_notebook_old():
 
 @pytest.fixture
 def test_notebook_repo():
-    return os.environ.get('TEST_NOTEBOOK_REPO',
-                          os.path.join(os.getcwd(), 'tests/testrepo/'))
+    path = os.environ.get('TEST_NOTEBOOK_REPO', None)
+    
+    if path is None:
+        path = os.path.join(os.getcwd(), 'tests/testrepo/')
+        shutil.rmtree(path)
+        subprocess.check_call(["git", "clone", "https://github.com/volodymyrss/nbworkflow-test.git", path])
+
+    return path
 
 
 @pytest.fixture
