@@ -173,12 +173,9 @@ def main():
     parser.add_argument('--debug', action="store_true")
 
     args = parser.parse_args()
-
-    handler = logging.StreamHandler()
-    handler.setLevel(logging.INFO)
-
+    
     root = logging.getLogger()
-
+    
     handler = logging.StreamHandler()
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     handler.setFormatter(formatter)

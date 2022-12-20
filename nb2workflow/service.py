@@ -588,6 +588,7 @@ def test():
     results = {}
     expecting = []
 
+    #TODO: use generalized testing
     for template_nba in app.notebook_adapters.values():
         if template_nba.name.startswith('test_'):
             key = template_nba.name

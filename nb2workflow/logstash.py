@@ -41,15 +41,9 @@ class LogStasher:
 
             try:
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            except Exception as e:
-                print("[ERROR] %s\n" % repr(e)) 
-                
-
-            try:
                 sock.connect((HOST, PORT))
+                sock.send(json.dumps(msg).encode())
+                sock.close()
             except Exception as e:
                 print("[ERROR] %s\n" % repr(e)) 
 
-            sock.send(json.dumps(msg).encode())
-
-            sock.close()

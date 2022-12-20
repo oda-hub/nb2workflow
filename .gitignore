@@ -30,3 +30,8 @@ code
 data
 example.ipynb
 .tox
+.coverage
+callback.json
+function.xml
+*_output.html
+*_output.json

@@ -24,14 +24,17 @@ from . import logstash
 
 from nb2workflow.health import current_health
 from nb2workflow import workflows
+from nb2workflow.logging_setup import setup_logging
 from nb2workflow.json import CustomJSONEncoder
 
 from nb2workflow.semantics import understand_comment_references
 
 import logging
+
 logger=logging.getLogger(__name__)
 
 logstasher = logstash.LogStasher()
+
 
 def run(notebook_fn, params: dict):
     nba = NotebookAdapter(notebook_fn)
@@ -343,19 +346,6 @@ class NotebookAdapter:
         self.inject_output_gathering()
         exceptions = []
 
-        
-#        root = logging.getLogger()
-#        root.setLevel(logging.DEBUG)
-
-#        handler = logging.StreamHandler()
-#        handler.setLevel(logging.DEBUG)
-#        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-#        handler.setFormatter(formatter)
-#        root.addHandler(handler)
-
-#        root.info("towards excution")
-
-
         ntries = 10
         while ntries > 0:
             try:
@@ -493,10 +483,18 @@ except Exception as e:
 def notebook_short_name(ipynb_fn):
     return os.path.basename(ipynb_fn).replace(".ipynb","")
 
-def find_notebooks(source):
+def find_notebooks(source, tests=False) -> dict[str, NotebookAdapter]:
+
+    base_filter = lambda fn: "output" not in fn and "preproc" not in fn
+
+    if tests:
+        filt = lambda fn: base_filter(fn) and "/test_" in fn
+    else:
+        filt = lambda fn: base_filter(fn) and "/test_" not in fn
 
     if os.path.isdir(source):
-        notebooks=[ fn for fn in glob.glob(source+"/*ipynb") if "output" not in fn and "preproc" not in fn ]
+        notebooks=[ fn for fn in glob.glob(source+"/*ipynb") if filt(fn) ]
+
         logger.debug("found notebooks: %s",notebooks)
 
         if len(notebooks)==0:
@@ -516,7 +514,7 @@ def find_notebooks(source):
 
     return notebook_adapters
 
-def nbinspect(nb_source, out=True):
+def nbinspect(nb_source, out=True, machine_readable=False):
     nbas = find_notebooks(nb_source)
 
     # class CustomEncoder(json.JSONEncoder):
@@ -525,9 +523,18 @@ def nbinspect(nb_source, out=True):
     #             return str(obj)
     #         return json.JSONEncoder.default(self, obj)
 
-    for n, nba in nbas.items():
-        print(json.dumps(nba.extract_parameters(), indent=4, sort_keys=True, cls=CustomJSONEncoder))
+    summary = []
 
+    for n, nba in nbas.items():
+        summary.append({
+                "parameters": nba.extract_parameters(),
+                "outputs": nba.extract_output_declarations()
+            })
+        print(json.dumps(summary[-1], indent=4, sort_keys=True, cls=CustomJSONEncoder))
+
+    if machine_readable:
+        print("WORKFLOW-NB-SIGNATURE:", json.dumps(summary, cls=CustomJSONEncoder))
+    
 
 def nbreduce(nb_source, max_size_mb):
     cellsize_limit = None
@@ -594,7 +601,56 @@ def nbreduce(nb_source, max_size_mb):
             cellsize_limit = largest_cellsize
 
 
-def nbrun(nb_source, inp, inplace=False):
+def validate_oda_dispatcher(nba: NotebookAdapter, optional=True, machine_readable=False):
+    logger.info('validating with ODA dispatcher plugin')
+
+    try:
+        from dispatcher_plugin_nb2workflow.queries import NB2WProductQuery
+    except Exception as e:
+        logger.warning("unable to import dispatcher_plugin_nb2workflow.queries.NB2WProductQuery: %s", e)
+        if not optional:
+            logger.error("dispatcher validation is not optional!")
+            raise
+    else:
+        nbpq = NB2WProductQuery('testname', 
+                        'testproduct', 
+                        nba.extract_parameters(),
+                        nba.extract_output_declarations())
+
+        output = nba.extract_output()
+
+        logger.debug(json.dumps(output, indent=4))
+
+        class MockRes:
+            @staticmethod
+            def json():
+                return {
+                    'data': {
+                        'output': output
+                    }
+                }
+
+        logger.debug("parameters as interpreted by dispatcher: %s", json.dumps(json.loads(nbpq.get_parameters_list_as_json()), indent=4))
+
+        dispatcher_parameters = json.loads(nbpq.get_parameters_list_as_json())
+
+        for parameter in dispatcher_parameters:
+            logger.info("\033[32mODA dispatcher parameter \033[0m: %s", parameter)
+
+        prod_list = nbpq.build_product_list(instrument=None, res=MockRes, out_dir=None)
+
+        for prod in prod_list:
+            logger.info("\033[33mworkflow the output produces ODA product \033[0m: \033[31m%s\033[0m (%s) %s", prod.name, prod.type_key, prod)
+
+        if machine_readable:
+            print("WORKFLOW-DISPATCHER-SIGNATURE:", json.dumps([
+                        {"parameters": dispatcher_parameters,
+                         "outputs": [{'name': prod.name, 'type': prod.type_key, 'class_name': prod.__class__.__name__} for prod in prod_list]
+                        }]))
+        
+    
+
+def nbrun(nb_source, inp, inplace=False, optional_dispather=True, machine_readable=False):
 
     nbas = find_notebooks(nb_source)
 
@@ -602,6 +658,8 @@ def nbrun(nb_source, inp, inplace=False):
         nba = nbas[inp.pop('notebook')]
     elif len(nbas) == 1:
         nba = list(nbas.values())[0]
+    else:
+        RuntimeError()
 
     r = nba.interpret_parameters(inp)
     
@@ -650,6 +708,8 @@ def nbrun(nb_source, inp, inplace=False):
     
     r['output_notebook_html'] = htmlfn
     r['output_notebook_html_content'] = base64.b64encode(open(htmlfn, "rb").read()).decode()
+
+    validate_oda_dispatcher(nba, optional=optional_dispather, machine_readable=machine_readable)
 
     return r
 
@@ -708,34 +768,22 @@ def main_inspect():
     parser = argparse.ArgumentParser(description='Inspect some notebooks') # run locally, remotely, semantically
     parser.add_argument('notebook', metavar='notebook', type=str)
     parser.add_argument('--debug', action="store_true")
+    parser.add_argument('--machine-readable', action="store_true")        
     
     args = parser.parse_args()
 
     setup_logging(args.debug)
 
-    nbinspect(args.notebook)
+    nbinspect(args.notebook, machine_readable=args.machine_readable)
 
-def setup_logging(debug=False):
-    handler = logging.StreamHandler()
-    handler.setLevel(logging.INFO)
-    root = logging.getLogger()
-    handler = logging.StreamHandler()
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    handler.setFormatter(formatter)
-    root.addHandler(handler)
-
-    if debug:
-        root.setLevel(logging.DEBUG)
-        handler.setLevel(logging.DEBUG)
-    else:
-        root.setLevel(logging.INFO)
-        handler.setLevel(logging.INFO)
 
 def main():
     parser = argparse.ArgumentParser(description='Run some notebooks') # run locally, remotely, semantically
     parser.add_argument('notebook', metavar='notebook', type=str)
     parser.add_argument('--debug', action="store_true")
     parser.add_argument('--inplace', action="store_true")
+    parser.add_argument('--mmoda-validation', action="store_true")        
+    parser.add_argument('--machine-readable', action="store_true")        
     
     parser.add_argument('inputs', nargs=argparse.REMAINDER)
 
@@ -749,8 +797,7 @@ def main():
         
     setup_logging(args.debug)
 
-
-    nbrun(args.notebook, inputs, inplace=args.inplace)
+    nbrun(args.notebook, inputs, inplace=args.inplace, optional_dispather=not args.mmoda_validation, machine_readable=args.machine_readable)
 
 
 if __name__ == "__main__":

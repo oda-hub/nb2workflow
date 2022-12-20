@@ -11,7 +11,7 @@ from diskcache import Cache
 
 from nb2workflow import nbadapter
 
-cache = Cache('data/default-cache')
+cache = Cache('.nb2workflow/cache')
 enable_cache = False
 
 try:
