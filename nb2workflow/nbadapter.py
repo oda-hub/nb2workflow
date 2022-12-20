@@ -232,22 +232,22 @@ class NotebookAdapter:
         for cell in nb.cells:
             if 'parameters' in cell.metadata.get('tags',[]):
                 for line in cell['source'].split("\n"):
-                    par=InputParameter.from_nbline(line)
+                    par = InputParameter.from_nbline(line)
                     if par is not None:
-                        input_parameters[par.name]=par.as_dict()
-                        input_parameters[par.name]['value']=par.as_dict()['default_value']
+                        input_parameters[par.name] = par.as_dict()
+                        input_parameters[par.name]['value'] = par.as_dict()['default_value']
             
             if 'system-parameters' in cell.metadata.get('tags',[]):
                 for line in cell['source'].split("\n"):
-                    par=InputParameter.from_nbline(line)
+                    par = InputParameter.from_nbline(line)
                     if par is not None:
-                        system_parameters[par.name]=par.as_dict()
+                        system_parameters[par.name] = par.as_dict()
             
             if 'injected-parameters' in cell.metadata.get('tags',[]):
                 for line in cell['source'].split("\n"):
                     par=InputParameter.from_nbline(line)
                     if par is not None:
-                        input_parameters[par.name]['value']=par.as_dict()['default_value']
+                        input_parameters[par.name]['value'] = par.as_dict()['default_value']
 
         self.system_parameters = system_parameters
 
