@@ -40,7 +40,7 @@ def run(notebook_fn, params: dict):
         log_output=True,
         progress_bar=False
     )
-    validate_oda_dispatcher(nba)
+    # validate_oda_dispatcher(nba)
     return nba.extract_output()
 
 class PapermillWorkflowIncomplete(Exception):
