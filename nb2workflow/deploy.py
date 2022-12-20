@@ -24,7 +24,7 @@ def determine_origin(repo):
     else:
         return repo
 
-def deploy(git_origin, deployment_base_name, namespace="oda-staging", local=False):
+def deploy(git_origin, deployment_base_name, namespace="oda-staging", local=False, run_tests=False):
     git_origin = determine_origin(git_origin)
 
     with tempfile.TemporaryDirectory() as tmpdir:        
