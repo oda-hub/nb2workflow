@@ -328,7 +328,8 @@ class NotebookAdapter:
             logger.info("new tmpdir: %s", tmpdir)
 
             try:
-                output = subprocess.check_output(["git","clone", "--depth", "1", os.path.dirname(os.path.realpath(self.notebook_fn)), tmpdir])
+                output = subprocess.check_output(["git","clone", os.path.dirname(os.path.realpath(self.notebook_fn)), tmpdir])
+                # output = subprocess.check_output(["git","clone", "--depth", "1", "file://" + os.path.dirname(os.path.realpath(self.notebook_fn)), tmpdir])
                 logger.info("git clone output: %s", output)
             except Exception as e:
                 logger.warning("git clone failed: %s, will attempt copytree", e)
