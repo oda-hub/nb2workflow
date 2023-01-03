@@ -328,7 +328,7 @@ class NotebookAdapter:
             logger.info("new tmpdir: %s", tmpdir)
 
             try:
-                output = subprocess.check_output(["git","clone",os.path.dirname(os.path.realpath(self.notebook_fn)), tmpdir])
+                output = subprocess.check_output(["git","clone", "--depth", "1", os.path.dirname(os.path.realpath(self.notebook_fn)), tmpdir])
                 logger.info("git clone output: %s", output)
             except Exception as e:
                 logger.warning("git clone failed: %s, will attempt copytree", e)
@@ -478,6 +478,14 @@ except Exception as e:
             return self.system_parameters.pop(name)['default_value'] 
 
         return default
+
+
+    def remove_tmpdir(self):
+        if self._tmpdir is not None:
+            logger.info("removing tmpdir %s", self._tmpdir)
+            shutil.rmtree(self._tmpdir)
+        else:
+            logger.info("no dir to remove")
 
 
 def notebook_short_name(ipynb_fn):
