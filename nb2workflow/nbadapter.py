@@ -259,7 +259,10 @@ class NotebookAdapter:
                     else:
                         p = parse_nbline(line, nb_uri=self.nb_uri)
                         if p is not None:
-                            G.parse(data=p['extra_ttl'])
+                            try:
+                                G.parse(data=p['extra_ttl'])
+                            except Exception as e:
+                                logger.warning("not a turtle: %s", p['extra_ttl'])
             
             if 'system-parameters' in cell.metadata.get('tags',[]):
                 for line in cell['source'].split("\n"):
