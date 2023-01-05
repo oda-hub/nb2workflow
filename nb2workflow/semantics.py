@@ -5,7 +5,7 @@ import rdflib
 
 logger = logging.getLogger(__name__)
 
-oda_ontology_prefix = "http://odahub.io/ontology#"    
+oda_ontology_prefix = "https://odahub.io/ontology#"    
 oda = rdflib.Namespace(oda_ontology_prefix)
 a = rdflib.URIRef('http://www.w3.org/1999/02/22-rdf-syntax-ns#type')
 
@@ -16,33 +16,36 @@ def understand_comment_references(comment, inline=True):
 
     logger.debug('treating %s comment: "%s"', "inline" if inline else "free-line", comment)
 
-    comment = re.sub(rf"\b(http.*?)(?:\s|$)", r"<\1>", comment)
-
-    logger.debug('preprocessed comment: "%s"', comment)
-    
-    param_uri = rdflib.URIRef(f"{oda_ontology_prefix}{uuid.uuid1().hex}")
-
-    parsed = None
-    parse_failures = []
-
-    for variation in [
-        f"@prefix oda: <{oda_ontology_prefix}> . {param_uri.n3()} a {comment} .",
-        f"@prefix oda: <{oda_ontology_prefix}> . {param_uri.n3()} {comment} ."
-    ]:
-        try:
-            parsed = parse_ttl(variation, param_uri)
-        except (rdflib.plugins.parsers.notation3.BadSyntax, NotImplementedError) as e:
-            logger.info("failed to parse")
-            parse_failures.append([variation, e])
-
-    if parsed is None:
-        logger.info("all attempts to parse failed %s", parse_failures)
-        return {
-            "owl_type": None,
-            "extra_ttl": None,
-        }
+    if not inline:
+        pass
     else:
-        return parsed    
+        comment = re.sub(rf"\b(http.*?)(?:\s|$)", r"<\1>", comment)
+
+        logger.debug('preprocessed comment: "%s"', comment)
+        
+        param_uri = rdflib.URIRef(f"{oda_ontology_prefix}{uuid.uuid1().hex}")
+
+        parsed = None
+        parse_failures = []
+
+        for variation in [
+            f"@prefix oda: <{oda_ontology_prefix}> . {param_uri.n3()} a {comment} .",
+            f"@prefix oda: <{oda_ontology_prefix}> . {param_uri.n3()} {comment} ."
+        ]:
+            try:
+                parsed = parse_ttl(variation, param_uri)
+            except (rdflib.plugins.parsers.notation3.BadSyntax, NotImplementedError) as e:
+                logger.info("failed to parse")
+                parse_failures.append([variation, e])
+
+        if parsed is None:
+            logger.info("all attempts to parse failed %s", parse_failures)
+            return {
+                "owl_type": None,
+                "extra_ttl": None,
+            }
+        else:
+            return parsed    
 
 
 

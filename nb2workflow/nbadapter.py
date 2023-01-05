@@ -4,6 +4,7 @@ import os
 import sys
 import glob
 import shutil
+import uuid
 import yaml 
 import re
 import time
@@ -14,6 +15,7 @@ import yaml
 import argparse
 import json
 import base64
+import rdflib
 
 import papermill as pm
 import scrapbook as sb
@@ -27,7 +29,7 @@ from nb2workflow import workflows
 from nb2workflow.logging_setup import setup_logging
 from nb2workflow.json import CustomJSONEncoder
 
-from nb2workflow.semantics import understand_comment_references
+from nb2workflow.semantics import understand_comment_references, oda_ontology_prefix
 
 import logging
 
@@ -63,12 +65,20 @@ def cast_parameter(x,par):
 
 
 
-def parse_nbline(line):
+def parse_nbline(line, nb_uri=None):
     if line.strip()=="":
         return None
     elif line.strip().startswith("#"):
-        logger.debug("found detached comment: \"%s\"",line)
-        return None
+        comment = line.strip().strip("#")
+        logger.debug("found detached comment: \"%s\"",line)                
+        if nb_uri is not None:
+            return {
+                "owl_type": nb_uri,
+                "extra_ttl": f"@prefix oda: <{oda_ontology_prefix}> . {nb_uri.n3()} {comment} ."
+            }
+        else:
+            return None
+
     else:
         if "#" in line:
             assignment_line, comment = line.split("#",1)
@@ -110,8 +120,8 @@ class InputParameter:
     @classmethod
     def from_nbline(cls,line):
         r = parse_nbline(line)
-        if r is None:
-            return r
+        if r is None or r.get('name', None) is None:
+            return None
         else:
             obj = cls()
             obj.raw_line=line
@@ -226,12 +236,19 @@ class NotebookAdapter:
 
         return fn
 
+    @property
+    def nb_uri(self):
+        return rdflib.URIRef(f"https://odahub.io/ontology#{self.unique_name}")
+    
+
     def extract_parameters(self):
         nb=self.read()
 
         input_parameters = {}
         system_parameters = {}
 
+        G = rdflib.Graph()
+        
         for cell in nb.cells:
             if 'parameters' in cell.metadata.get('tags',[]):
                 for line in cell['source'].split("\n"):
@@ -239,6 +256,10 @@ class NotebookAdapter:
                     if par is not None:
                         input_parameters[par.name] = par.as_dict()
                         input_parameters[par.name]['value'] = par.as_dict()['default_value']
+                    else:
+                        p = parse_nbline(line, nb_uri=self.nb_uri)
+                        if p is not None:
+                            G.parse(data=p['extra_ttl'])
             
             if 'system-parameters' in cell.metadata.get('tags',[]):
                 for line in cell['source'].split("\n"):
@@ -253,6 +274,12 @@ class NotebookAdapter:
                         input_parameters[par.name]['value'] = par.as_dict()['default_value']
 
         self.system_parameters = system_parameters
+
+        for n, p in input_parameters.items():
+            if p['extra_ttl'] is not None:
+                G.parse(data=p['extra_ttl'])
+
+        self.extra_ttl = G.serialize(format='turtle')
 
         return input_parameters
     
@@ -328,7 +355,7 @@ class NotebookAdapter:
             logger.info("new tmpdir: %s", tmpdir)
 
             try:
-                output = subprocess.check_output(["git","clone", os.path.dirname(os.path.realpath(self.notebook_fn)), tmpdir])
+                output = subprocess.check_output(["git","clone", "--recurse-submodules", os.path.dirname(os.path.realpath(self.notebook_fn)), tmpdir])
                 # output = subprocess.check_output(["git","clone", "--depth", "1", "file://" + os.path.dirname(os.path.realpath(self.notebook_fn)), tmpdir])
                 logger.info("git clone output: %s", output)
             except Exception as e:

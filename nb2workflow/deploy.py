@@ -233,7 +233,6 @@ def main():
     
     args = parser.parse_args()
 
-    logging.basicConfig
     setup_logging()
     
     deploy(args.repository, args.deployment_name, namespace=args.namespace, local=args.local)
