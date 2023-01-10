@@ -4,7 +4,7 @@ import logging
 import pytest
 
 a = rdflib.URIRef('http://www.w3.org/1999/02/22-rdf-syntax-ns#type')
-oda_ontology_prefix = "http://odahub.io/ontology#"    
+oda_ontology_prefix = "https://odahub.io/ontology#"    
 oda = rdflib.Namespace(oda_ontology_prefix)
 
 # test_notebook_repo=os.environ.get('TEST_NOTEBOOK_REPO')
@@ -32,8 +32,8 @@ def test_nbadapter_repo_annotations(test_notebook_repo):
     assert (oda["emin_keV"], a, oda["emin"]) in G
     assert (oda["emin_keV"], a, oda["keV"]) in G
 
-    assert (oda["lower_limit_15integer_upper_limit_1000integer_emax_keV"], a, oda["keV"]) in G
-    assert (oda["lower_limit_15integer_upper_limit_1000integer_emax_keV"], oda["lower_limit"], rdflib.Literal(15)) in G
+    assert (oda["emax_keV_lower_limit_15integer_upper_limit_1000integer"], a, oda["keV"]) in G
+    assert (oda["emax_keV_lower_limit_15integer_upper_limit_1000integer"], oda["lower_limit"], rdflib.Literal(15)) in G
 
     
 
