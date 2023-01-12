@@ -72,10 +72,7 @@ def parse_nbline(line, nb_uri=None):
         comment = line.strip().strip("#")
         logger.debug("found detached comment: \"%s\"",line)                
         if nb_uri is not None:
-            return {
-                "owl_type": nb_uri,
-                "extra_ttl": f"@prefix oda: <{oda_ontology_prefix}> . {nb_uri.n3()} {comment} ."
-            }
+            return understand_comment_references(comment, nb_uri)
         else:
             return None
 
@@ -101,7 +98,8 @@ def parse_nbline(line, nb_uri=None):
             value = value_str
             python_type = str
 
-        parsed_comment = understand_comment_references(comment)
+        param_uri = rdflib.URIRef(f"{oda_ontology_prefix}{uuid.uuid1().hex}")
+        parsed_comment = understand_comment_references(comment, param_uri)
 
         return dict(
                     name = name,

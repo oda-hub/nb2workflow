@@ -1,10 +1,10 @@
-
-
 import re
+import rdflib
 
 
 def test_semantic_comments():
     from nb2workflow.semantics import understand_comment_references
+    from nb2workflow.nbadapter import parse_nbline
 
     r = understand_comment_references("https://odahub.io/ontology#StartTimeISOT")
     assert r['owl_type'] == "https://odahub.io/ontology#StartTimeISOT"
@@ -36,6 +36,7 @@ def test_semantic_comments():
     assert normalize(r['extra_ttl']) == "@prefix oda: <https://odahub.io/ontology#> . @prefix xsd: <http://www.w3.org/2001/XMLSchema#> . oda:lower_limit_3integer_upper_limit_30integer oda:lower_limit 3 ; oda:upper_limit 30 ."
 
     # comments
-    r = understand_comment_references('oda:version "v1"')
-    assert r['owl_type'] == 'na'
-    assert r['extra_rdf'] == 'na'
+    nb_uri = rdflib.URIRef("http://mynb")
+    r = parse_nbline('# oda:version "v1"', nb_uri)
+    assert r['owl_type'] == str(nb_uri)
+    assert normalize(r['extra_ttl']) == '@prefix oda: <https://odahub.io/ontology#> . <http://mynb> oda:version "v1" .'

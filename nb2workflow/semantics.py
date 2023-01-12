@@ -11,49 +11,49 @@ a = rdflib.URIRef('http://www.w3.org/1999/02/22-rdf-syntax-ns#type')
 
 
 # TODO: register this function as versioned rdf-generating workflow
-def understand_comment_references(comment, inline=True) -> dict:
+def understand_comment_references(comment, base_uri=None) -> dict:
+    if base_uri is None:
+        base_uri = rdflib.URIRef(f"{oda_ontology_prefix}{uuid.uuid1().hex}")
+        deduce_type = True
+    else:
+        deduce_type = False
+
     comment = comment.strip()
 
-    logger.debug('treating %s comment: "%s"', "inline" if inline else "free-line", comment)
+    logger.debug('understand_comment_references: "%s"', comment)
 
-    if not inline:
+    # this allows to use simplified syntax in some cases, e.g. when just a url alone is provided to indicate type
+    comment = re.sub(rf"\b(http.*?)(?:\s|$)", r"<\1>", comment)
+
+    logger.debug('preprocessed comment: "%s"', comment)
+            
+    parsed = None
+    parse_failures = []
+
+    for variation in [
+        f"@prefix oda: <{oda_ontology_prefix}> . {base_uri.n3()} a {comment} .",
+        f"@prefix oda: <{oda_ontology_prefix}> . {base_uri.n3()} {comment} ."
+    ]:
+        try:
+            parsed = parse_ttl(variation, base_uri, deduce_type)
+        except (rdflib.plugins.parsers.notation3.BadSyntax, NotImplementedError) as e:
+            logger.info("failed to parse")
+            parse_failures.append([variation, e])
+
+    if parsed is None:
+        logger.info("all attempts to parse failed %s", parse_failures)
         return {
             "owl_type": None,
             "extra_ttl": None,
         }
     else:
-        comment = re.sub(rf"\b(http.*?)(?:\s|$)", r"<\1>", comment)
-
-        logger.debug('preprocessed comment: "%s"', comment)
-        
-        param_uri = rdflib.URIRef(f"{oda_ontology_prefix}{uuid.uuid1().hex}")
-
-        parsed = None
-        parse_failures = []
-
-        for variation in [
-            f"@prefix oda: <{oda_ontology_prefix}> . {param_uri.n3()} a {comment} .",
-            f"@prefix oda: <{oda_ontology_prefix}> . {param_uri.n3()} {comment} ."
-        ]:
-            try:
-                parsed = parse_ttl(variation, param_uri)
-            except (rdflib.plugins.parsers.notation3.BadSyntax, NotImplementedError) as e:
-                logger.info("failed to parse")
-                parse_failures.append([variation, e])
-
-        if parsed is None:
-            logger.info("all attempts to parse failed %s", parse_failures)
-            return {
-                "owl_type": None,
-                "extra_ttl": None,
-            }
-        else:
-            return parsed    
+        return parsed    
 
 
 
     
-def parse_ttl(combined_ttl, param_uri):
+def parse_ttl(combined_ttl, param_uri, deduce_type=True):
+    # here there is some simplification with respect to owl meaning of subclasses and their predicates
     logger.info("input combined turtle: %s", combined_ttl)
 
     G = rdflib.Graph()
@@ -73,16 +73,19 @@ def parse_ttl(combined_ttl, param_uri):
     for p, o in predicate_objects:
         logger.info("extra predicate %s: %s", p, o)
     
-    if len(owl_types) == 1 and len(predicate_objects) == 1:
-        owl_type = owl_types[0]
+    if deduce_type:
+        if len(owl_types) == 1 and len(predicate_objects) == 1:
+            owl_type = owl_types[0]
 
-        G.remove((param_uri, a, owl_type))
-    
-    elif len(predicate_objects) > 1:
-        owl_type = construct_common_root_class(G, param_uri, predicate_objects)
+            G.remove((param_uri, a, owl_type))
+        
+        elif len(predicate_objects) > 1:
+            owl_type = construct_common_root_class(G, param_uri, predicate_objects)
 
+        else:
+            raise NotImplementedError("no semantic annotation found")
     else:
-        raise NotImplementedError("no semantic annotation found")
+        owl_type = param_uri
 
     logger.info("complete extra ttl: %s", G.serialize(format="turtle"))
     
