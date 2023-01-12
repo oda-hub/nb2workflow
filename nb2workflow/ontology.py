@@ -12,11 +12,9 @@ import rdflib
 
 try:
     import odakb.sparql
-except Exception:
-    logger.error("some error")
+except Exception as e:
+    logger.warning("unable to import odakb.sparql (%s) but proceeding anyway", e)
 
-
-   
 
 try:
     import owlready2
@@ -121,7 +119,6 @@ def service_semantic_signature(nbas, format="xml", domains=None) -> str:
 
 
 
-
 def service_semantic_signature_owl(nbas, format="rdfxml"):
     if owlready2 is None:
         return
@@ -150,7 +147,6 @@ def service_semantic_signature_owl(nbas, format="rdfxml"):
     logger.debug(owl_str)
     
     return str(owl_str)
-
 
 
 
