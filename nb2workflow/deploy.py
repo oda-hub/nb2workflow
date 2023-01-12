@@ -151,19 +151,6 @@ ENTRYPOINT nb2service --debug $ODA_WORKFLOW_NOTEBOOK_PATH --host 0.0.0.0 --port 
                     "--port", "8000", "-n", namespace]
                 )
 
-            # try:
-            #     cmd = ["kubectl", "create", "ingress", "annotated",  
-            #          f'--rule="{deployment_name}-workflow-backend.obsuks1.unige.ch={deployment_name}/*:8000"',
-            #          "--annotation", "traefik.ingress.kubernetes.io/router.entrypoints=websecure",
-            #          "--annotation", "traefik.ingress.kubernetes.io/router.tls=true",
-            #          ]
-
-            #     logger.info(" ".join(cmd))
-            #     subprocess.check_call(
-            #         cmd
-            #     )
-            # except Exception:
-            #     raise
 
             if check_live:
                 logging.info("will check live")
