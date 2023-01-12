@@ -35,5 +35,7 @@ def test_semantic_comments():
     assert r['owl_type'] == "https://odahub.io/ontology#lower_limit_3integer_upper_limit_30integer"
     assert normalize(r['extra_ttl']) == "@prefix oda: <https://odahub.io/ontology#> . @prefix xsd: <http://www.w3.org/2001/XMLSchema#> . oda:lower_limit_3integer_upper_limit_30integer oda:lower_limit 3 ; oda:upper_limit 30 ."
 
-
-    # TODO test free-line comments
+    # comments
+    r = understand_comment_references('oda:version "v1"')
+    assert r['owl_type'] == 'na'
+    assert r['extra_rdf'] == 'na'

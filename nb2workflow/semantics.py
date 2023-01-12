@@ -11,13 +11,16 @@ a = rdflib.URIRef('http://www.w3.org/1999/02/22-rdf-syntax-ns#type')
 
 
 # TODO: register this function as versioned rdf-generating workflow
-def understand_comment_references(comment, inline=True):
+def understand_comment_references(comment, inline=True) -> dict:
     comment = comment.strip()
 
     logger.debug('treating %s comment: "%s"', "inline" if inline else "free-line", comment)
 
     if not inline:
-        pass
+        return {
+            "owl_type": None,
+            "extra_ttl": None,
+        }
     else:
         comment = re.sub(rf"\b(http.*?)(?:\s|$)", r"<\1>", comment)
 
