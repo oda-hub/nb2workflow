@@ -66,7 +66,7 @@ def test_nb_version(test_notebook):
     nba = nb2workflow.nbadapter.NotebookAdapter(test_notebook)
 
 
-    assert nba.nb_uri == rdflib.URIRef('https://odahub.io/ontology#workflow-notebook_cf24cd75')
+    assert nba.nb_uri == rdflib.URIRef('http://odahub.io/ontology#workflow-notebook_cf24cd75')
 
     nba.extract_parameters()
 
@@ -77,7 +77,7 @@ def test_nb_version(test_notebook):
     ttl = G.serialize(format='turtle')
     print(ttl)
     
-    versions = list(G.objects(nba.nb_uri, rdflib.URIRef("https://odahub.io/ontology#version")))
+    versions = list(G.objects(nba.nb_uri, rdflib.URIRef("http://odahub.io/ontology#version")))
 
     assert versions != ["v1"]
 
@@ -106,7 +106,7 @@ def test_nb_autocollect(test_notebook):
     ttl = G.serialize(format='turtle')
     print(ttl)
     
-    versions = G.subject_objects(rdflib.URIRef("https://odahub.io/ontology#version"))
+    versions = G.subject_objects(rdflib.URIRef("http://odahub.io/ontology#version"))
     assert versions != []
 
 

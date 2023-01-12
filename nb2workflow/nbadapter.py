@@ -236,7 +236,7 @@ class NotebookAdapter:
 
     @property
     def nb_uri(self):
-        return rdflib.URIRef(f"https://odahub.io/ontology#{self.unique_name}")
+        return rdflib.URIRef(f"http://odahub.io/ontology#{self.unique_name}")
     
 
     def extract_parameters(self):

@@ -5,7 +5,7 @@ import rdflib
 
 logger = logging.getLogger(__name__)
 
-oda_ontology_prefix = "https://odahub.io/ontology#"    
+oda_ontology_prefix = "http://odahub.io/ontology#"    
 oda = rdflib.Namespace(oda_ontology_prefix)
 a = rdflib.URIRef('http://www.w3.org/1999/02/22-rdf-syntax-ns#type')
 
@@ -111,7 +111,7 @@ def limits_inference(G, root):
 def construct_common_root_class(G, param_uri, predicate_objects):
     factors = []
 
-    for p, o in sorted(predicate_objects):
+    for p, o in predicate_objects:
         for t in [p, o]:
             t = t.n3()
             for common_ns in ["http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
@@ -126,7 +126,7 @@ def construct_common_root_class(G, param_uri, predicate_objects):
         
     # it does not matter exactly how this is formatted as long as it is unique
     # it is good that it is readable
-    merged_type = oda_ontology_prefix + "_".join(factors)
+    merged_type = oda_ontology_prefix + "_".join(sorted(factors))
     
     logger.info("merged type %s", merged_type)
     owl_type = merged_type

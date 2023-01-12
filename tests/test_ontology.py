@@ -4,7 +4,7 @@ import logging
 import pytest
 
 a = rdflib.URIRef('http://www.w3.org/1999/02/22-rdf-syntax-ns#type')
-oda_ontology_prefix = "https://odahub.io/ontology#"    
+oda_ontology_prefix = "http://odahub.io/ontology#"    
 oda = rdflib.Namespace(oda_ontology_prefix)
 
 # test_notebook_repo=os.environ.get('TEST_NOTEBOOK_REPO')
