@@ -4,6 +4,7 @@ import os
 import sys
 import glob
 import shutil
+import uuid
 import yaml 
 import re
 import time
@@ -14,28 +15,38 @@ import yaml
 import argparse
 import json
 import base64
+import rdflib
 
 import papermill as pm
 import scrapbook as sb
 import nbformat
 from nbconvert import HTMLExporter
 
+from . import logstash
+
 from nb2workflow.health import current_health
 from nb2workflow import workflows
+from nb2workflow.logging_setup import setup_logging
 from nb2workflow.json import CustomJSONEncoder
 
+from nb2workflow.semantics import understand_comment_references, oda_ontology_prefix
+
 import logging
+
 logger=logging.getLogger(__name__)
 
+logstasher = logstash.LogStasher()
 
-try:
-    from nb2workflow import logstash
-    logstasher = logstash.LogStasher()
-except Exception as e:
-    logger.debug("unable to setup logstash %s",repr(e))
 
-    logstasher = None
-
+def run(notebook_fn, params: dict):
+    nba = NotebookAdapter(notebook_fn)
+    nba.execute(
+        params,
+        log_output=True,
+        progress_bar=False
+    )
+    validate_oda_dispatcher(nba)
+    return nba.extract_output()
 
 class PapermillWorkflowIncomplete(Exception):
     pass
@@ -52,58 +63,51 @@ def cast_parameter(x,par):
             raise ValueError(f'Parameter {par["name"]} value "{x}" can not be interpreted as boolean.')
     return par['python_type'](x)
 
-def understand_comment_references(comment):
-    logger.debug("treating comment %s",comment)
-
-    oda_ontology_prefix = "http://odahub.io/ontology"
-    r = re.search(r"\b("+oda_ontology_prefix+r".*?)(?:\s+|$)", comment)
-    if r:
-        owl_type = r.groups()[0]
-        logger.debug("comment contains owl references: %s",owl_type)
-    else:
-        owl_type = None
-        logger.debug("no references in this comment")
-
-    return dict(
-        owl_type = owl_type,
-    )
 
 
-def parse_nbline(line):
+def parse_nbline(line, nb_uri=None):
     if line.strip()=="":
         return None
     elif line.strip().startswith("#"):
-        logger.debug("found detached comment: \"%s\"",line)
-        return None
+        comment = line.strip().strip("#")
+        logger.debug("found detached comment: \"%s\"",line)                
+        if nb_uri is not None:
+            return understand_comment_references(comment, nb_uri)
+        else:
+            return None
+
     else:
         if "#" in line:
-            assignment_line,comment=line.split("#",1)
+            assignment_line, comment = line.split("#",1)
         else:
-            assignment_line=line
-            comment=""
+            assignment_line = line
+            comment = ""
             
         if "=" in assignment_line:
             name, value_str = assignment_line.split("=", 1)
             name = name.strip()
+            value_str = value_str.strip()
         else:
             name = assignment_line.strip()
-            value_str=None
+            value_str = None
 
         try:
-            value=literal_eval(value_str.strip())
+            value = literal_eval(value_str)
             python_type = type(value)
         except Exception:
             value = value_str
             python_type = str
 
-        comment=comment
+        param_uri = rdflib.URIRef(f"{oda_ontology_prefix}{uuid.uuid1().hex}")
+        parsed_comment = understand_comment_references(comment, param_uri)
 
         return dict(
                     name = name,
                     value = value,
                     python_type = python_type,
                     comment = comment,
-                    owl_type = understand_comment_references(comment).get('owl_type',None),
+                    owl_type = parsed_comment.get('owl_type', None),
+                    extra_ttl = parsed_comment.get('extra_ttl', None),
                 )
 
 
@@ -114,8 +118,8 @@ class InputParameter:
     @classmethod
     def from_nbline(cls,line):
         r = parse_nbline(line)
-        if r is None:
-            return r
+        if r is None or r.get('name', None) is None:
+            return None
         else:
             obj = cls()
             obj.raw_line=line
@@ -127,10 +131,11 @@ class InputParameter:
             obj.python_type = p['python_type']
             obj.comment = p['comment']
             obj.owl_type = p['owl_type']
+            obj.extra_ttl = p['extra_ttl']
 
             obj.choose_owl_type()
             
-            logger.debug("%s %s %s comment: %s",obj.name,obj.default_value.__class__,obj.default_value,obj.comment)
+            logger.info("interpreted %s %s %s comment: %s",obj.name,obj.default_value.__class__,obj.default_value,obj.comment)
             return obj
     
 
@@ -140,8 +145,9 @@ class InputParameter:
         if self.comment.strip() != "":
             references =  understand_comment_references(self.comment)
 
-            if references.get('owl_type',None):
+            if references.get('owl_type', None):
                 self.owl_type = references.get('owl_type')
+                self.extra_ttl = references.get('extra_ttl')
 
         if self.owl_type is None:
             self.owl_type = "http://www.w3.org/2001/XMLSchema#"+self.python_type.__name__ # also use this if already defined
@@ -153,6 +159,7 @@ class InputParameter:
                     name=self.name,
                     comment=self.comment,
                     owl_type=self.owl_type,
+                    extra_ttl=self.extra_ttl
                 )
 
 
@@ -227,33 +234,53 @@ class NotebookAdapter:
 
         return fn
 
+    @property
+    def nb_uri(self):
+        return rdflib.URIRef(f"http://odahub.io/ontology#{self.unique_name}")
+    
+
     def extract_parameters(self):
         nb=self.read()
 
         input_parameters = {}
         system_parameters = {}
 
+        G = rdflib.Graph()
+        
         for cell in nb.cells:
             if 'parameters' in cell.metadata.get('tags',[]):
                 for line in cell['source'].split("\n"):
-                    par=InputParameter.from_nbline(line)
+                    par = InputParameter.from_nbline(line)
                     if par is not None:
-                        input_parameters[par.name]=par.as_dict()
-                        input_parameters[par.name]['value']=par.as_dict()['default_value']
+                        input_parameters[par.name] = par.as_dict()
+                        input_parameters[par.name]['value'] = par.as_dict()['default_value']
+                    else:
+                        p = parse_nbline(line, nb_uri=self.nb_uri)
+                        if p is not None:
+                            try:
+                                G.parse(data=p['extra_ttl'])
+                            except Exception as e:
+                                logger.warning("not a turtle: %s", p['extra_ttl'])
             
             if 'system-parameters' in cell.metadata.get('tags',[]):
                 for line in cell['source'].split("\n"):
-                    par=InputParameter.from_nbline(line)
+                    par = InputParameter.from_nbline(line)
                     if par is not None:
-                        system_parameters[par.name]=par.as_dict()
+                        system_parameters[par.name] = par.as_dict()
             
             if 'injected-parameters' in cell.metadata.get('tags',[]):
                 for line in cell['source'].split("\n"):
                     par=InputParameter.from_nbline(line)
                     if par is not None:
-                        input_parameters[par.name]['value']=par.as_dict()['default_value']
+                        input_parameters[par.name]['value'] = par.as_dict()['default_value']
 
         self.system_parameters = system_parameters
+
+        for n, p in input_parameters.items():
+            if p['extra_ttl'] is not None:
+                G.parse(data=p['extra_ttl'])
+
+        self.extra_ttl = G.serialize(format='turtle')
 
         return input_parameters
     
@@ -306,21 +333,19 @@ class NotebookAdapter:
 
     def execute(self, parameters, progress_bar = True, log_output = True, inplace=False):
         t0 = time.time()
-        if logstasher is not None:
-            logstasher.log(dict(origin="nb2workflow.execute", event="starting", parameters=parameters, workflow_name=notebook_short_name(self.notebook_fn), health=current_health()))
+        logstasher.log(dict(origin="nb2workflow.execute", event="starting", parameters=parameters, workflow_name=notebook_short_name(self.notebook_fn), health=current_health()))
 
         logger.info("starting job")
         exceptions = self._execute(parameters, progress_bar, log_output, inplace)
             
         tspent = time.time() - t0
-        if logstasher is not None:
-            logstasher.log(dict(origin="nb2workflow.execute", 
-                                event="done", 
-                                parameters=parameters, 
-                                workflow_name=notebook_short_name(self.notebook_fn), 
-                                exceptions=list(map(workflows.serialize_workflow_exception, exceptions)),
-                                health=current_health(), 
-                                time_spent=tspent))
+        logstasher.log(dict(origin="nb2workflow.execute", 
+                            event="done", 
+                            parameters=parameters, 
+                            workflow_name=notebook_short_name(self.notebook_fn), 
+                            exceptions=list(map(workflows.serialize_workflow_exception, exceptions)),
+                            health=current_health(), 
+                            time_spent=tspent))
 
         return exceptions
 
@@ -331,7 +356,8 @@ class NotebookAdapter:
             logger.info("new tmpdir: %s", tmpdir)
 
             try:
-                output = subprocess.check_output(["git","clone",os.path.dirname(os.path.realpath(self.notebook_fn)), tmpdir])
+                output = subprocess.check_output(["git","clone", "--recurse-submodules", os.path.dirname(os.path.realpath(self.notebook_fn)), tmpdir])
+                # output = subprocess.check_output(["git","clone", "--depth", "1", "file://" + os.path.dirname(os.path.realpath(self.notebook_fn)), tmpdir])
                 logger.info("git clone output: %s", output)
             except Exception as e:
                 logger.warning("git clone failed: %s, will attempt copytree", e)
@@ -348,19 +374,6 @@ class NotebookAdapter:
 
         self.inject_output_gathering()
         exceptions = []
-
-        
-#        root = logging.getLogger()
-#        root.setLevel(logging.DEBUG)
-
-#        handler = logging.StreamHandler()
-#        handler.setLevel(logging.DEBUG)
-#        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-#        handler.setFormatter(formatter)
-#        root.addHandler(handler)
-
-#        root.info("towards excution")
-
 
         ntries = 10
         while ntries > 0:
@@ -496,13 +509,29 @@ except Exception as e:
         return default
 
 
+    def remove_tmpdir(self):
+        if self._tmpdir is not None:
+            logger.info("removing tmpdir %s", self._tmpdir)
+            shutil.rmtree(self._tmpdir)
+        else:
+            logger.info("no dir to remove")
+
+
 def notebook_short_name(ipynb_fn):
     return os.path.basename(ipynb_fn).replace(".ipynb","")
 
-def find_notebooks(source):
+def find_notebooks(source, tests=False) -> dict[str, NotebookAdapter]:
+
+    base_filter = lambda fn: "output" not in fn and "preproc" not in fn
+
+    if tests:
+        filt = lambda fn: base_filter(fn) and "/test_" in fn
+    else:
+        filt = lambda fn: base_filter(fn) and "/test_" not in fn
 
     if os.path.isdir(source):
-        notebooks=[ fn for fn in glob.glob(source+"/*ipynb") if "output" not in fn and "preproc" not in fn ]
+        notebooks=[ fn for fn in glob.glob(source+"/*ipynb") if filt(fn) ]
+
         logger.debug("found notebooks: %s",notebooks)
 
         if len(notebooks)==0:
@@ -522,7 +551,7 @@ def find_notebooks(source):
 
     return notebook_adapters
 
-def nbinspect(nb_source, out=True):
+def nbinspect(nb_source, out=True, machine_readable=False):
     nbas = find_notebooks(nb_source)
 
     # class CustomEncoder(json.JSONEncoder):
@@ -531,9 +560,18 @@ def nbinspect(nb_source, out=True):
     #             return str(obj)
     #         return json.JSONEncoder.default(self, obj)
 
-    for n, nba in nbas.items():
-        print(json.dumps(nba.extract_parameters(), indent=4, sort_keys=True, cls=CustomJSONEncoder))
+    summary = []
 
+    for n, nba in nbas.items():
+        summary.append({
+                "parameters": nba.extract_parameters(),
+                "outputs": nba.extract_output_declarations()
+            })
+        print(json.dumps(summary[-1], indent=4, sort_keys=True, cls=CustomJSONEncoder))
+
+    if machine_readable:
+        print("WORKFLOW-NB-SIGNATURE:", json.dumps(summary, cls=CustomJSONEncoder))
+    
 
 def nbreduce(nb_source, max_size_mb):
     cellsize_limit = None
@@ -600,7 +638,56 @@ def nbreduce(nb_source, max_size_mb):
             cellsize_limit = largest_cellsize
 
 
-def nbrun(nb_source, inp, inplace=False):
+def validate_oda_dispatcher(nba: NotebookAdapter, optional=True, machine_readable=False):
+    logger.info('validating with ODA dispatcher plugin')
+
+    try:
+        from dispatcher_plugin_nb2workflow.queries import NB2WProductQuery
+    except Exception as e:
+        logger.warning("unable to import dispatcher_plugin_nb2workflow.queries.NB2WProductQuery: %s", e)
+        if not optional:
+            logger.error("dispatcher validation is not optional!")
+            raise
+    else:
+        nbpq = NB2WProductQuery('testname', 
+                        'testproduct', 
+                        nba.extract_parameters(),
+                        nba.extract_output_declarations())
+
+        output = nba.extract_output()
+
+        logger.debug(json.dumps(output, indent=4))
+
+        class MockRes:
+            @staticmethod
+            def json():
+                return {
+                    'data': {
+                        'output': output
+                    }
+                }
+
+        logger.debug("parameters as interpreted by dispatcher: %s", json.dumps(json.loads(nbpq.get_parameters_list_as_json()), indent=4))
+
+        dispatcher_parameters = json.loads(nbpq.get_parameters_list_as_json())
+
+        for parameter in dispatcher_parameters:
+            logger.info("\033[32mODA dispatcher parameter \033[0m: %s", parameter)
+
+        prod_list = nbpq.build_product_list(instrument=None, res=MockRes, out_dir=None)
+
+        for prod in prod_list:
+            logger.info("\033[33mworkflow the output produces ODA product \033[0m: \033[31m%s\033[0m (%s) %s", prod.name, prod.type_key, prod)
+
+        if machine_readable:
+            print("WORKFLOW-DISPATCHER-SIGNATURE:", json.dumps([
+                        {"parameters": dispatcher_parameters,
+                         "outputs": [{'name': prod.name, 'type': prod.type_key, 'class_name': prod.__class__.__name__} for prod in prod_list]
+                        }]))
+        
+    
+
+def nbrun(nb_source, inp, inplace=False, optional_dispather=True, machine_readable=False):
 
     nbas = find_notebooks(nb_source)
 
@@ -608,6 +695,8 @@ def nbrun(nb_source, inp, inplace=False):
         nba = nbas[inp.pop('notebook')]
     elif len(nbas) == 1:
         nba = list(nbas.values())[0]
+    else:
+        RuntimeError()
 
     r = nba.interpret_parameters(inp)
     
@@ -656,6 +745,8 @@ def nbrun(nb_source, inp, inplace=False):
     
     r['output_notebook_html'] = htmlfn
     r['output_notebook_html_content'] = base64.b64encode(open(htmlfn, "rb").read()).decode()
+
+    validate_oda_dispatcher(nba, optional=optional_dispather, machine_readable=machine_readable)
 
     return r
 
@@ -714,34 +805,22 @@ def main_inspect():
     parser = argparse.ArgumentParser(description='Inspect some notebooks') # run locally, remotely, semantically
     parser.add_argument('notebook', metavar='notebook', type=str)
     parser.add_argument('--debug', action="store_true")
+    parser.add_argument('--machine-readable', action="store_true")        
     
     args = parser.parse_args()
 
     setup_logging(args.debug)
 
-    nbinspect(args.notebook)
+    nbinspect(args.notebook, machine_readable=args.machine_readable)
 
-def setup_logging(debug=False):
-    handler = logging.StreamHandler()
-    handler.setLevel(logging.INFO)
-    root = logging.getLogger()
-    handler = logging.StreamHandler()
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    handler.setFormatter(formatter)
-    root.addHandler(handler)
-
-    if debug:
-        root.setLevel(logging.DEBUG)
-        handler.setLevel(logging.DEBUG)
-    else:
-        root.setLevel(logging.INFO)
-        handler.setLevel(logging.INFO)
 
 def main():
     parser = argparse.ArgumentParser(description='Run some notebooks') # run locally, remotely, semantically
     parser.add_argument('notebook', metavar='notebook', type=str)
     parser.add_argument('--debug', action="store_true")
     parser.add_argument('--inplace', action="store_true")
+    parser.add_argument('--mmoda-validation', action="store_true")        
+    parser.add_argument('--machine-readable', action="store_true")        
     
     parser.add_argument('inputs', nargs=argparse.REMAINDER)
 
@@ -755,8 +834,7 @@ def main():
         
     setup_logging(args.debug)
 
-
-    nbrun(args.notebook, inputs, inplace=args.inplace)
+    nbrun(args.notebook, inputs, inplace=args.inplace, optional_dispather=not args.mmoda_validation, machine_readable=args.machine_readable)
 
 
 if __name__ == "__main__":

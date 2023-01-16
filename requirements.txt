@@ -21,8 +21,7 @@ psutil
 diskcache
 requests
 pyyaml
-#nteract-scrapbook==0.3.1 # until pyarrow works with py3
-nteract-scrapbook
+scrapbook
 matplotlib
 pytest
 werkzeug==2.0.3

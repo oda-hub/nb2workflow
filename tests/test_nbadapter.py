@@ -73,7 +73,7 @@ def test_nbadapter(test_notebook, morph_notebook, caplog):
 
 
 def test_nbadapter_repo(test_notebook_repo):
-    from nb2workflow.nbadapter import NotebookAdapter, find_notebooks
+    from nb2workflow.nbadapter import NotebookAdapter, find_notebooks, validate_oda_dispatcher
 
     nbas = find_notebooks(test_notebook_repo)
 
@@ -101,6 +101,8 @@ def test_nbadapter_repo(test_notebook_repo):
 
         assert len(output) == 4
         assert 'spectrum' in output
+
+        validate_oda_dispatcher(nba)
 
 
 def test_nbreduce(test_notebook):

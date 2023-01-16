@@ -1,7 +1,14 @@
 from __future__ import print_function
 import pickle
 import re
-from werkzeug.routing import RequestRedirect, MethodNotAllowed, NotFound
+
+from werkzeug.routing import RequestRedirect
+
+try:
+    from werkzeug.exceptions import MethodNotAllowed, NotFound
+except ImportError:
+    from werkzeug.routing import MethodNotAllowed, NotFound
+
 import queue
 from nb2workflow import ontology, publish, schedule
 from nb2workflow.nbadapter import NotebookAdapter, find_notebooks, PapermillWorkflowIncomplete
@@ -588,6 +595,7 @@ def test():
     results = {}
     expecting = []
 
+    #TODO: use generalized testing
     for template_nba in app.notebook_adapters.values():
         if template_nba.name.startswith('test_'):
             key = template_nba.name

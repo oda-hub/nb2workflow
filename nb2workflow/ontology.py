@@ -12,8 +12,9 @@ import rdflib
 
 try:
     import odakb.sparql
-except Exception:
-    logger.error("some error")
+except Exception as e:
+    logger.warning("unable to import odakb.sparql (%s) but proceeding anyway", e)
+
 
 try:
     import owlready2
@@ -83,6 +84,8 @@ def function_semantic_signature(function_name, location, parameters, output, dom
         logger.info('function_semantic_signature parameter p_uri=%s', p_uri)
         G.add((p_uri, rdf_ns['type'], rdflib.URIRef(to_xsd_type(pv))))
         G.add((wfl, oda_ns['expects'], p_uri))
+        if pv["extra_ttl"] is not None:
+            G.parse(data=pv["extra_ttl"])
 
     if domains is not None:
         for domain in domains:
@@ -113,7 +116,6 @@ def service_semantic_signature(nbas, format="xml", domains=None) -> str:
     logger.debug(rdf_str)
     
     return rdf_str
-
 
 
 
@@ -148,7 +150,6 @@ def service_semantic_signature_owl(nbas, format="rdfxml"):
 
 
 
-
 def nb2rdf(notebook_fn: str, domains: Optional[list]=None) -> str:
     nba = nbadapter.NotebookAdapter(notebook_fn)
 
@@ -168,12 +169,9 @@ def main():
     parser.add_argument('--debug', action="store_true")
 
     args = parser.parse_args()
-
-    handler = logging.StreamHandler()
-    handler.setLevel(logging.INFO)
-
+    
     root = logging.getLogger()
-
+    
     handler = logging.StreamHandler()
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     handler.setFormatter(formatter)
