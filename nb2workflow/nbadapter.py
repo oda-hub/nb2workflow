@@ -127,8 +127,13 @@ def owl_type_for_python_type(python_type: type):
     return "http://www.w3.org/2001/XMLSchema#"+ python_type.__name__ 
 
 class InputParameter:
-    def __init__(self):
-        pass
+    raw_line=None 
+    name=None
+    default_value=None
+    python_type=None
+    comment=None
+    owl_type=None
+    extra_ttl=None
 
     @classmethod
     def from_nbline(cls,line):
@@ -153,7 +158,7 @@ class InputParameter:
                     obj.comment)
 
             if obj.owl_type is None:
-                obj.owl_type = "http://www.w3.org/2001/XMLSchema#"+self.python_type.__name__ # also use this if already defined
+                obj.owl_type = "http://www.w3.org/2001/XMLSchema#" + obj.python_type.__name__ # also use this if already defined
 
             return obj
     
