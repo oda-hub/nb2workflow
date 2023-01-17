@@ -108,7 +108,7 @@ def parse_nbline(line: str, nb_uri=None) -> Optional[dict]:
             value = value_str
             python_type = str
             
-        parsed_comment = understand_comment_references(comment, fallback_type=owl_type_for_python_type(python_type))
+        parsed_comment = understand_comment_references(comment, fallback_type=owl_type_for_python_type(python_type))        
         
         logger.info("parameter name=%s value=%s python_type=%s, owl_type=%s extra_ttl=%s", 
                     name, value, python_type, parsed_comment['owl_type'], parsed_comment['extra_ttl'])
@@ -152,11 +152,12 @@ class InputParameter:
                     obj.default_value.__class__,obj.default_value,
                     obj.comment)
 
+            if obj.owl_type is None:
+                obj.owl_type = "http://www.w3.org/2001/XMLSchema#"+self.python_type.__name__ # also use this if already defined
+
             return obj
     
-
-        if self.owl_type is None:
-            self.owl_type = "http://www.w3.org/2001/XMLSchema#"+self.python_type.__name__ # also use this if already defined
+        
 
     def as_dict(self):
         return dict(
