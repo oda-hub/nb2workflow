@@ -4,6 +4,7 @@ import os
 import sys
 import glob
 import shutil
+from typing import Optional
 import uuid
 import yaml 
 import re
@@ -65,12 +66,21 @@ def cast_parameter(x,par):
 
 
 
-def parse_nbline(line, nb_uri=None):
-    if line.strip()=="":
+def parse_nbline(line: str, nb_uri=None) -> Optional[dict]:
+    """
+    this function is used in 3 cases:
+    * input parameters
+    * outputs
+    * full-line comments - to annotate notebook itself
+    """
+
+    if line.strip() == "":
         return None
+
     elif line.strip().startswith("#"):
         comment = line.strip().strip("#")
-        logger.debug("found detached comment: \"%s\"",line)                
+        logger.debug("found detached comment: \"%s\"",line)
+
         if nb_uri is not None:
             return understand_comment_references(comment, nb_uri)
         else:
@@ -97,9 +107,11 @@ def parse_nbline(line, nb_uri=None):
         except Exception:
             value = value_str
             python_type = str
-
-        param_uri = rdflib.URIRef(f"{oda_ontology_prefix}{uuid.uuid1().hex}")
-        parsed_comment = understand_comment_references(comment, param_uri)
+            
+        parsed_comment = understand_comment_references(comment, fallback_type=owl_type_for_python_type(python_type))
+        
+        logger.info("parameter name=%s value=%s python_type=%s, owl_type=%s extra_ttl=%s", 
+                    name, value, python_type, parsed_comment['owl_type'], parsed_comment['extra_ttl'])
 
         return dict(
                     name = name,
@@ -111,43 +123,37 @@ def parse_nbline(line, nb_uri=None):
                 )
 
 
+def owl_type_for_python_type(python_type: type):
+    return "http://www.w3.org/2001/XMLSchema#"+ python_type.__name__ 
+
 class InputParameter:
     def __init__(self):
         pass
 
     @classmethod
     def from_nbline(cls,line):
-        r = parse_nbline(line)
-        if r is None or r.get('name', None) is None:
+        parsed_nbline = parse_nbline(line)
+        if parsed_nbline is None or parsed_nbline.get('name', None) is None:
             return None
+
         else:
             obj = cls()
-            obj.raw_line=line
 
-            p = parse_nbline(line)
+            obj.raw_line = line            
+            obj.name = parsed_nbline['name']
+            obj.default_value = parsed_nbline['value']
+            obj.python_type = parsed_nbline['python_type']
+            obj.comment = parsed_nbline['comment']
+            obj.owl_type = parsed_nbline['owl_type']
+            obj.extra_ttl = parsed_nbline['extra_ttl']
             
-            obj.name = p['name']
-            obj.default_value = p['value']
-            obj.python_type = p['python_type']
-            obj.comment = p['comment']
-            obj.owl_type = p['owl_type']
-            obj.extra_ttl = p['extra_ttl']
+            logger.info("interpreted %s %s %s comment: %s",
+                    obj.name,
+                    obj.default_value.__class__,obj.default_value,
+                    obj.comment)
 
-            obj.choose_owl_type()
-            
-            logger.info("interpreted %s %s %s comment: %s",obj.name,obj.default_value.__class__,obj.default_value,obj.comment)
             return obj
     
-
-    def choose_owl_type(self):
-        self.owl_type = None
-
-        if self.comment.strip() != "":
-            references =  understand_comment_references(self.comment)
-
-            if references.get('owl_type', None):
-                self.owl_type = references.get('owl_type')
-                self.extra_ttl = references.get('extra_ttl')
 
         if self.owl_type is None:
             self.owl_type = "http://www.w3.org/2001/XMLSchema#"+self.python_type.__name__ # also use this if already defined
@@ -237,58 +243,60 @@ class NotebookAdapter:
     @property
     def nb_uri(self):
         return rdflib.URIRef(f"http://odahub.io/ontology#{self.unique_name}")
-    
+
+
+    def extract_parameters_from_cell(self, cell, G):
+        parameters = {}
+
+        for line in cell['source'].split("\n"):
+            par = InputParameter.from_nbline(line)
+            if par is not None:
+                parameters[par.name] = par.as_dict()
+                parameters[par.name]['value'] = par.as_dict()['default_value']
+            else:
+                p = parse_nbline(line, nb_uri=self.nb_uri)
+                if p is not None:
+                    try:
+                        G.parse(data=p['extra_ttl'])
+                    except Exception as e:
+                        logger.warning("not a turtle: %s", p['extra_ttl'])
+
+        return parameters
+
 
     def extract_parameters(self):
-        nb=self.read()
+        nb = self.read()
 
-        input_parameters = {}
-        system_parameters = {}
-
+        self.input_parameters = {}
+        self.system_parameters = {}
+        
         G = rdflib.Graph()
         
         for cell in nb.cells:
-            if 'parameters' in cell.metadata.get('tags',[]):
-                for line in cell['source'].split("\n"):
-                    par = InputParameter.from_nbline(line)
-                    if par is not None:
-                        input_parameters[par.name] = par.as_dict()
-                        input_parameters[par.name]['value'] = par.as_dict()['default_value']
-                    else:
-                        p = parse_nbline(line, nb_uri=self.nb_uri)
-                        if p is not None:
-                            try:
-                                G.parse(data=p['extra_ttl'])
-                            except Exception as e:
-                                logger.warning("not a turtle: %s", p['extra_ttl'])
-            
-            if 'system-parameters' in cell.metadata.get('tags',[]):
-                for line in cell['source'].split("\n"):
-                    par = InputParameter.from_nbline(line)
-                    if par is not None:
-                        system_parameters[par.name] = par.as_dict()
-            
-            if 'injected-parameters' in cell.metadata.get('tags',[]):
-                for line in cell['source'].split("\n"):
-                    par=InputParameter.from_nbline(line)
-                    if par is not None:
-                        input_parameters[par.name]['value'] = par.as_dict()['default_value']
-
-        self.system_parameters = system_parameters
-
-        for n, p in input_parameters.items():
+            for tag, attr in [
+                    ('parameters', 'input_parameters'),
+                    ('system-parameters', 'system_parameters'),
+                    ('injected-parameters', 'input_parameters'),
+                    ]:
+                if tag in cell.metadata.get('tags', []):
+                    pars = self.extract_parameters_from_cell(cell, G)
+                    pars = {**getattr(self, attr), **pars}
+                    setattr(self, attr, pars)
+                                            
+        for n, p in self.input_parameters.items():
             if p['extra_ttl'] is not None:
                 G.parse(data=p['extra_ttl'])
 
         self.extra_ttl = G.serialize(format='turtle')
 
-        return input_parameters
+        return self.input_parameters
+
     
     def interpret_parameters(self,parameters):
-        expected_parameters=self.extract_parameters()
-        request_parameters=dict()
+        expected_parameters = self.extract_parameters()
+        request_parameters = dict()
 
-        unexpected_parameters=[]
+        unexpected_parameters = []
         issues=[]
 
         for arg in parameters:
@@ -297,20 +305,20 @@ class NotebookAdapter:
             logger.info("request arg %s",parameters[arg])
             if arg in expected_parameters:
                 try:
-                    request_parameters[arg]=cast_parameter(parameters.get(arg),expected_parameters.get(arg))
+                    request_parameters[arg] = cast_parameter(parameters.get(arg),expected_parameters.get(arg))
                     logger.info("request arg %s provided as %s",parameters[arg],request_parameters[arg])
                 except ValueError as e:
                     issues.append(e.args[0])
             else:
                 unexpected_parameters.append(arg)
 
-        if len(unexpected_parameters)>0:
-            issues+=[f'found unexpected request parameters: {", ".join(unexpected_parameters)}, can be {", ".join(expected_parameters.keys())}']
+        if len(unexpected_parameters) > 0:
+            issues += [f'found unexpected request parameters: {", ".join(unexpected_parameters)}, can be {", ".join(expected_parameters.keys())}']
             
         return dict(
-                        issues=issues,
-                        request_parameters=request_parameters,
-                    )
+                    issues=issues,
+                    request_parameters=request_parameters,
+                )
 
     def update_summary(self, **d):
         if not hasattr(self, '_summary'):
@@ -324,7 +332,7 @@ class NotebookAdapter:
         self._summary.update(d)
         
         if state is not None:
-            self._summary['state'] = self._summary.get("state",[]) + [(time.time(), state)]
+            self._summary['state'] = self._summary.get("state", []) + [(time.time(), state)]
 
         fn = os.path.join(self.tmpdir, "summary.yaml")
         yaml.dump(self._summary, open(fn, "w"))
@@ -432,7 +440,8 @@ class NotebookAdapter:
             if 'outputs' in cell.metadata.get('tags',[]):
                 for line in cell['source'].split("\n"):
                     p = parse_nbline(line)
-                    if p is None: continue
+                    if p is None:
+                        continue
                     outputs[p['name']] = p
 
 
