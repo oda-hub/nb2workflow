@@ -11,14 +11,14 @@ a = rdflib.URIRef('http://www.w3.org/1999/02/22-rdf-syntax-ns#type')
 
 
 # TODO: register this function as versioned rdf-generating workflow
-def understand_comment_references(comment, base_uri=None) -> dict:
+def understand_comment_references(comment, base_uri=None, fallback_type=None) -> dict:
     if base_uri is None:
         base_uri = rdflib.URIRef(f"{oda_ontology_prefix}{uuid.uuid1().hex}")
         deduce_type = True
     else:
-        deduce_type = False
+        deduce_type = False            
 
-    comment = comment.strip()
+    comment = comment.strip()    
 
     logger.debug('understand_comment_references: "%s"', comment)
 
@@ -30,20 +30,27 @@ def understand_comment_references(comment, base_uri=None) -> dict:
     parsed = None
     parse_failures = []
 
-    for variation in [
+    variations = [
         f"@prefix oda: <{oda_ontology_prefix}> . {base_uri.n3()} a {comment} .",
-        f"@prefix oda: <{oda_ontology_prefix}> . {base_uri.n3()} {comment} ."
-    ]:
+        f"@prefix oda: <{oda_ontology_prefix}> . {base_uri.n3()} {comment} .",
+    ]
+
+    if fallback_type is not None:
+        variations.append(f"@prefix oda: <{oda_ontology_prefix}> . {base_uri.n3()} a <{fallback_type}>; {comment} .")
+
+    
+    for variation in variations:
         try:
             parsed = parse_ttl(variation, base_uri, deduce_type)
+            logger.info("this variation WAS parsed: %s to %s", variation, parsed)
         except (rdflib.plugins.parsers.notation3.BadSyntax, NotImplementedError) as e:
-            logger.info("failed to parse")
+            logger.info("this variation could not be parsed: %s due to %s", variation, e)
             parse_failures.append([variation, e])
 
     if parsed is None:
         logger.info("all attempts to parse failed %s", parse_failures)
         return {
-            "owl_type": None,
+            "owl_type": fallback_type,
             "extra_ttl": None,
         }
     else:
@@ -71,20 +78,26 @@ def parse_ttl(combined_ttl, param_uri, deduce_type=True):
     logger.info("types: %s", owl_types)
 
     for p, o in predicate_objects:
-        logger.info("extra predicate %s: %s", p, o)
+        if p != a:
+            logger.info("extra predicate %s: %s", p, o)
     
     if deduce_type:
+        logger.info("will deduce type")
         if len(owl_types) == 1 and len(predicate_objects) == 1:
             owl_type = owl_types[0]
+
+            logger.info("have exactly one type predicate, returning %s", owl_type)
 
             G.remove((param_uri, a, owl_type))
         
         elif len(predicate_objects) > 1:
             owl_type = construct_common_root_class(G, param_uri, predicate_objects)
+            logger.info("constructed common type predicate, returning %s", owl_type)
 
         else:
             raise NotImplementedError("no semantic annotation found")
     else:
+        logger.info("will NOT deduce type")
         owl_type = param_uri
 
     logger.info("complete extra ttl: %s", G.serialize(format="turtle"))
