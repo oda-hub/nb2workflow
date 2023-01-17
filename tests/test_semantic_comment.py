@@ -30,8 +30,8 @@ def test_semantic_comments():
     assert r['extra_ttl'] == None
 
     r = understand_comment_references("oda:upper_limit 1", fallback_type='http://www.w3.org/2001/XMLSchema#int') 
-    assert r['owl_type'] != None
-    assert r['extra_ttl'] != None
+    assert r['owl_type'] is not None
+    assert r['extra_ttl'] is not None
 
     r = understand_comment_references("oda:Integer; oda:upper_limit 1")
     assert normalize(r['owl_type']) == 'http://odahub.io/ontology#1integer_Integer_upper_limit'
