@@ -477,7 +477,7 @@ if isinstance({output},str) and os.path.exists({output}):
     fn = {output}
     content = open(fn ,'rb').read()    
 
-    if {self.limit_output_attachment_file} is not None and len(content) < {self.limit_output_attachment_file}:
+    if {self.limit_output_attachment_file} is None or len(content) < {self.limit_output_attachment_file}:
         encoded = base64.b64encode(content).decode()
         print("glueing file", fn)
         sb.glue(variable_name + "_content", encoded)
