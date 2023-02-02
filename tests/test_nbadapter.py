@@ -49,7 +49,7 @@ def test_nbadapter(test_notebook, morph_notebook, caplog):
     outputs = nba.extract_output_declarations()
     print("outputs", outputs)
 
-    assert len(outputs) == 3
+    assert len(outputs) == 4
 
     if os.path.exists(nba.output_notebook_fn):
         os.remove(nba.output_notebook_fn)
@@ -67,7 +67,7 @@ def test_nbadapter(test_notebook, morph_notebook, caplog):
         os.remove(fn)
 
     print(output)
-    assert len(output) == 4
+    assert len(output) == 6
 
     assert 'spectrum' in output
 
@@ -99,7 +99,7 @@ def test_nbadapter_repo(test_notebook_repo):
 
         print(output)
 
-        assert len(output) == 4
+        assert len(output) == 6
         assert 'spectrum' in output
 
         validate_oda_dispatcher(nba)
@@ -122,7 +122,7 @@ def test_nbreduce(test_notebook):
 
     output = nba.extract_output()
 
-    assert len(output) == 4
+    assert len(output) == 6
 
     assert 'spectrum' in output
 

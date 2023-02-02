@@ -286,12 +286,14 @@ class NotebookAdapter:
 
         return input_parameters
     
-    def interpret_parameters(self,parameters):
-        expected_parameters=self.extract_parameters()
-        request_parameters=dict()
+    def interpret_parameters(self, parameters):
+        expected_parameters = self.extract_parameters()
+        request_parameters = dict()
 
-        unexpected_parameters=[]
-        issues=[]
+        unexpected_parameters = []
+        issues = []
+
+        print("request parameters %s", parameters)
 
         for arg in parameters:
             if arg.startswith("_"): continue
@@ -719,6 +721,8 @@ def nbrun(nb_source, inp, inplace=False, optional_dispather=True, machine_readab
         nba = list(nbas.values())[0]
     else:
         RuntimeError()
+
+    print("inp", inp)
 
     r = nba.interpret_parameters(inp)
     

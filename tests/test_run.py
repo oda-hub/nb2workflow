@@ -68,7 +68,7 @@ def test_nb_version(test_notebook):
     nba = nb2workflow.nbadapter.NotebookAdapter(test_notebook)
 
 
-    assert nba.nb_uri == rdflib.URIRef('http://odahub.io/ontology#workflow-notebook_cf24cd75')
+    assert nba.nb_uri == rdflib.URIRef('http://odahub.io/ontology#workflow-notebook_5daa7d90')
 
     nba.extract_parameters()
 
