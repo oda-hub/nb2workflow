@@ -1,6 +1,8 @@
 import os
 import logging
 
+import pytest
+
 #logger=logging.getLogger("nb2workflow")
 
 FORMAT = '%(asctime)-15s %(message)s'
@@ -120,3 +122,40 @@ def test_nb_autocollect(test_notebook):
     assert 'output_notebook_content' not in r
     assert 'output_notebook_html' in r
     assert 'output_notebook_html_content' in r
+
+
+@pytest.mark.parametrize("limit", [None, 1, 1e6])
+def test_nb_attach_file(test_notebook, limit):
+    import nb2workflow.nbadapter
+    
+    basename = os.path.basename(test_notebook).replace(".ipynb","_output")
+
+    print("basename:", basename)
+
+    for p in ".ipynb", ".json", ".html":
+        print("base and prefix", basename + p)
+        if os.path.exists(basename + p):
+            os.remove(basename + p)
+
+    nba = nb2workflow.nbadapter.NotebookAdapter(test_notebook)
+
+    # all content attached
+    nba.limit_output_attachment_file = limit
+
+    nba.execute({})
+    r = nba.extract_output()
+
+    # for p in ".ipynb", ".json", ".html":
+    #     assert os.path.exists(basename+p)
+
+    assert 'spectrum_png' in r
+
+    if limit is None or limit < 10:
+        assert 'spectrum_png_url' in r
+        assert r['spectrum_png_url'] == "file:///tmp/nb2w-store/5868cf2f6489332212a58df9d89ddd13"
+
+        assert r['energies_fits_file'] == "energies.fits"
+        assert r['energies_fits_file_url'] == "file:///tmp/nb2w-store/0b5d8591f8f2807fcb4bf1fe81a57589"        
+    else:
+        assert 'spectrum_png_content' in r
+    
