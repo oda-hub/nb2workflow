@@ -164,6 +164,8 @@ class InputParameter:
 
 
 class NotebookAdapter:
+    limit_output_attachment_file = None
+
     def __init__(self, notebook_fn):
         self.notebook_fn = os.path.abspath(notebook_fn)
         self.name = notebook_short_name(notebook_fn)
@@ -449,6 +451,7 @@ import papermill as pm
 import scrapbook as sb
 import base64
 import json
+import hashlib
 import os
     
 from nb2workflow.nbadapter import denumpyfy
@@ -466,7 +469,26 @@ except Exception as e:
     sb.glue("{output}",json.dumps(denumpyfy({output}), cls=CustomJSONEncoder))
 """.format(output=output)
 
-            output_gather_content+="\nisinstance({output},str) and os.path.exists({output}) and sb.glue(\"{output}_content\",base64.b64encode(open({output},'rb').read()).decode())".format(output=output)
+            output_gather_content += f"""
+if isinstance({output},str) and os.path.exists({output}):
+    variable_name = "{output}"
+    fn = {output}
+    content = open(fn ,'rb').read()    
+
+    if {self.limit_output_attachment_file} is not None and len(content) < {self.limit_output_attachment_file}:
+        encoded = base64.b64encode(content).decode()
+        print("glueing file", fn)
+        sb.glue(variable_name + "_content", encoded)
+    else:
+        # TODO: make a customizable upload to different DL platforms; before that it should be enabled with caution    
+        os.makedirs("/tmp/nb2w-store", exist_ok=True)
+        url = "file:///tmp/nb2w-store/" + str(hashlib.md5(content).hexdigest())
+        print("storing file to URL", url)
+        with open(url.replace("file://", ""), "wb") as f:
+            f.write(content)
+
+        sb.glue(\"{output}_url\", url)
+"""
             output_gather_content+="\n".format(output=output)
 
         nb = self.read()
