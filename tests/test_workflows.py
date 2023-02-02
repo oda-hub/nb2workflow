@@ -23,7 +23,7 @@ def test_workflow_localfile(test_notebook_repo):
 
     print(result)
     assert result['output']
-    assert len(result['output']) == 4
+    assert len(result['output']) == 6
     assert result['exceptions'] == []
 
     assert 'spectrum' in result['output']
