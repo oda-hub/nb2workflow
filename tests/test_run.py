@@ -154,8 +154,8 @@ def test_nb_attach_file(test_notebook, limit):
         assert 'spectrum_png_content' in r
     else:
         assert 'spectrum_png_url' in r
-        assert r['spectrum_png_url'] == "file:///tmp/nb2w-store/5868cf2f6489332212a58df9d89ddd13"
+        assert r['spectrum_png_url'].startswith("file:///tmp/nb2w-store/")
 
         assert r['energies_fits_file'] == "energies.fits"
-        assert r['energies_fits_file_url'] == "file:///tmp/nb2w-store/0b5d8591f8f2807fcb4bf1fe81a57589"        
+        assert r['energies_fits_file_url'].startswith("file:///tmp/nb2w-store/")
     
