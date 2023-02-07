@@ -277,6 +277,7 @@ class NotebookAdapter:
 
         self.input_parameters = {}
         self.system_parameters = {}
+        self.source_parameters = {}
         
         G = rdflib.Graph()
         
@@ -285,6 +286,7 @@ class NotebookAdapter:
                     ('parameters', 'input_parameters'),
                     ('system-parameters', 'system_parameters'),
                     ('injected-parameters', 'input_parameters'),
+                    ('refs', 'source_parameters'),
                     ]:
                 if tag in cell.metadata.get('tags', []):
                     pars = self.extract_parameters_from_cell(cell, G)
@@ -557,7 +559,7 @@ if isinstance({output},str) and os.path.exists({output}):
 def notebook_short_name(ipynb_fn):
     return os.path.basename(ipynb_fn).replace(".ipynb","")
 
-def find_notebooks(source, tests=False) -> dict[str, NotebookAdapter]:
+def find_notebooks(source, tests=False): # -> dict[str, NotebookAdapter]:
 
     base_filter = lambda fn: "output" not in fn and "preproc" not in fn
 
