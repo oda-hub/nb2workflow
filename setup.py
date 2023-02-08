@@ -14,6 +14,8 @@ setup(name='nb2workflow',
       packages=['nb2workflow'],
       zip_safe=False,
 
+      python_requires='>=3.9',
+
       entry_points={
           'console_scripts': [
             'nb2service=nb2workflow.service:main',
