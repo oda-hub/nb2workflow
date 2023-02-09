@@ -3,23 +3,36 @@
 [![Python package](https://github.com/volodymyrss/nb2workflow/actions/workflows/python-package.yml/badge.svg)](https://github.com/volodymyrss/nb2workflow/actions/workflows/python-package.yml)
 [![codecov](https://codecov.io/gh/volodymyrss/nb2workflow/branch/master/graph/badge.svg)](https://codecov.io/gh/volodymyrss/nb2workflow)
 
-Starts service without container:
+## Starts service without container:
 ```bash
 nb2service tests/testrepo/workflow-notebook.ipynb
 ```
-Builds service container and starts it:
+
+## Builds service container and starts it:
 ```bash
 nb2worker tests/testrepo/
 ```
 
-Builds one-shot container and cwl:
+## Builds one-shot container and cwl:
 
 ```bash
 nb2worker tests/testrepo/ --build --job
 ```
 
-Generates cwl:
+## Generates cwl:
 ```bash
 nb2cwl tests/testrepo/
 ```
 
+## Deploys a service
+
+```bash
+nb2deploy https://renkulab.io/gitlab/vladimir.savchenko/oda-sdss legacysurvey
+```
+
+
+## Motivation
+
+## Why run notebooks?
+
+### Why convert notebook as a service?

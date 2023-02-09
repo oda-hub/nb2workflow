@@ -25,3 +25,13 @@ tests/testrepo
 dist
 cwl.output.json
 code
+.venv
+.vscode
+data
+example.ipynb
+.tox
+.coverage
+callback.json
+function.xml
+*_output.html
+*_output.json

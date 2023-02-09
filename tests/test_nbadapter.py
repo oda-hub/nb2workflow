@@ -39,7 +39,7 @@ def test_nbadapter(test_notebook, morph_notebook, caplog):
     for k, v in parameters.items():
         print("\033[31m", k, ":", v, "\033[0m")
 
-    assert len(parameters) == 5
+    assert len(parameters) == 6
 
     assert 'comment' in parameters['scwid']
     assert parameters['scwid']['owl_type'] == "http://odahub.io/ontology/integral#ScWID"
@@ -49,7 +49,7 @@ def test_nbadapter(test_notebook, morph_notebook, caplog):
     outputs = nba.extract_output_declarations()
     print("outputs", outputs)
 
-    assert len(outputs) == 3
+    assert len(outputs) == 4
 
     if os.path.exists(nba.output_notebook_fn):
         os.remove(nba.output_notebook_fn)
@@ -67,13 +67,13 @@ def test_nbadapter(test_notebook, morph_notebook, caplog):
         os.remove(fn)
 
     print(output)
-    assert len(output) == 4
+    assert len(output) == 6
 
     assert 'spectrum' in output
 
 
 def test_nbadapter_repo(test_notebook_repo):
-    from nb2workflow.nbadapter import NotebookAdapter, find_notebooks
+    from nb2workflow.nbadapter import NotebookAdapter, find_notebooks, validate_oda_dispatcher
 
     nbas = find_notebooks(test_notebook_repo)
 
@@ -85,7 +85,7 @@ def test_nbadapter_repo(test_notebook_repo):
         parameters = nba.extract_parameters()
 
         print(parameters)
-        assert len(parameters) == 5
+        assert len(parameters) == 6
 
         if os.path.exists(nba.output_notebook_fn):
             os.remove(nba.output_notebook_fn)
@@ -99,8 +99,10 @@ def test_nbadapter_repo(test_notebook_repo):
 
         print(output)
 
-        assert len(output) == 4
+        assert len(output) == 6
         assert 'spectrum' in output
+
+        validate_oda_dispatcher(nba)
 
 
 def test_nbreduce(test_notebook):
@@ -120,7 +122,7 @@ def test_nbreduce(test_notebook):
 
     output = nba.extract_output()
 
-    assert len(output) == 4
+    assert len(output) == 6
 
     assert 'spectrum' in output
 

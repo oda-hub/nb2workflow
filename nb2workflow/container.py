@@ -52,7 +52,7 @@ def prepare_image(repo_source, from_image, service=True, nb2w_path=None, runpref
         dockerfile.append(ec)
 
     pipconf = os.path.join(repo_path, 'pip.conf')
-    logger.info("using %s", pipconf)
+    logger.info("using pipconf %s", pipconf)
     if os.path.exists(pipconf):
         dockerfile.append("ENV PIP_CONFIG_FILE=/etc/pip/pip.conf")
         dockerfile.append("ADD $REPO_PATH/pip.conf /etc/pip/pip.conf")
@@ -81,8 +81,10 @@ def prepare_image(repo_source, from_image, service=True, nb2w_path=None, runpref
     dockerfile.append("WORKDIR /workdir")
 
     if service:
+        logger.info('service mode')
         dockerfile.append("ENTRYPOINT nb2service /repo/ --host 0.0.0.0")
     else:
+        logger.info('not service mode')
         dockerfile.append('ENTRYPOINT []')
         #dockerfile.append('ENTRYPOINT ["bash"]' )
         #dockerfile.append('ENTRYPOINT ["nbrun", "/repo/"]' )
@@ -134,7 +136,7 @@ def main():
     parser.add_argument('--port', metavar='port', type=int, default=9191)
     parser.add_argument('--nb2wrev', metavar='TAG', type=str, default="master")
     parser.add_argument('--nb2wpath', metavar='PATH', type=str)
-    parser.add_argument('--volume', metavar='mount:mount', type=str, nargs="*")
+    parser.add_argument('--volume', metavar='mount:mount', type=str, nargs="*", default=[])
     parser.add_argument('--docker-run-prefix',  type=str, default="")
     parser.add_argument('--store-dockerfile',
                         metavar='location', type=str, default=None)

@@ -1,8 +1,11 @@
 from ast import literal_eval
+import hashlib
 import os
 import sys
 import glob
 import shutil
+from typing import Optional
+import uuid
 import yaml 
 import re
 import time
@@ -13,27 +16,38 @@ import yaml
 import argparse
 import json
 import base64
+import rdflib
 
 import papermill as pm
 import scrapbook as sb
 import nbformat
 from nbconvert import HTMLExporter
 
+from . import logstash
+
 from nb2workflow.health import current_health
 from nb2workflow import workflows
+from nb2workflow.logging_setup import setup_logging
+from nb2workflow.json import CustomJSONEncoder
+
+from nb2workflow.semantics import understand_comment_references, oda_ontology_prefix
 
 import logging
+
 logger=logging.getLogger(__name__)
 
+logstasher = logstash.LogStasher()
 
-try:
-    from nb2workflow import logstash
-    logstasher = logstash.LogStasher()
-except Exception as e:
-    logger.debug("unable to setup logstash %s",repr(e))
 
-    logstasher = None
-
+def run(notebook_fn, params: dict):
+    nba = NotebookAdapter(notebook_fn)
+    nba.execute(
+        params,
+        log_output=True,
+        progress_bar=False
+    )
+    validate_oda_dispatcher(nba)
+    return nba.extract_output()
 
 class PapermillWorkflowIncomplete(Exception):
     pass
@@ -41,101 +55,114 @@ class PapermillWorkflowIncomplete(Exception):
 
 def cast_parameter(x,par):
     logger.debug("cast %s %s",x,par)
+    if par['python_type'] is bool:
+        if x in ['false', 'False', 0, '0', '']:
+            return False
+        elif x in ['true', 'True', 1, '1']:
+            return True
+        else:
+            raise ValueError(f'Parameter {par["name"]} value "{x}" can not be interpreted as boolean.')
     return par['python_type'](x)
 
-def understand_comment_references(comment):
-    logger.debug("treating comment %s",comment)
-
-    oda_ontology_prefix = "http://odahub.io/ontology"
-    r = re.search(r"\b("+oda_ontology_prefix+r".*?)(?:\s+|$)", comment)
-    if r:
-        owl_type = r.groups()[0]
-        logger.debug("comment contains owl references: %s",owl_type)
-    else:
-        owl_type = None
-        logger.debug("no references in this comment")
-
-    return dict(
-        owl_type = owl_type,
-    )
 
 
-def parse_nbline(line):
-    if line.strip()=="":
+def parse_nbline(line: str, nb_uri=None) -> Optional[dict]:
+    """
+    this function is used in 3 cases:
+    * input parameters
+    * outputs
+    * full-line comments - to annotate notebook itself
+    """
+
+    if line.strip() == "":
         return None
+
     elif line.strip().startswith("#"):
+        comment = line.strip().strip("#")
         logger.debug("found detached comment: \"%s\"",line)
-        return None
+
+        if nb_uri is not None:
+            return understand_comment_references(comment, nb_uri)
+        else:
+            return None
+
     else:
         if "#" in line:
-            assignment_line,comment=line.split("#",1)
+            assignment_line, comment = line.split("#",1)
         else:
-            assignment_line=line
-            comment=""
+            assignment_line = line
+            comment = ""
             
         if "=" in assignment_line:
             name, value_str = assignment_line.split("=", 1)
             name = name.strip()
+            value_str = value_str.strip()
         else:
             name = assignment_line.strip()
-            value_str=None
+            value_str = None
 
         try:
-            value=literal_eval(value_str.strip())
+            value = literal_eval(value_str)
             python_type = type(value)
         except Exception:
             value = value_str
             python_type = str
-
-        comment=comment
+            
+        parsed_comment = understand_comment_references(comment, fallback_type=owl_type_for_python_type(python_type))        
+        
+        logger.info("parameter name=%s value=%s python_type=%s, owl_type=%s extra_ttl=%s", 
+                    name, value, python_type, parsed_comment['owl_type'], parsed_comment['extra_ttl'])
 
         return dict(
                     name = name,
                     value = value,
                     python_type = python_type,
                     comment = comment,
-                    owl_type = understand_comment_references(comment).get('owl_type',None),
+                    owl_type = parsed_comment.get('owl_type', None),
+                    extra_ttl = parsed_comment.get('extra_ttl', None),
                 )
 
 
+def owl_type_for_python_type(python_type: type):
+    return "http://www.w3.org/2001/XMLSchema#"+ python_type.__name__ 
+
 class InputParameter:
-    def __init__(self):
-        pass
+    raw_line=None 
+    name=None
+    default_value=None
+    python_type=None
+    comment=None
+    owl_type=None
+    extra_ttl=None
 
     @classmethod
     def from_nbline(cls,line):
-        r = parse_nbline(line)
-        if r is None:
-            return r
+        parsed_nbline = parse_nbline(line)
+        if parsed_nbline is None or parsed_nbline.get('name', None) is None:
+            return None
+
         else:
             obj = cls()
-            obj.raw_line=line
 
-            p = parse_nbline(line)
+            obj.raw_line = line            
+            obj.name = parsed_nbline['name']
+            obj.default_value = parsed_nbline['value']
+            obj.python_type = parsed_nbline['python_type']
+            obj.comment = parsed_nbline['comment']
+            obj.owl_type = parsed_nbline['owl_type']
+            obj.extra_ttl = parsed_nbline['extra_ttl']
             
-            obj.name = p['name']
-            obj.default_value = p['value']
-            obj.python_type = p['python_type']
-            obj.comment = p['comment']
-            obj.owl_type = p['owl_type']
+            logger.info("interpreted %s %s %s comment: %s",
+                    obj.name,
+                    obj.default_value.__class__,obj.default_value,
+                    obj.comment)
 
-            obj.choose_owl_type()
-            
-            logger.debug("%s %s %s comment: %s",obj.name,obj.default_value.__class__,obj.default_value,obj.comment)
+            if obj.owl_type is None:
+                obj.owl_type = "http://www.w3.org/2001/XMLSchema#" + obj.python_type.__name__ # also use this if already defined
+
             return obj
     
-
-    def choose_owl_type(self):
-        self.owl_type = None
-
-        if self.comment.strip() != "":
-            references =  understand_comment_references(self.comment)
-
-            if references.get('owl_type',None):
-                self.owl_type = references.get('owl_type')
-
-        if self.owl_type is None:
-            self.owl_type = "http://www.w3.org/2001/XMLSchema#"+self.python_type.__name__ # also use this if already defined
+        
 
     def as_dict(self):
         return dict(
@@ -144,16 +171,18 @@ class InputParameter:
                     name=self.name,
                     comment=self.comment,
                     owl_type=self.owl_type,
+                    extra_ttl=self.extra_ttl
                 )
 
 
 class NotebookAdapter:
-    def __init__(self,notebook_fn):
-        self.notebook_fn = notebook_fn
-        self.name = notebook_short_name(notebook_fn)
-        logger.debug("notebook adapter for %s",notebook_fn)
-        logger.debug(self.extract_parameters())
+    limit_output_attachment_file = None
 
+    def __init__(self, notebook_fn):
+        self.notebook_fn = os.path.abspath(notebook_fn)
+        self.name = notebook_short_name(notebook_fn)
+        logger.debug("notebook adapter for %s", self.notebook_fn)
+        logger.debug(self.extract_parameters())
 
     def new_tmpdir(self):
         logger.debug("tmpdir was "+getattr(self,'_tmpdir','unset'))
@@ -166,18 +195,42 @@ class NotebookAdapter:
     def tmpdir(self):
         if getattr(self,'_tmpdir', None) is None:
             self._tmpdir = tempfile.mkdtemp(prefix="nb2w-")
+        if self._tmpdir is None:
+            raise RuntimeError("can no create tempdif")
         return self._tmpdir
     
     @property
     def preproc_notebook_fn(self):
-        return os.path.join(self.tmpdir,os.path.basename(self.notebook_fn.replace(".ipynb","_preproc.ipynb")))
+        return os.path.join(self.tmpdir, os.path.basename(self.notebook_fn.replace(".ipynb","_preproc.ipynb")))
 
     @property
     def output_notebook_fn(self):
-        return os.path.join(self.tmpdir,os.path.basename(self.notebook_fn.replace(".ipynb","_output.ipynb")))
+        return os.path.join(self.tmpdir, os.path.basename(self.notebook_fn.replace(".ipynb","_output.ipynb")))
 
     def read(self):
+        if not os.path.exists(self.notebook_fn):
+            raise RuntimeError(f"notebook {self.notebook_fn} not found in {os.getcwd()}")
+
         return nbformat.reads(open(self.notebook_fn).read(), as_version=4)
+
+    _notebook_origin = None
+
+    @property
+    def notebook_origin(self):
+        if self._notebook_origin is None:
+            notebook_dir = os.path.dirname(self.notebook_fn)
+            logger.info('notebook_dir: %s', notebook_dir)
+
+            url = subprocess.check_output(["git", "remote", "get-url", "origin"], cwd=notebook_dir).decode().strip()
+            revision = subprocess.check_output(["git", "describe", "--always", "--tags"], cwd=notebook_dir).decode().strip()
+
+            self._notebook_origin = f"{url}#{revision}"
+        
+        return self._notebook_origin
+
+    @property
+    def unique_name(self):
+        return f"{self.name}_{hashlib.md5(self.notebook_origin.encode()).hexdigest()[:8]}"
 
     def export_html(self, fn=None):
         if fn is None:
@@ -195,60 +248,85 @@ class NotebookAdapter:
 
         return fn
 
+    @property
+    def nb_uri(self):
+        return rdflib.URIRef(f"http://odahub.io/ontology#{self.unique_name}")
+
+
+    def extract_parameters_from_cell(self, cell, G):
+        parameters = {}
+
+        for line in cell['source'].split("\n"):
+            par = InputParameter.from_nbline(line)
+            if par is not None:
+                parameters[par.name] = par.as_dict()
+                parameters[par.name]['value'] = par.as_dict()['default_value']
+            else:
+                p = parse_nbline(line, nb_uri=self.nb_uri)
+                if p is not None:
+                    try:
+                        G.parse(data=p['extra_ttl'])
+                    except Exception as e:
+                        logger.warning("not a turtle: %s", p['extra_ttl'])
+
+        return parameters
+
+
     def extract_parameters(self):
-        nb=self.read()
+        nb = self.read()
 
-        input_parameters = {}
-        system_parameters = {}
-
+        self.input_parameters = {}
+        self.system_parameters = {}
+        
+        G = rdflib.Graph()
+        
         for cell in nb.cells:
-            if 'parameters' in cell.metadata.get('tags',[]):
-                for line in cell['source'].split("\n"):
-                    par=InputParameter.from_nbline(line)
-                    if par is not None:
-                        input_parameters[par.name]=par.as_dict()
-                        input_parameters[par.name]['value']=par.as_dict()['default_value']
-            
-            if 'system-parameters' in cell.metadata.get('tags',[]):
-                for line in cell['source'].split("\n"):
-                    par=InputParameter.from_nbline(line)
-                    if par is not None:
-                        system_parameters[par.name]=par.as_dict()
-            
-            if 'injected-parameters' in cell.metadata.get('tags',[]):
-                for line in cell['source'].split("\n"):
-                    par=InputParameter.from_nbline(line)
-                    if par is not None:
-                        input_parameters[par.name]['value']=par.as_dict()['default_value']
+            for tag, attr in [
+                    ('parameters', 'input_parameters'),
+                    ('system-parameters', 'system_parameters'),
+                    ('injected-parameters', 'input_parameters'),
+                    ]:
+                if tag in cell.metadata.get('tags', []):
+                    pars = self.extract_parameters_from_cell(cell, G)
+                    pars = {**getattr(self, attr), **pars}
+                    setattr(self, attr, pars)
+                                            
+        for n, p in self.input_parameters.items():
+            if p['extra_ttl'] is not None:
+                G.parse(data=p['extra_ttl'])
 
-        self.system_parameters = system_parameters
+        self.extra_ttl = G.serialize(format='turtle')
 
-        return input_parameters
+        return self.input_parameters
+
     
     def interpret_parameters(self,parameters):
-        expected_parameters=self.extract_parameters()
-        request_parameters=dict()
+        expected_parameters = self.extract_parameters()
+        request_parameters = dict()
 
-        unexpected_parameters=[]
+        unexpected_parameters = []
+        issues=[]
+
         for arg in parameters:
             if arg.startswith("_"): continue
 
             logger.info("request arg %s",parameters[arg])
             if arg in expected_parameters:
-                request_parameters[arg]=cast_parameter(parameters.get(arg),expected_parameters.get(arg))
-                logger.info("request arg %s provided as %s",parameters[arg],request_parameters[arg])
+                try:
+                    request_parameters[arg] = cast_parameter(parameters.get(arg),expected_parameters.get(arg))
+                    logger.info("request arg %s provided as %s",parameters[arg],request_parameters[arg])
+                except ValueError as e:
+                    issues.append(e.args[0])
             else:
                 unexpected_parameters.append(arg)
 
-        issues=[]
-
-        if len(unexpected_parameters)>0:
-            issues+=[f'found unexpected request parameters: {", ".join(unexpected_parameters)}, can be {", ".join(expected_parameters.keys())}']
+        if len(unexpected_parameters) > 0:
+            issues += [f'found unexpected request parameters: {", ".join(unexpected_parameters)}, can be {", ".join(expected_parameters.keys())}']
             
         return dict(
-                        issues=issues,
-                        request_parameters=request_parameters,
-                    )
+                    issues=issues,
+                    request_parameters=request_parameters,
+                )
 
     def update_summary(self, **d):
         if not hasattr(self, '_summary'):
@@ -262,7 +340,7 @@ class NotebookAdapter:
         self._summary.update(d)
         
         if state is not None:
-            self._summary['state'] = self._summary.get("state",[]) + [(time.time(), state)]
+            self._summary['state'] = self._summary.get("state", []) + [(time.time(), state)]
 
         fn = os.path.join(self.tmpdir, "summary.yaml")
         yaml.dump(self._summary, open(fn, "w"))
@@ -271,22 +349,19 @@ class NotebookAdapter:
 
     def execute(self, parameters, progress_bar = True, log_output = True, inplace=False):
         t0 = time.time()
-        if logstasher is not None:
-            logstasher.log(dict(origin="nb2workflow.execute", event="starting", parameters=parameters, workflow_name=notebook_short_name(self.notebook_fn), health=current_health()))
-
+        logstasher.log(dict(origin="nb2workflow.execute", event="starting", parameters=parameters, workflow_name=notebook_short_name(self.notebook_fn), health=current_health()))
 
         logger.info("starting job")
         exceptions = self._execute(parameters, progress_bar, log_output, inplace)
-
+            
         tspent = time.time() - t0
-        if logstasher is not None:
-            logstasher.log(dict(origin="nb2workflow.execute", 
-                                event="done", 
-                                parameters=parameters, 
-                                workflow_name=notebook_short_name(self.notebook_fn), 
-                                exceptions=list(map(workflows.serialize_workflow_exception, exceptions)),
-                                health=current_health(), 
-                                time_spent=tspent))
+        logstasher.log(dict(origin="nb2workflow.execute", 
+                            event="done", 
+                            parameters=parameters, 
+                            workflow_name=notebook_short_name(self.notebook_fn), 
+                            exceptions=list(map(workflows.serialize_workflow_exception, exceptions)),
+                            health=current_health(), 
+                            time_spent=tspent))
 
         return exceptions
 
@@ -297,7 +372,8 @@ class NotebookAdapter:
             logger.info("new tmpdir: %s", tmpdir)
 
             try:
-                output = subprocess.check_output(["git","clone",os.path.dirname(os.path.realpath(self.notebook_fn)), tmpdir])
+                output = subprocess.check_output(["git","clone", "--recurse-submodules", os.path.dirname(os.path.realpath(self.notebook_fn)), tmpdir])
+                # output = subprocess.check_output(["git","clone", "--depth", "1", "file://" + os.path.dirname(os.path.realpath(self.notebook_fn)), tmpdir])
                 logger.info("git clone output: %s", output)
             except Exception as e:
                 logger.warning("git clone failed: %s, will attempt copytree", e)
@@ -314,19 +390,6 @@ class NotebookAdapter:
 
         self.inject_output_gathering()
         exceptions = []
-
-        
-#        root = logging.getLogger()
-#        root.setLevel(logging.DEBUG)
-
-#        handler = logging.StreamHandler()
-#        handler.setLevel(logging.DEBUG)
-#        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-#        handler.setFormatter(formatter)
-#        root.addHandler(handler)
-
-#        root.info("towards excution")
-
 
         ntries = 10
         while ntries > 0:
@@ -385,7 +448,8 @@ class NotebookAdapter:
             if 'outputs' in cell.metadata.get('tags',[]):
                 for line in cell['source'].split("\n"):
                     p = parse_nbline(line)
-                    if p is None: continue
+                    if p is None:
+                        continue
                     outputs[p['name']] = p
 
 
@@ -402,9 +466,11 @@ import papermill as pm
 import scrapbook as sb
 import base64
 import json
+import hashlib
 import os
     
 from nb2workflow.nbadapter import denumpyfy
+from nb2workflow.json import CustomJSONEncoder
 
 """
         for output in outputs.keys():
@@ -415,10 +481,29 @@ try:
 except Exception as e:
     print("failed to glue {output}", {output})
     print("will glue jsonified")
-    sb.glue("{output}",json.dumps(denumpyfy({output})))
+    sb.glue("{output}",json.dumps(denumpyfy({output}), cls=CustomJSONEncoder))
 """.format(output=output)
 
-            output_gather_content+="\nisinstance({output},str) and os.path.exists({output}) and sb.glue(\"{output}_content\",base64.b64encode(open({output},'rb').read()).decode())".format(output=output)
+            output_gather_content += f"""
+if isinstance({output},str) and os.path.exists({output}):
+    variable_name = "{output}"
+    fn = {output}
+    content = open(fn ,'rb').read()    
+
+    if {self.limit_output_attachment_file} is None or len(content) < {self.limit_output_attachment_file}:
+        encoded = base64.b64encode(content).decode()
+        print("glueing file", fn)
+        sb.glue(variable_name + "_content", encoded)
+    else:
+        # TODO: make a customizable upload to different DL platforms; before that it should be enabled with caution    
+        os.makedirs("/tmp/nb2w-store", exist_ok=True)
+        url = "file:///tmp/nb2w-store/" + str(hashlib.md5(content).hexdigest())
+        print("storing file to URL", url)
+        with open(url.replace("file://", ""), "wb") as f:
+            f.write(content)
+
+        sb.glue(\"{output}_url\", url)
+"""
             output_gather_content+="\n".format(output=output)
 
         nb = self.read()
@@ -461,13 +546,29 @@ except Exception as e:
         return default
 
 
+    def remove_tmpdir(self):
+        if self._tmpdir is not None:
+            logger.info("removing tmpdir %s", self._tmpdir)
+            shutil.rmtree(self._tmpdir)
+        else:
+            logger.info("no dir to remove")
+
+
 def notebook_short_name(ipynb_fn):
     return os.path.basename(ipynb_fn).replace(".ipynb","")
 
-def find_notebooks(source):
+def find_notebooks(source, tests=False) -> dict[str, NotebookAdapter]:
+
+    base_filter = lambda fn: "output" not in fn and "preproc" not in fn
+
+    if tests:
+        filt = lambda fn: base_filter(fn) and "/test_" in fn
+    else:
+        filt = lambda fn: base_filter(fn) and "/test_" not in fn
 
     if os.path.isdir(source):
-        notebooks=[ fn for fn in glob.glob(source+"/*ipynb") if "output" not in fn and "preproc" not in fn ]
+        notebooks=[ fn for fn in glob.glob(source+"/*ipynb") if filt(fn) ]
+
         logger.debug("found notebooks: %s",notebooks)
 
         if len(notebooks)==0:
@@ -487,18 +588,27 @@ def find_notebooks(source):
 
     return notebook_adapters
 
-def nbinspect(nb_source, out=True):
+def nbinspect(nb_source, out=True, machine_readable=False):
     nbas = find_notebooks(nb_source)
 
-    class CustomEncoder(json.JSONEncoder):
-        def default(self, obj):
-            if isinstance(obj, type):
-                return str(obj)
-            return json.JSONEncoder.default(self, obj)
+    # class CustomEncoder(json.JSONEncoder):
+    #     def default(self, obj):
+    #         if isinstance(obj, type):
+    #             return str(obj)
+    #         return json.JSONEncoder.default(self, obj)
+
+    summary = []
 
     for n, nba in nbas.items():
-        print(json.dumps(nba.extract_parameters(), indent=4, sort_keys=True, cls=CustomEncoder))
+        summary.append({
+                "parameters": nba.extract_parameters(),
+                "outputs": nba.extract_output_declarations()
+            })
+        print(json.dumps(summary[-1], indent=4, sort_keys=True, cls=CustomJSONEncoder))
 
+    if machine_readable:
+        print("WORKFLOW-NB-SIGNATURE:", json.dumps(summary, cls=CustomJSONEncoder))
+    
 
 def nbreduce(nb_source, max_size_mb):
     cellsize_limit = None
@@ -565,7 +675,56 @@ def nbreduce(nb_source, max_size_mb):
             cellsize_limit = largest_cellsize
 
 
-def nbrun(nb_source, inp, inplace=False):
+def validate_oda_dispatcher(nba: NotebookAdapter, optional=True, machine_readable=False):
+    logger.info('validating with ODA dispatcher plugin')
+
+    try:
+        from dispatcher_plugin_nb2workflow.queries import NB2WProductQuery
+    except Exception as e:
+        logger.warning("unable to import dispatcher_plugin_nb2workflow.queries.NB2WProductQuery: %s", e)
+        if not optional:
+            logger.error("dispatcher validation is not optional!")
+            raise
+    else:
+        nbpq = NB2WProductQuery('testname', 
+                        'testproduct', 
+                        nba.extract_parameters(),
+                        nba.extract_output_declarations())
+
+        output = nba.extract_output()
+
+        logger.debug(json.dumps(output, indent=4))
+
+        class MockRes:
+            @staticmethod
+            def json():
+                return {
+                    'data': {
+                        'output': output
+                    }
+                }
+
+        logger.debug("parameters as interpreted by dispatcher: %s", json.dumps(json.loads(nbpq.get_parameters_list_as_json()), indent=4))
+
+        dispatcher_parameters = json.loads(nbpq.get_parameters_list_as_json())
+
+        for parameter in dispatcher_parameters:
+            logger.info("\033[32mODA dispatcher parameter \033[0m: %s", parameter)
+
+        prod_list = nbpq.build_product_list(instrument=None, res=MockRes, out_dir=None)
+
+        for prod in prod_list:
+            logger.info("\033[33mworkflow the output produces ODA product \033[0m: \033[31m%s\033[0m (%s) %s", prod.name, prod.type_key, prod)
+
+        if machine_readable:
+            print("WORKFLOW-DISPATCHER-SIGNATURE:", json.dumps([
+                        {"parameters": dispatcher_parameters,
+                         "outputs": [{'name': prod.name, 'type': prod.type_key, 'class_name': prod.__class__.__name__} for prod in prod_list]
+                        }]))
+        
+    
+
+def nbrun(nb_source, inp, inplace=False, optional_dispather=True, machine_readable=False):
 
     nbas = find_notebooks(nb_source)
 
@@ -573,6 +732,10 @@ def nbrun(nb_source, inp, inplace=False):
         nba = nbas[inp.pop('notebook')]
     elif len(nbas) == 1:
         nba = list(nbas.values())[0]
+    else:
+        RuntimeError()
+
+    print("inp", inp)
 
     r = nba.interpret_parameters(inp)
     
@@ -621,6 +784,8 @@ def nbrun(nb_source, inp, inplace=False):
     
     r['output_notebook_html'] = htmlfn
     r['output_notebook_html_content'] = base64.b64encode(open(htmlfn, "rb").read()).decode()
+
+    validate_oda_dispatcher(nba, optional=optional_dispather, machine_readable=machine_readable)
 
     return r
 
@@ -679,34 +844,22 @@ def main_inspect():
     parser = argparse.ArgumentParser(description='Inspect some notebooks') # run locally, remotely, semantically
     parser.add_argument('notebook', metavar='notebook', type=str)
     parser.add_argument('--debug', action="store_true")
+    parser.add_argument('--machine-readable', action="store_true")        
     
     args = parser.parse_args()
 
     setup_logging(args.debug)
 
-    nbinspect(args.notebook)
+    nbinspect(args.notebook, machine_readable=args.machine_readable)
 
-def setup_logging(debug=False):
-    handler = logging.StreamHandler()
-    handler.setLevel(logging.INFO)
-    root = logging.getLogger()
-    handler = logging.StreamHandler()
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    handler.setFormatter(formatter)
-    root.addHandler(handler)
-
-    if debug:
-        root.setLevel(logging.DEBUG)
-        handler.setLevel(logging.DEBUG)
-    else:
-        root.setLevel(logging.INFO)
-        handler.setLevel(logging.INFO)
 
 def main():
     parser = argparse.ArgumentParser(description='Run some notebooks') # run locally, remotely, semantically
     parser.add_argument('notebook', metavar='notebook', type=str)
     parser.add_argument('--debug', action="store_true")
     parser.add_argument('--inplace', action="store_true")
+    parser.add_argument('--mmoda-validation', action="store_true")        
+    parser.add_argument('--machine-readable', action="store_true")        
     
     parser.add_argument('inputs', nargs=argparse.REMAINDER)
 
@@ -720,8 +873,7 @@ def main():
         
     setup_logging(args.debug)
 
-
-    nbrun(args.notebook, inputs, inplace=args.inplace)
+    nbrun(args.notebook, inputs, inplace=args.inplace, optional_dispather=not args.mmoda_validation, machine_readable=args.machine_readable)
 
 
 if __name__ == "__main__":

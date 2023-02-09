@@ -6,13 +6,15 @@ if {'pytest', 'test', 'ptr'}.intersection(sys.argv):
     setup_requires.append('pytest-runner')
 
 setup(name='nb2workflow',
-      version = '1.3.7',
+      version = '1.3.34',
       description='convert notebook to workflow',
       author='Volodymyr Savchenko',
       author_email='contact@volodymyrsavchenko.com',
       license='GPLv3',
       packages=['nb2workflow'],
       zip_safe=False,
+
+      python_requires='>=3.9',
 
       entry_points={
           'console_scripts': [
@@ -21,6 +23,7 @@ setup(name='nb2workflow',
             'nb2workflow-version=nb2workflow:version',
             'nb2cwl=nb2workflow.cwl:main',
             'nb2rdf=nb2workflow.ontology:main',
+            'nb2deploy=nb2workflow.deploy:main',
             'nbrun=nb2workflow.nbadapter:main',
             'nbinspect=nb2workflow.nbadapter:main_inspect',
             'nbreduce=nb2workflow.nbadapter:main_reduce',
@@ -31,7 +34,7 @@ setup(name='nb2workflow',
         "service":[
             'flask',
             'pytest-flask',
-            'flask-caching', #'Flask-Caching',
+            'flask-caching', 
             'flask-cors',
             'flasgger',
             'python-consul',
@@ -40,6 +43,7 @@ setup(name='nb2workflow',
         "rdf":[
             'rdflib',
             'owlready2==0.11',
+            'oda-knowledge-base',
         ],
         "cwl":[
             "cwlgen",
@@ -52,7 +56,11 @@ setup(name='nb2workflow',
             'numpy',
             'astropy',
             'pandas',
+            'matplotlib'
         ],
+        "mmoda":[
+            'oda_api'
+        ]
       },
 
       tests_require=[
@@ -60,6 +68,7 @@ setup(name='nb2workflow',
         'pytest-xprocess',
         'matplotlib',
         'cwl-runner',
+        'psutil'
       ],
 
       install_requires=[
@@ -70,7 +79,9 @@ setup(name='nb2workflow',
         'diskcache',
         'requests',
         'pyyaml',
-        'nteract-scrapbook', 
+        'scrapbook', 
+        'werkzeug==2.0.3',
+        'sentry_sdk'
       ],
 
 

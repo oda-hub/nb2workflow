@@ -1,5 +1,14 @@
 from __future__ import print_function
-from werkzeug.routing import RequestRedirect, MethodNotAllowed, NotFound
+import pickle
+import re
+
+from werkzeug.routing import RequestRedirect
+
+try:
+    from werkzeug.exceptions import MethodNotAllowed, NotFound
+except ImportError:
+    from werkzeug.routing import MethodNotAllowed, NotFound
+
 import queue
 from nb2workflow import ontology, publish, schedule
 from nb2workflow.nbadapter import NotebookAdapter, find_notebooks, PapermillWorkflowIncomplete
@@ -22,14 +31,13 @@ from io import BytesIO
 
 
 from flask import Flask, make_response, jsonify, request, url_for, send_file, Response
-from flask.json import JSONEncoder
 from flask_caching import Cache
 from flask_cors import CORS
 
-from flasgger import LazyJSONEncoder, LazyString, Swagger, swag_from
-
+from flasgger import LazyString, Swagger, swag_from
 
 from nb2workflow.workflows import serialize_workflow_exception
+from nb2workflow.json import CustomJSONEncoder
 
 import threading
 
@@ -60,19 +68,6 @@ class ReverseProxied(object):
         return self.app(environ, start_response)
 
 
-class CustomJSONEncoder(LazyJSONEncoder):
-    def default(self, obj, *args, **kwargs):
-        try:
-            if isinstance(obj, type):
-                return dict(type_object=repr(obj))
-            iterable = iter(obj)
-        except TypeError:
-            pass
-        else:
-            return list(iterable)
-        return JSONEncoder.default(self, obj)
-
-
 cache = Cache(config={'CACHE_TYPE': 'simple'})
 
 
@@ -98,7 +93,7 @@ def create_app():
     swagger = Swagger(app, template=template)
     app.wsgi_app = ReverseProxied(app.wsgi_app)
     app.json_encoder = CustomJSONEncoder
-    cache.init_app(app, config={'CACHE_TYPE': 'simple'})
+    cache.init_app(app, config={'CACHE_TYPE': 'SimpleCache'})
 
 
 #    CORS(app)
@@ -120,12 +115,6 @@ def after_request(response):
                          'GET,PUT,POST,DELETE,OPTIONS')
     return response
 
-
-def make_key():
-    """Make a key that includes GET parameters."""
-    return request.full_path
-
-
 class AsyncWorker(threading.Thread):
     def __init__(self, worker_id):
         self.worker_id = worker_id
@@ -133,25 +122,32 @@ class AsyncWorker(threading.Thread):
 
     def run(self):
         while True:
-            logger.info("worker_id %s", self.worker_id)
-            async_workflow = async_queue.get(block=True)
-
-            async_workflow.run()
-
+            self.run_one()
             time.sleep(5)
 
+    def run_one(self):
+        logger.info("worker_id %s", self.worker_id)
+        async_workflow = async_queue.get(block=True)
+        async_workflow.run()
 
 class AsyncWorkflow:
-    def __init__(self, key, target, params):
+    def __init__(self, key, target, params, callback=None):
         self.key = key
         self.target = target
         self.params = params
+        self.callback = callback
+
+        logger.info("%s initializing callback %s", self, callback)
 
     def run(self):
         try:
             self._run()
         except Exception as e:
-            print("failed", e)
+            logger.error("run failed unexplicably: %s", repr(e))
+            app.async_workflows[self.key] = dict(
+                output={}, 
+                exceptions=[serialize_workflow_exception(e)]
+            )
 
     def note(self, *args, **kwargs):
         if not hasattr(self, 'notes'):
@@ -188,7 +184,8 @@ class AsyncWorkflow:
             self.blocked_until = time.time() + 10
 
             async_queue.put(self)
-            app.async_workflows[self.key] = 'submitted'
+            app.async_workflows[self.key] = 'submitted'            
+
             return
 
         logger.info("exceptions: %s", repr(exceptions))
@@ -217,17 +214,46 @@ class AsyncWorkflow:
                 nretry -= 1
                 time.sleep(1)
 
-        logger.error("output: %s", output)
+        logger.debug("output: %s", output)
 
         logger.info("updating key %s", self.key)
         app.async_workflows[self.key] = dict(output=output, exceptions=list(
             map(serialize_workflow_exception, exceptions)), jobdir=nba.tmpdir)
+
+        self.perform_callback()
+
+    def perform_callback(self):
+        if self.callback is None:
+            logger.info('no callback registered, skipping')
+            return
+
+        logger.info('will perform callback: %s', self.callback)
+
+
+        result = app.async_workflows[self.key]
+
+        callback_payload = dict(
+            action='done'
+        )
+        
+        if re.match('^file://', self.callback):
+            with open(self.callback.replace('file://', ''), "w") as f:
+                 json.dump(callback_payload, f)
+            logger.info('stored callback in a file %s', self.callback)
+
+        elif re.match('^https?://', self.callback):
+            r = requests.get(self.callback, params=callback_payload)
+            logger.info('callback %s returns %s : %s', self.callback, r, r.text)
+        
+        else:
+            raise NotImplementedError
 
 
 def workflow(target, background=False, async_request=False):
     issues = []
 
     async_request = request.args.get('_async_request', async_request)
+    async_request_callback = request.args.get('_async_request_callback', None)
 
     logger.debug("target %s", target)
 
@@ -238,6 +264,7 @@ def workflow(target, background=False, async_request=False):
     nba = NotebookAdapter(template_nba.notebook_fn)
 
     if nba is None:
+        interpreted_parameters = None
         issues.append("target not known: %s; available targets: %s" %
                       (target, app.notebook_adapters.keys()))
     else:
@@ -260,7 +287,7 @@ def workflow(target, background=False, async_request=False):
 
         if value is None:
             async_task = AsyncWorkflow(
-                key=key, target=target, params=interpreted_parameters)
+                key=key, target=target, params=interpreted_parameters, callback=async_request_callback)
 
             async_queue.put(async_task)
 
@@ -398,14 +425,20 @@ def setup_routes(app):
                 logger.info("NOT caching response %s", rv)
                 return False
             else:
-                logger.info("caching response %s", rv)
+                logger.info("should cache response %s", rv)                
+                try:
+                    pickle.dumps(rv)
+                except pickle.PicklingError as e:
+                    logger.info("the response can not be pickled and cached %s", e)
+                    return False
+
                 return True
 
         cache_timeout = nba.get_system_parameter_value('cache_timeout', 0)
         try:
             app.route('/api/v1.0/get/'+target, methods=['GET'], endpoint=endpoint)(
                 swag_from(target_specs)(
-                    cache.cached(timeout=cache_timeout, key_prefix=make_key, response_filter=response_filter, query_string=True)(
+                    cache.cached(timeout=cache_timeout, response_filter=response_filter, query_string=True)(
                         funcg(target)
                     )))
         except AssertionError as e:
@@ -432,10 +465,10 @@ def setup_routes(app):
 def workflow_options():
     return jsonify(dict([
         (
-                        target,
-                        dict(output=nba.extract_output_declarations(),
-                             parameters=nba.extract_parameters()),
-                        )
+            target,
+            dict(output=nba.extract_output_declarations(),
+                    parameters=nba.extract_parameters()),
+            )
         for target, nba in app.notebook_adapters.items()
     ]))
 
@@ -562,6 +595,7 @@ def test():
     results = {}
     expecting = []
 
+    #TODO: use generalized testing
     for template_nba in app.notebook_adapters.values():
         if template_nba.name.startswith('test_'):
             key = template_nba.name
@@ -610,7 +644,12 @@ def root():
     issues = []
 
     if len(issues) == 0:
-        return "all is ok!"
+        return {
+                    "message": "all is ok!",
+                    "versiom": os.getenv("ODA_WORKFLOW_VERSION"),
+                    "last_author": os.getenv("ODA_WORKFLOW_LAST_AUTHOR"),
+                    "last_changed": os.getenv("ODA_WORKFLOW_LAST_CHANGED")                    
+            }
     else:
         return make_response(jsonify(issues=issues), 500)
 
