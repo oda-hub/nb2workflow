@@ -33,7 +33,7 @@ def test_nbadapter_repo_annotations(test_notebook_repo):
     assert (oda["emin_keV"], subClassOf, oda["keV"]) in G
 
     assert (oda["1000integer_15integer_emax_keV_lower_limit_upper_limit"], subClassOf, oda["keV"]) in G
-    assert (oda["1000integer_15integer_emax_keV_lower_limit_upper_limit"], oda["lower_limit"], rdflib.Literal(15)) in G
+    #assert (oda["1000integer_15integer_emax_keV_lower_limit_upper_limit"], oda["lower_limit"], rdflib.Literal(15)) in G
 
     
 

@@ -11,8 +11,9 @@ oda = rdflib.Namespace(oda_ontology_prefix)
 xsd = rdflib.Namespace("http://www.w3.org/2001/XMLSchema#")
 rdfs = rdflib.Namespace("http://www.w3.org/2000/01/rdf-schema#")
 rdf = rdflib.Namespace("http://www.w3.org/1999/02/22-rdf-syntax-ns#")                        
+owl = rdflib.Namespace("http://www.w3.org/2002/07/owl#")
 
-rdf_prefixes = [oda, xsd, rdf, rdfs]
+rdf_prefixes = [oda, xsd, rdf, rdfs, owl]
 
 a = rdf['type']
 subClassOf = rdfs['subClassOf']
@@ -73,7 +74,8 @@ def parse_ttl(combined_ttl, param_uri, deduce_type=True):
     logger.info("input combined turtle: %s", combined_ttl)
 
     G = rdflib.Graph()
-    G.bind("oda", rdflib.Namespace(oda_ontology_prefix))        
+    G.bind("oda", rdflib.Namespace(oda_ontology_prefix))
+    G.bind("owl", owl)
 
     G.parse(data=combined_ttl, 
             format="turtle")
@@ -174,7 +176,13 @@ def construct_common_root_class(G, param_uri, predicate_objects):
     for p, o in sorted(predicate_objects):
         G.remove((param_uri, p, o))
         if p == a:
-            p = subClassOf
-        G.add((merged_type, p, o))
+            G.add((merged_type, subClassOf, o))
+        else:
+            bn = rdflib.BNode()
+            G.add((merged_type, subClassOf, bn))
+            G.add((bn, a, owl['Restriction']))
+            G.add((bn, owl['onProperty'], p))
+            G.add((bn, owl['hasValue'], o))
+ 
 
     return owl_type
