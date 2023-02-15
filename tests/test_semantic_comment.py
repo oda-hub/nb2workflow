@@ -35,24 +35,38 @@ def test_semantic_comments():
 
     r = understand_comment_references("oda:Integer; oda:upper_limit 1")
     assert normalize(r['owl_type']) == 'http://odahub.io/ontology#1integer_Integer_upper_limit'
-    assert normalize(r['extra_ttl']) == '@prefix oda: <http://odahub.io/ontology#> . @prefix xsd: <http://www.w3.org/2001/XMLSchema#> . oda:1integer_Integer_upper_limit a oda:Integer ; oda:upper_limit 1 .'
+    assert normalize(r['extra_ttl']) == normalize('''@prefix oda: <http://odahub.io/ontology#> . 
+                                           @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> . 
+                                           @prefix xsd: <http://www.w3.org/2001/XMLSchema#> . 
+                                           
+                                            oda:1integer_Integer_upper_limit oda:upper_limit 1 ;
+                                                                             rdfs:subClassOf oda:Integer .
+                                        ''')
 
     r = understand_comment_references("oda:energyMin, oda:keV")
     assert r['owl_type'] == "http://odahub.io/ontology#energyMin_keV"
-    assert normalize(r['extra_ttl']) == "@prefix oda: <http://odahub.io/ontology#> . oda:energyMin_keV a oda:energyMin, oda:keV ."
+    assert normalize(r['extra_ttl']) == "@prefix oda: <http://odahub.io/ontology#> . @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> . oda:energyMin_keV rdfs:subClassOf oda:energyMin, oda:keV ."
     
     r = understand_comment_references("oda:energyMin; oda:lower_limit 3;  oda:upper_limit 30")
     assert r['owl_type'] == "http://odahub.io/ontology#30integer_3integer_energyMin_lower_limit_upper_limit"
-    assert normalize(r['extra_ttl']) == "@prefix oda: <http://odahub.io/ontology#> . @prefix xsd: <http://www.w3.org/2001/XMLSchema#> . oda:30integer_3integer_energyMin_lower_limit_upper_limit a oda:energyMin ; oda:lower_limit 3 ; oda:upper_limit 30 ."
+    assert normalize(r['extra_ttl']) == "@prefix oda: <http://odahub.io/ontology#> . @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> . @prefix xsd: <http://www.w3.org/2001/XMLSchema#> . oda:30integer_3integer_energyMin_lower_limit_upper_limit oda:lower_limit 3 ; oda:upper_limit 30 ; rdfs:subClassOf oda:energyMin ."
 
     r = understand_comment_references("oda:energyMin; oda:limits 3, 30")
     assert r['owl_type'] == "http://odahub.io/ontology#30integer_3integer_energyMin_lower_limit_upper_limit"
-    assert normalize(r['extra_ttl']) == "@prefix oda: <http://odahub.io/ontology#> . @prefix xsd: <http://www.w3.org/2001/XMLSchema#> . oda:30integer_3integer_energyMin_lower_limit_upper_limit a oda:energyMin ; oda:lower_limit 3 ; oda:upper_limit 30 ."
+    assert normalize(r['extra_ttl']) == "@prefix oda: <http://odahub.io/ontology#> . @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> . @prefix xsd: <http://www.w3.org/2001/XMLSchema#> . oda:30integer_3integer_energyMin_lower_limit_upper_limit oda:lower_limit 3 ; oda:upper_limit 30 ; rdfs:subClassOf oda:energyMin ."
     
     r = parse_nbline('# oda:version "v1"', nb_uri)
     assert r['owl_type'] == str(nb_uri)
     assert normalize(r['extra_ttl']) == '@prefix oda: <http://odahub.io/ontology#> . <http://mynb> oda:version "v1" .'
 
+    r = parse_nbline('# oda:reference https://doi.org/10.1051/0004-6361/202037850', nb_uri)        
+    assert r['owl_type'] == str(nb_uri)
+    assert normalize(r['extra_ttl']) == '@prefix oda: <http://odahub.io/ontology#> . <http://mynb> oda:reference <https://doi.org/10.1051/0004-6361/202037850> .'
+
+    r = parse_nbline('# oda:relevantForObject oda:Crab', nb_uri)
+    assert r['owl_type'] == str(nb_uri)
+    assert normalize(r['extra_ttl']) == '@prefix oda: <http://odahub.io/ontology#> . <http://mynb> oda:relevantForObject oda:Crab .'
+    
 
 def test_semantic_nbline():
     from nb2workflow.nbadapter import parse_nbline
