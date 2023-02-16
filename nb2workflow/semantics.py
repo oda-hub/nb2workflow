@@ -149,6 +149,13 @@ def construct_common_root_class(G, param_uri, predicate_objects):
            individual instances of apples are things as such, and we can only point to them and describe their classes and properties
               we can point to individual parameters used in particular workflows 
                  they are instances, and they derive their characteristics from their classes
+
+    ===
+
+    so we treat parameter types as classes, and parameters as used in the workflows as instances
+    to simplify expression in the notebook parameter annotation, we use annotation properties like oda:upper_limit. 
+        these are later transformed by the consumer (e.g. oda dispatcher) into owl restrictions
+
     """
 
     factors = []
@@ -178,11 +185,7 @@ def construct_common_root_class(G, param_uri, predicate_objects):
         if p == a:
             G.add((merged_type, subClassOf, o))
         else:
-            bn = rdflib.BNode()
-            G.add((merged_type, subClassOf, bn))
-            G.add((bn, a, owl['Restriction']))
-            G.add((bn, owl['onProperty'], p))
-            G.add((bn, owl['hasValue'], o))
+            G.add((merged_type, p, o))
  
 
     return owl_type

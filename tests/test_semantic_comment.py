@@ -47,12 +47,8 @@ def test_semantic_comments():
            @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> . 
            @prefix xsd: <http://www.w3.org/2001/XMLSchema#> . 
             
-           oda:1integer_Integer_upper_limit rdfs:subClassOf 
-                                                [ a owl:Restriction ;
-                                                  owl:hasValue 1 ;
-                                                  owl:onProperty oda:upper_limit
-                                                ], 
-                                                oda:Integer .
+           oda:1integer_Integer_upper_limit rdfs:subClassOf oda:Integer;
+                                                oda:upper_limit 1 .
         ''')
 
  
@@ -72,14 +68,9 @@ def test_semantic_comments():
             @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> . 
             @prefix xsd: <http://www.w3.org/2001/XMLSchema#> . 
             
-            oda:30integer_3integer_energyMin_lower_limit_upper_limit rdfs:subClassOf 
-                [ a owl:Restriction ; 
-                  owl:hasValue 3 ; 
-                  owl:onProperty oda:lower_limit ], 
-                [ a owl:Restriction ; 
-                  owl:hasValue 30 ; 
-                  owl:onProperty oda:upper_limit ], 
-                oda:energyMin .
+            oda:30integer_3integer_energyMin_lower_limit_upper_limit rdfs:subClassOf oda:energyMin; 
+                  oda:lower_limit 3 ; 
+                  oda:upper_limit 30 .
             """)
 
     r = understand_comment_references("oda:energyMin; oda:limits 3, 30")
@@ -91,13 +82,9 @@ def test_semantic_comments():
             @prefix xsd: <http://www.w3.org/2001/XMLSchema#> . 
             
             oda:30integer_3integer_energyMin_lower_limit_upper_limit rdfs:subClassOf 
-                [ a owl:Restriction ; 
-                  owl:hasValue 30 ; 
-                  owl:onProperty oda:upper_limit ], 
-                [ a owl:Restriction ; 
-                  owl:hasValue 3 ; 
-                  owl:onProperty oda:lower_limit ], 
-                oda:energyMin .
+                  oda:energyMin; 
+                  oda:lower_limit 3 ; 
+                  oda:upper_limit 30 .
             """)
     
     r = parse_nbline('# oda:version "v1"', nb_uri)
@@ -134,10 +121,8 @@ def test_semantic_nbline():
         @prefix xsd: <http://www.w3.org/2001/XMLSchema#> . 
         @prefix owl: <http://www.w3.org/2002/07/owl#> . 
         
-        oda:2integer_int_upper_limit rdfs:subClassOf xsd:int, 
-                                     [ a owl:Restriction ; 
-                                       owl:hasValue 2 ; 
-                                       owl:onProperty oda:upper_limit ] .
+        oda:2integer_int_upper_limit rdfs:subClassOf xsd:int;
+                                     oda:upper_limit 2 .
     """)
 
     r = parse_nbline("result=obj_results # http://odahub.io/ontology#LightCurveList") 
