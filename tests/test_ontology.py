@@ -26,13 +26,13 @@ def test_nbadapter_repo_annotations(test_notebook_repo):
 
     logger.info(G.serialize(format="turtle"))
     
-    # note that here, oda:keV is understood as "something that is expressed in keV"
-    # this is different from the unit:keV .
+    # note that here, oda:par_keV is understood as "some parameter that is expressed in keV"
+    # this is different from oda:keV which is a subClass of Unit.
 
     assert (oda["emin_keV"], subClassOf, oda["emin"]) in G
     assert (oda["emin_keV"], subClassOf, oda["keV"]) in G
 
-    assert (oda["1000integer_15integer_emax_keV_lower_limit_upper_limit"], subClassOf, oda["keV"]) in G
+    assert (oda["1000integer_15integer_emax_keV_lower_limit_upper_limit"], subClassOf, oda["par_keV"]) in G
     assert (oda["1000integer_15integer_emax_keV_lower_limit_upper_limit"], oda["lower_limit"], rdflib.Literal(15)) in G
 
     

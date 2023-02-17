@@ -11,9 +11,8 @@ oda = rdflib.Namespace(oda_ontology_prefix)
 xsd = rdflib.Namespace("http://www.w3.org/2001/XMLSchema#")
 rdfs = rdflib.Namespace("http://www.w3.org/2000/01/rdf-schema#")
 rdf = rdflib.Namespace("http://www.w3.org/1999/02/22-rdf-syntax-ns#")                        
-owl = rdflib.Namespace("http://www.w3.org/2002/07/owl#")
 
-rdf_prefixes = [oda, xsd, rdf, rdfs, owl]
+rdf_prefixes = [oda, xsd, rdf, rdfs]
 
 a = rdf['type']
 subClassOf = rdfs['subClassOf']
@@ -75,8 +74,7 @@ def parse_ttl(combined_ttl, param_uri, deduce_type=True):
 
     G = rdflib.Graph()
     G.bind("oda", rdflib.Namespace(oda_ontology_prefix))
-    G.bind("owl", owl)
-
+    
     G.parse(data=combined_ttl, 
             format="turtle")
     logger.info("interpreted turtle: %s", G.serialize(format="turtle"))
