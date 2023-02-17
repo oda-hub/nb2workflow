@@ -26,8 +26,8 @@ def test_nbadapter_repo_annotations(test_notebook_repo):
 
     logger.info(G.serialize(format="turtle"))
     
-    # note that here, oda:par_keV is understood as "some parameter that is expressed in keV"
-    # this is different from oda:keV which is a subClass of Unit.
+    # note that here, oda:keV is understood as "some parameter that is expressed in keV"
+    # this is different from unit:keV which is a subClass of Unit.
 
     assert (oda["emin_keV"], subClassOf, oda["emin"]) in G
     assert (oda["emin_keV"], subClassOf, oda["keV"]) in G
