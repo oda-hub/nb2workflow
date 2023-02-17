@@ -51,6 +51,16 @@ def test_semantic_comments():
                                                 oda:upper_limit 1 .
         ''')
 
+    r = understand_comment_references("oda:energyMin; oda:unit unit:keV")
+    assert r['owl_type'] == "http://odahub.io/ontology#energyMin_keV_unit"
+    assert normalize(r['extra_ttl']) == normalize("""
+            @prefix oda: <http://odahub.io/ontology#> . 
+            @prefix unit: <http://odahub.io/ontology/unit#> . 
+            @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> . 
+            
+            oda:energyMin_keV_unit rdfs:subClassOf oda:energyMin;
+                              oda:unit unit:keV .
+            """)
  
     r = understand_comment_references("oda:energyMin, oda:keV")
     assert r['owl_type'] == "http://odahub.io/ontology#energyMin_keV"

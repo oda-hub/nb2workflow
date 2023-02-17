@@ -5,14 +5,20 @@ import rdflib
 
 logger = logging.getLogger(__name__)
 
-oda_ontology_prefix = "http://odahub.io/ontology#"    
+oda_ontology_prefix = "http://odahub.io/ontology#"
 
 oda = rdflib.Namespace(oda_ontology_prefix)
+unit = rdflib.Namespace(oda_ontology_prefix.rstrip("#") + "/unit#")
+
 xsd = rdflib.Namespace("http://www.w3.org/2001/XMLSchema#")
 rdfs = rdflib.Namespace("http://www.w3.org/2000/01/rdf-schema#")
 rdf = rdflib.Namespace("http://www.w3.org/1999/02/22-rdf-syntax-ns#")                        
 
-rdf_prefixes = [oda, xsd, rdf, rdfs]
+rdf_prefixes = {'oda': oda, 
+                'xsd': xsd, 
+                'rdf': rdf, 
+                'rdfs': rdfs, 
+                'unit': unit}
 
 a = rdf['type']
 subClassOf = rdfs['subClassOf']
@@ -40,17 +46,19 @@ def understand_comment_references(comment, base_uri=None, fallback_type=None) ->
     parse_failures = []
 
     variations = [
-        f"@prefix oda: <{oda_ontology_prefix}> . {base_uri.n3()} a {comment} .",
-        f"@prefix oda: <{oda_ontology_prefix}> . {base_uri.n3()} {comment} .",
+        f"{base_uri.n3()} a {comment} .",
+        f"{base_uri.n3()} {comment} .",
+        # "{base_uri.n3()} rdfs:subClassOf {comment} .",
     ]
 
     if fallback_type is not None:
-        variations.append(f"@prefix oda: <{oda_ontology_prefix}> . {base_uri.n3()} a <{fallback_type}>; {comment} .")
+        variations.append(f"{base_uri.n3()} a <{fallback_type}>; {comment} .")
 
+    prefixes_in_string = "\n".join([f"@prefix {p}: <{n}> ." for p, n in rdf_prefixes.items()])
     
     for variation in variations:
-        try:
-            parsed = parse_ttl(variation, base_uri, deduce_type)
+        try:            
+            parsed = parse_ttl(prefixes_in_string + "\n"*3 + variation, base_uri, deduce_type)
             logger.info("this variation WAS parsed: %s to %s", variation, parsed)
         except (rdflib.plugins.parsers.notation3.BadSyntax, NotImplementedError) as e:
             logger.info("this variation could not be parsed: %s due to %s", variation, e)
@@ -73,10 +81,12 @@ def parse_ttl(combined_ttl, param_uri, deduce_type=True):
     logger.info("input combined turtle: %s", combined_ttl)
 
     G = rdflib.Graph()
-    G.bind("oda", rdflib.Namespace(oda_ontology_prefix))
+    G.bind("oda", oda)
+    G.bind("unit", unit)
     
     G.parse(data=combined_ttl, 
             format="turtle")
+    
     logger.info("interpreted turtle: %s", G.serialize(format="turtle"))
 
     limits_inference(G, param_uri)    
@@ -162,7 +172,7 @@ def construct_common_root_class(G, param_uri, predicate_objects):
         logger.info("p, o pair in in merge type: %s %s", p, o)
         for t in [p, o]:
             t = t.n3()
-            for common_factor in [a] + rdf_prefixes:
+            for common_factor in [a] + list(rdf_prefixes.values()):
                 t = t.replace(common_factor, "")
 
             t = re.sub("[^a-zA-Z0-9_]", "", t)
