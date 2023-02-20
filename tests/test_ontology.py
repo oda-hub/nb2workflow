@@ -1,15 +1,12 @@
-import os
 import rdflib
 import logging
-import pytest
 
-a = rdflib.URIRef('http://www.w3.org/1999/02/22-rdf-syntax-ns#type')
 oda_ontology_prefix = "http://odahub.io/ontology#"    
 oda = rdflib.Namespace(oda_ontology_prefix)
+rdfs = rdflib.Namespace("http://www.w3.org/2000/01/rdf-schema#")
 
-# test_notebook_repo=os.environ.get('TEST_NOTEBOOK_REPO')
+subClassOf = rdfs['subClassOf']
 
-#logger=logging.getLogger("nb2workflow")
 
 FORMAT = '%(asctime)-15s %(message)s'
 logging.basicConfig(format=FORMAT)
@@ -29,10 +26,13 @@ def test_nbadapter_repo_annotations(test_notebook_repo):
 
     logger.info(G.serialize(format="turtle"))
     
-    assert (oda["emin_keV"], a, oda["emin"]) in G
-    assert (oda["emin_keV"], a, oda["keV"]) in G
+    # note that here, oda:keV is understood as "some parameter that is expressed in keV"
+    # this is different from unit:keV which is a subClass of Unit.
 
-    assert (oda["1000integer_15integer_emax_keV_lower_limit_upper_limit"], a, oda["keV"]) in G
+    assert (oda["emin_keV"], subClassOf, oda["emin"]) in G
+    assert (oda["emin_keV"], subClassOf, oda["keV"]) in G
+
+    assert (oda["1000integer_15integer_emax_keV_lower_limit_upper_limit"], subClassOf, oda["keV"]) in G
     assert (oda["1000integer_15integer_emax_keV_lower_limit_upper_limit"], oda["lower_limit"], rdflib.Literal(15)) in G
 
     
