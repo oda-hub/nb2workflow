@@ -4,7 +4,7 @@ import os
 import sys
 import glob
 import shutil
-from typing import Optional
+from typing import Optional, Dict
 import uuid
 import yaml 
 import re
@@ -557,7 +557,7 @@ if isinstance({output},str) and os.path.exists({output}):
 def notebook_short_name(ipynb_fn):
     return os.path.basename(ipynb_fn).replace(".ipynb","")
 
-def find_notebooks(source, tests=False) -> dict[str, NotebookAdapter]:
+def find_notebooks(source, tests=False) -> Dict[str, NotebookAdapter]:
 
     base_filter = lambda fn: "output" not in fn and "preproc" not in fn
 
