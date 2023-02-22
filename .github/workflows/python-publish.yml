@@ -69,7 +69,7 @@ jobs:
         git config --global user.name "ODA Release Bot"
         bump2version patch --verbose --commit --tag
         bump2version release --verbose --commit --tag
-        git push
+        git push --force
 
     - name: Build package
       run: python -m build
