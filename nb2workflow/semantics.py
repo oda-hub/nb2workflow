@@ -39,6 +39,7 @@ def understand_comment_references(comment, base_uri=None, fallback_type=None) ->
 
     # this allows to use simplified syntax in some cases, e.g. when just a url alone is provided to indicate type
     comment = re.sub(rf"\b(http.*?)(?:\s|$)", r"<\1>", comment)
+    comment = re.sub(rf"([0-9])\.( |$)", r"\1.0\2", comment)
 
     logger.debug('preprocessed comment: "%s"', comment)
             
@@ -48,6 +49,8 @@ def understand_comment_references(comment, base_uri=None, fallback_type=None) ->
     variations = [
         f"{base_uri.n3()} a {comment} .",
         f"{base_uri.n3()} {comment} .",
+        f"{base_uri.n3()} a {comment}",
+        f"{base_uri.n3()} {comment}",
         # "{base_uri.n3()} rdfs:subClassOf {comment} .",
     ]
 
@@ -60,7 +63,7 @@ def understand_comment_references(comment, base_uri=None, fallback_type=None) ->
         try:            
             parsed = parse_ttl(prefixes_in_string + "\n"*3 + variation, base_uri, deduce_type)
             logger.info("this variation WAS parsed: %s to %s", variation, parsed)
-        except (rdflib.plugins.parsers.notation3.BadSyntax, NotImplementedError) as e:
+        except (rdflib.plugins.parsers.notation3.BadSyntax, NotImplementedError, IndexError) as e:
             logger.info("this variation could not be parsed: %s due to %s", variation, e)
             parse_failures.append([variation, e])
 
