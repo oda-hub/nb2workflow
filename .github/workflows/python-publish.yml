@@ -69,7 +69,8 @@ jobs:
         git config --global user.name "ODA Release Bot"
         bump2version patch --verbose --commit --tag
         bump2version release --verbose --commit --tag
-        git push --force
+
+    - uses: stefanzweifel/git-auto-commit-action@v4
 
     - name: Build package
       run: python -m build
