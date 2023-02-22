@@ -1,7 +1,10 @@
+import pytest
+
 import rdflib
 import rdflib.compare
 
-# normalize = lambda x: re.sub(r"[ \n]+", " ", x).strip()
+from nb2workflow.semantics import understand_comment_references
+from nb2workflow.nbadapter import parse_nbline
 
 
 def normalize(x):
@@ -11,8 +14,6 @@ def normalize(x):
 
 
 def test_semantic_comments():
-    from nb2workflow.semantics import understand_comment_references
-    from nb2workflow.nbadapter import parse_nbline
 
     nb_uri = rdflib.URIRef("http://mynb")    
 
@@ -39,17 +40,7 @@ def test_semantic_comments():
     assert r['owl_type'] is not None
     assert r['extra_ttl'] is not None
 
-    r = understand_comment_references("oda:Integer; oda:upper_limit 1")
-    assert r['owl_type'] == 'http://odahub.io/ontology#1integer_Integer_upper_limit'
-    assert normalize(r['extra_ttl']) == normalize(
-        '''@prefix oda: <http://odahub.io/ontology#> .
-           @prefix owl: <http://www.w3.org/2002/07/owl#> . 
-           @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> . 
-           @prefix xsd: <http://www.w3.org/2001/XMLSchema#> . 
-            
-           oda:1integer_Integer_upper_limit rdfs:subClassOf oda:Integer;
-                                                oda:upper_limit 1 .
-        ''')
+
 
     r = understand_comment_references("oda:energyMin; oda:unit unit:keV")
     assert r['owl_type'] == "http://odahub.io/ontology#energyMin_keV_unit"
@@ -110,6 +101,26 @@ def test_semantic_comments():
     assert normalize(r['extra_ttl']) == normalize('@prefix oda: <http://odahub.io/ontology#> . <http://mynb> oda:relevantForObject oda:Crab .')
     
 
+@pytest.mark.parametrize("comment, expected_owl_type, expected_value", [
+    ("http://odahub.io/ontology#TimeIntervalSeconds ; oda:upper_limit 20.", "200decimal_TimeIntervalSeconds_upper_limit", "20.0"),
+    ("http://odahub.io/ontology#TimeIntervalSeconds ; oda:upper_limit 20 .", "20integer_TimeIntervalSeconds_upper_limit", "20"),
+    ("http://odahub.io/ontology#TimeIntervalSeconds ; oda:upper_limit 20", "20integer_TimeIntervalSeconds_upper_limit", "20"),
+    ("http://odahub.io/ontology#TimeIntervalSeconds ; oda:upper_limit 20.0", "200decimal_TimeIntervalSeconds_upper_limit", "20.0"),
+])
+def test_single_ul(comment, expected_owl_type, expected_value):
+    r = understand_comment_references(comment)
+    assert r['owl_type'] == "http://odahub.io/ontology#" + expected_owl_type
+    assert normalize(r['extra_ttl']) == normalize(
+       f'''@prefix oda: <http://odahub.io/ontology#> .
+           @prefix owl: <http://www.w3.org/2002/07/owl#> . 
+           @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> . 
+           @prefix xsd: <http://www.w3.org/2001/XMLSchema#> . 
+            
+           oda:{expected_owl_type} rdfs:subClassOf oda:TimeIntervalSeconds;
+                                   oda:upper_limit {expected_value} .
+            ''')
+
+    
 def test_semantic_nbline():
     from nb2workflow.nbadapter import parse_nbline
 
