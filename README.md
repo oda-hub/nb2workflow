@@ -1,4 +1,4 @@
-[![Codacy Badge](https://api.codacy.com/project/badge/Grade/c93b37d1f9874bbc8d4ec83cbf065313)](https://app.codacy.com/app/vladimir.savchenko/nb2workflow?utm_source=github.com&utm_medium=referral&utm_content=volodymyrss/nb2workflow&utm_campaign=Badge_Grade_Dashboard)
+[![PyPI version](https://badge.fury.io/py/nb2workflow.svg)](https://badge.fury.io/py/nb2workflow)
 [![codebeat badge](https://codebeat.co/badges/79285797-5d5b-4770-87dd-35e5dad68729)](https://codebeat.co/projects/github-com-volodymyrss-nb2workflow-master)
 [![Python package](https://github.com/volodymyrss/nb2workflow/actions/workflows/python-package.yml/badge.svg)](https://github.com/volodymyrss/nb2workflow/actions/workflows/python-package.yml)
 [![codecov](https://codecov.io/gh/volodymyrss/nb2workflow/branch/master/graph/badge.svg)](https://codecov.io/gh/volodymyrss/nb2workflow)
