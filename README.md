@@ -33,6 +33,9 @@ nb2deploy https://renkulab.io/gitlab/vladimir.savchenko/oda-sdss legacysurvey
 
 ## Motivation
 
+See development guide for details https://odahub.io/docs/guide-development/
+
 ## Why run notebooks?
 
 ### Why convert notebook as a service?
+
