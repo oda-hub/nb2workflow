@@ -11,6 +11,7 @@ import time
 import yaml
 from .logging_setup import setup_logging
 from . import version
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +32,7 @@ def determine_origin(repo):
     else:
         return repo
 
-def deploy(git_origin, deployment_base_name, namespace="oda-staging", local=False, run_tests=True, check_live=True):
+def build_container(git_origin, local=False, run_tests=True, registry="odahub", build_timestamp=False):
     git_origin = determine_origin(git_origin)
 
     with tempfile.TemporaryDirectory() as tmpdir:        
@@ -52,7 +53,7 @@ def deploy(git_origin, deployment_base_name, namespace="oda-staging", local=Fals
         last_change_time = subprocess.check_output( 
             ["git", "log", "-1", "--pretty=format:'%ai'"], # could use all authors too, but it's inside anyway
             cwd=local_repo_path ).decode().strip()
-            
+           
 
         config_fn = local_repo_path / "mmoda.yaml"
 
@@ -94,8 +95,8 @@ RUN for nn in $ODA_WORKFLOW_NOTEBOOK_PATH/*.ipynb; do mv $nn $nn-tmp;  jq '.meta
 
 ENTRYPOINT nb2service --debug $ODA_WORKFLOW_NOTEBOOK_PATH --host 0.0.0.0 --port 8000 | cut -c1-500
 """)
-
-        image = f"odahub/nb-{pathlib.Path(git_origin).name}:{descr}-nb2w{version()}" # {time.strftime(r'%y%m%d%H%M%S')}"
+        ts = '-' + datetime.now(timezone.utc).isoformat() if build_timestamp else ''
+        image = f"{registry}/nb-{pathlib.Path(git_origin).name}:{descr}-nb2w{version()}{ts}" # {time.strftime(r'%y%m%d%H%M%S')}"
 
         subprocess.check_call( # cli is more stable than python API
             ["docker", "build", ".", "-t", image],
@@ -118,78 +119,88 @@ ENTRYPOINT nb2service --debug $ODA_WORKFLOW_NOTEBOOK_PATH --host 0.0.0.0 --port 
         else:
             workflow_dispatcher_signature = None
             workflow_nb_signature = None
-       
-        if local:
-            subprocess.check_call( # cli is more stable than python API
-                ["docker", "run", '-p', '8000:8000', image],
-                cwd=tmpdir)
+        
+    if not local: 
+        subprocess.check_call( # cli is more stable than python API
+            ["docker", "push", image],
+            cwd=tmpdir)
+    
+    return {"description": descr,
+            "image": image,
+            "author": author,
+            "last_change_time": last_change_time,
+            "workflow_dispatcher_signature": workflow_dispatcher_signature,
+            "workflow_nb_signature": workflow_nb_signature}
+
+def deploy(git_origin, deployment_base_name, namespace="oda-staging", local=False, run_tests=True, check_live=True):
+    
+    container = build_container(git_origin, local=local, run_tests=run_tests)
+    
+    if local:
+        subprocess.check_call( # cli is more stable than python API
+            ["docker", "run", '-p', '8000:8000', container['image']])
+    else:
+        deployment_name = deployment_base_name + "-backend"
+        try:
+            subprocess.check_call(
+                ["kubectl", "patch", "deployment", deployment_name, "-n", namespace,
+                "--type", "merge",
+                "-p", 
+                json.dumps(
+                    {"spec":{"template":{"spec":{
+                        "containers":[
+                            {"name": deployment_name, "image": container['image']}
+                        ]}}}})
+                ]
+            )
+        except Exception as e:
+            subprocess.check_call(
+                ["kubectl", "create", "deployment", deployment_name, "-n", namespace, "--image=" + container['image']]
+            )
+            subprocess.check_call(
+                ["kubectl", "expose", "deployment", deployment_name, "--name", deployment_name, 
+                "--port", "8000", "-n", namespace]
+            )
+
+
+        if check_live:
+            logging.info("will check live")
+            while True:
+                try:
+                    p = subprocess.Popen([
+                        "kubectl",
+                        "exec",
+                        "-it",
+                        "deployments/oda-dispatcher",
+                        "-n",
+                        "oda-staging",
+                        "--",
+                        "bash", "-c",
+                        f"curl {deployment_name}:8000"], stdout=subprocess.PIPE)
+                    p.wait()
+                    if p.stdout is not None:
+                        service_output_json = p.stdout.read()
+                        logger.info("got valid output: %s", service_output_json)
+                        service_output = json.loads(service_output_json.decode())
+                        logger.info("got valid output json: %s", service_output)
+                        break
+                except Exception as e:
+                    logging.info("problem getting response from the service: %s", e)
+                    time.sleep(3)                    
         else:
-            subprocess.check_call( # cli is more stable than python API
-                ["docker", "push", image],
-                cwd=tmpdir)
-
-
-            deployment_name = deployment_base_name + "-backend"
-            try:
-                subprocess.check_call(
-                    ["kubectl", "patch", "deployment", deployment_name, "-n", namespace,
-                    "--type", "merge",
-                    "-p", 
-                    json.dumps(
-                        {"spec":{"template":{"spec":{
-                            "containers":[
-                                {"name": deployment_name, "image": image}
-                            ]}}}})
-                    ]
-                )
-            except Exception as e:
-                subprocess.check_call(
-                    ["kubectl", "create", "deployment", deployment_name, "-n", namespace, "--image=" + image]
-                )
-                subprocess.check_call(
-                    ["kubectl", "expose", "deployment", deployment_name, "--name", deployment_name, 
-                    "--port", "8000", "-n", namespace]
-                )
-
-
-            if check_live:
-                logging.info("will check live")
-                while True:
-                    try:
-                        p = subprocess.Popen([
-                            "kubectl",
-                            "exec",
-                            "-it",
-                            "deployments/oda-dispatcher",
-                            "-n",
-                            "oda-staging",
-                            "--",
-                            "bash", "-c",
-                            f"curl {deployment_name}:8000"], stdout=subprocess.PIPE)
-                        p.wait()
-                        if p.stdout is not None:
-                            service_output_json = p.stdout.read()
-                            logger.info("got valid output: %s", service_output_json)
-                            service_output = json.loads(service_output_json.decode())
-                            logger.info("got valid output json: %s", service_output)
-                            break
-                    except Exception as e:
-                        logging.info("problem getting response from the service: %s", e)
-                        time.sleep(3)                    
-            else:
-                service_output = {}
-            
-            return {
-                "deployment_name": deployment_name,
-                "namespace": namespace,
-                "description": descr,
-                "image": image,
-                "author": author,
-                "last_change_time": last_change_time,
-                "workflow_dispatcher_signature": workflow_dispatcher_signature,
-                "workflow_nb_signature": workflow_nb_signature,
-                "service_output": service_output
-            }
+            service_output = {}
+        
+        return {
+            "deployment_name": deployment_name,
+            "namespace": namespace,
+            "description": container['descr'],
+            "image": container['image'],
+            "author": container['author'],
+            "last_change_time": container['last_change_time'],
+            "workflow_dispatcher_signature": container['workflow_dispatcher_signature'],
+            "workflow_nb_signature": container['workflow_nb_signature'],
+            "service_output": service_output
+        }
 
 
 def main():
