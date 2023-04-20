@@ -132,9 +132,9 @@ ENTRYPOINT nb2service --debug $ODA_WORKFLOW_NOTEBOOK_PATH --host 0.0.0.0 --port 
             "workflow_dispatcher_signature": workflow_dispatcher_signature,
             "workflow_nb_signature": workflow_nb_signature}
 
-def deploy(git_origin, deployment_base_name, namespace="oda-staging", local=False, run_tests=True, check_live=True):
+def deploy(git_origin, deployment_base_name, namespace="oda-staging", local=False, run_tests=True, check_live=True, registry="odahub"):
     
-    container = build_container(git_origin, local=local, run_tests=run_tests)
+    container = build_container(git_origin, local=local, run_tests=run_tests, registry=registry)
     
     if local:
         subprocess.check_call( # cli is more stable than python API
