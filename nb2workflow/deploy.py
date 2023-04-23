@@ -32,7 +32,11 @@ def determine_origin(repo):
     else:
         return repo
 
-def build_container(git_origin, local=False, run_tests=True, registry="odahub", build_timestamp=False):
+def build_container(git_origin, 
+                    local=False, 
+                    run_tests=True, 
+                    registry="odahub", 
+                    build_timestamp=False):
     git_origin = determine_origin(git_origin)
 
     with tempfile.TemporaryDirectory() as tmpdir:        
@@ -113,8 +117,11 @@ ENTRYPOINT nb2service --debug $ODA_WORKFLOW_NOTEBOOK_PATH --host 0.0.0.0 --port 
                       'done')
                      ],
                     cwd=tmpdir)
-
-            workflow_dispatcher_signature = json.loads(re.search(rb"^WORKFLOW-DISPATCHER-SIGNATURE: (.*?)$", out, re.M).group(1).decode())
+            # dispatcher signature is currently optional. 
+            # Will be empty if dipsatcher plugin is not installed in the container
+            workflow_dispatcher_signature = re.search(rb"^WORKFLOW-DISPATCHER-SIGNATURE: (.*?)$", out, re.M)
+            if workflow_dispatcher_signature is not None:
+                workflow_dispatcher_signature = json.loads(workflow_dispatcher_signature.group(1).decode())
             workflow_nb_signature = json.loads(re.search(rb"^WORKFLOW-NB-SIGNATURE: (.*?)$", out, re.M).group(1).decode())
         else:
             workflow_dispatcher_signature = None
@@ -122,17 +129,21 @@ ENTRYPOINT nb2service --debug $ODA_WORKFLOW_NOTEBOOK_PATH --host 0.0.0.0 --port 
         
     if not local: 
         subprocess.check_call( # cli is more stable than python API
-            ["docker", "push", image],
-            cwd=tmpdir)
+            ["docker", "push", image])
     
-    return {"description": descr,
+    return {"descr": descr,
             "image": image,
             "author": author,
             "last_change_time": last_change_time,
             "workflow_dispatcher_signature": workflow_dispatcher_signature,
             "workflow_nb_signature": workflow_nb_signature}
 
-def deploy(git_origin, deployment_base_name, namespace="oda-staging", local=False, run_tests=True, check_live=True, registry="odahub"):
+def deploy(git_origin, 
+           deployment_base_name, 
+           namespace="oda-staging", 
+           local=False, run_tests=True, 
+           check_live=True, registry="odahub", 
+           check_live_through = "oda-dispatcher"):
     
     container = build_container(git_origin, local=local, run_tests=run_tests, registry=registry)
     
@@ -171,9 +182,9 @@ def deploy(git_origin, deployment_base_name, namespace="oda-staging", local=Fals
                         "kubectl",
                         "exec",
                         "-it",
-                        "deployments/oda-dispatcher",
+                        f"deployments/{check_live_through}",
                         "-n",
-                        "oda-staging",
+                        namespace,
                         "--",
                         "bash", "-c",
                         f"curl {deployment_name}:8000"], stdout=subprocess.PIPE)
