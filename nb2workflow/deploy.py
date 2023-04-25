@@ -12,6 +12,9 @@ import yaml
 from .logging_setup import setup_logging
 from . import version
 from datetime import datetime, timezone
+from textwrap import dedent
+import uuid
+
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +39,183 @@ def build_container(git_origin,
                     local=False, 
                     run_tests=True, 
                     registry="odahub", 
-                    build_timestamp=False):
+                    build_timestamp=False,
+                    engine = "docker",
+                    **kwargs):
+    # TODO: takes time, could it be done asynchronously?
+    if engine == "docker":
+        return _build_with_docker(git_origin=git_origin,
+                                 local=local,
+                                 run_tests=run_tests,
+                                 registry = registry,
+                                 build_timestamp=build_timestamp)
+    elif engine == 'kaniko':
+        if run_tests == True:
+            logger.warning("KANIKO builder doesn't support run_tests . Will switch off")
+        return _build_with_kaniko(git_origin=git_origin,
+                                 registry = registry,
+                                 local = local,
+                                 build_timestamp=build_timestamp,
+                                 namespace = kwargs['namespace']
+                                 )
+    else:
+        return NotImplementedError('Unknown container build engine: %s', engine)
+
+
+def _nb2w_dockerfile_gen(context_dir, git_origin, source_from, meta):
+    try:
+        with open(pathlib.Path(context_dir) / "Dockerfile", "r") as fd:
+            dockerfile_content = fd.read()
+            dockerfile_content += "\n"
+    except FileNotFoundError:
+        dockerfile_content = ""
+    
+    local_repo_path = pathlib.Path(context_dir) / "nb-repo"
+    config_fn = local_repo_path / "mmoda.yaml"
+
+    config = default_config.copy()
+    if os.path.exists(config_fn):
+        extra_config = yaml.safe_load(open(config_fn))
+        logger.info("extra config from %s: %s", config_fn, extra_config)
+        config.update(extra_config)
+    else:
+        logger.info("no extra config in %s", config_fn)
+    logger.info("complete config: %s", config)
+
+    notebook_fullpath_in_container = pathlib.Path('/repo') / (config['notebook_path'].strip("/"))
+    logger.info("using notebook_fullpath_in_container: %s", notebook_fullpath_in_container)
+
+    if not config['use_repo_base_image']: 
+        dockerfile_content = "FROM python:3.9\n"
+        
+    if source_from == 'localdir':
+        dockerfile_content += "COPY nb-repo/ /repo/\n"
+    elif source_from == 'git':
+        dockerfile_content += "RUN apt-get install -y git\n"
+        dockerfile_content += f"RUN git clone {git_origin} repo\n"
+    else:
+        raise NotImplementedError('Unknown source code location %s', source_from)
+    
+    if not config['use_repo_base_image']:         
+        dockerfile_content += "RUN pip install -r repo/requirements.txt\n"
+    
+    dockerfile_content += dedent(f"""
+                                  RUN pip install nb2workflow[cwl,service,rdf]=={version()}
+                                  
+                                  ENV ODA_WORKFLOW_VERSION="{meta['descr']}"
+                                  ENV ODA_WORKFLOW_LAST_AUTHOR="{meta['author']}"
+                                  ENV ODA_WORKFLOW_LAST_CHANGED="{meta['last_change_time']}"
+                                  ENV ODA_WORKFLOW_NOTEBOOK_PATH="{notebook_fullpath_in_container}"
+                                  
+                                  RUN curl -o /usr/bin/jq -L https://github.com/stedolan/jq/releases/download/jq-1.5/jq-linux64; \
+                                      chmod +x /usr/bin/jq
+                                  RUN for nn in $ODA_WORKFLOW_NOTEBOOK_PATH/*.ipynb; do mv $nn $nn-tmp; \
+                                      jq '.metadata.kernelspec.name |= "python3"' $nn-tmp > $nn ; rm $nn-tmp ; done
+                                  
+                                  ENTRYPOINT nb2service --debug $ODA_WORKFLOW_NOTEBOOK_PATH --host 0.0.0.0 --port 8000 | cut -c1-500
+                                  """)
+    
+    with open(pathlib.Path(context_dir) / "Dockerfile", "w") as fd:
+        fd.write(dockerfile_content)
+    
+    return dockerfile_content
+
+def _build_with_kaniko(git_origin,  
+                      registry="odahub", 
+                      local=False,
+                      build_timestamp=False,
+                      namespace="oda-staging"):
+    
+    #secret should be created beforehand https://github.com/GoogleContainerTools/kaniko#pushing-to-docker-hub
+       
+    container_metadata = _build_with_docker(git_origin=git_origin,
+                                            registry=registry,
+                                            build_timestamp=build_timestamp,
+                                            dry_run=True,
+                                            source_from='git')
+    
+    dockerfile_content = container_metadata['dockerfile_content']
+    
+    
+    with tempfile.TemporaryDirectory() as tmpdir:
+        with open(pathlib.Path(tmpdir) / "Dockerfile", "w") as fd:
+            fd.write(dockerfile_content)
+        
+        suffix = pathlib.Path(tmpdir).name.lower().replace('_', '-')
+        
+        subprocess.check_call([
+            "kubectl",
+            "create",
+            "configmap",
+            f"nb2w-dockerfile-{suffix}",
+            "--from-file=Dockerfile=Dockerfile"
+        ], cwd = tmpdir)
+        
+        dest = '--no-push' if local else f'--destination={container_metadata["image"]}'
+        with open(pathlib.Path(tmpdir) / "buildjob.yaml", "w") as fd:
+            fd.write(dedent(f"""\
+                apiVersion: batch/v1
+                kind: Job
+                metadata:
+                  name: kaniko-build-{suffix}
+                  namespace: {namespace}
+                spec:
+                  template:
+                    spec:
+                      containers:
+                      - name: kaniko-build
+                        image: gcr.io/kaniko-project/executor:latest
+                        args:
+                        - "--dockerfile=/tmp/build/Dockerfile"
+                        - "--context=dir:///tmp/build"
+                        - "{dest}"
+                          
+                        volumeMounts:
+                        - name: dockerfile
+                          mountPath: /tmp/build/Dockerfile
+                          subPath: Dockerfile
+                        - name: kaniko-secret
+                          mountPath: /kaniko/.docker/config.json
+                          subPath: config.json
+                      volumes:
+                      - name: dockerfile
+                        configMap:
+                          name: nb2w-dockerfile-{suffix}
+                      - name: kaniko-secret
+                        secret:
+                          secretName: kaniko-secret
+                      restartPolicy: Never
+                """))
+        
+        subprocess.check_call([
+            "kubectl",
+            "create",
+            "-f",
+            "buildjob.yaml"
+        ], cwd = tmpdir)
+        
+        subprocess.check_call([
+            "kubectl",
+            "-n",
+            f"{namespace}",
+            "wait",
+            "--for=condition=complete",
+            "--timeout=10m",
+            f"job/kaniko-build-{suffix}"
+        ])
+        
+        # TODO: clear jobs and configmaps (but it may be done by some CronJob)
+        
+        return container_metadata
+
+
+def _build_with_docker(git_origin, 
+                    local=False, 
+                    run_tests=True, 
+                    registry="odahub", 
+                    build_timestamp=False,
+                    dry_run = False,
+                    source_from = 'localdir'):
     git_origin = determine_origin(git_origin)
 
     with tempfile.TemporaryDirectory() as tmpdir:        
@@ -46,68 +225,32 @@ def build_container(git_origin,
 
         local_repo_path = pathlib.Path(tmpdir) / "nb-repo"
 
-        descr = subprocess.check_output( # cli is more stable than python API
-            ["git", "describe", "--always", "--tags"],
-            cwd=local_repo_path ).decode().strip()
+        meta = {}
+        meta['descr'] = subprocess.check_output( # cli is more stable than python API
+                            ["git", "describe", "--always", "--tags"],
+                            cwd=local_repo_path ).decode().strip()
         
-        author = subprocess.check_output( 
-            ["git", "log", "-1", "--pretty=format:'%an <%ae>'"], # could use all authors too, but it's inside anyway
-            cwd=local_repo_path ).decode().strip()
+        meta['author'] = subprocess.check_output( 
+                            ["git", "log", "-1", "--pretty=format:'%an <%ae>'"], # could use all authors too, but it's inside anyway
+                            cwd=local_repo_path ).decode().strip()
             
-        last_change_time = subprocess.check_output( 
-            ["git", "log", "-1", "--pretty=format:'%ai'"], # could use all authors too, but it's inside anyway
-            cwd=local_repo_path ).decode().strip()
-           
+        meta['last_change_time'] = subprocess.check_output( 
+                                    ["git", "log", "-1", "--pretty=format:'%ai'"], # could use all authors too, but it's inside anyway
+                                    cwd=local_repo_path ).decode().strip()
 
-        config_fn = local_repo_path / "mmoda.yaml"
+        dockerfile_content = _nb2w_dockerfile_gen(tmpdir, git_origin, source_from, meta)
 
-        config = default_config.copy()
-        if os.path.exists(config_fn):
-            extra_config = yaml.safe_load(open(config_fn))
-            logger.info("extra config from %s: %s", config_fn, extra_config)
-            config.update(extra_config)
-        else:
-            logger.info("no extra config in %s", config_fn)
-        logger.info("complete config: %s", config)
+        ts = '-' + time.strftime(r'%y%m%d%H%M%S') if build_timestamp else ''
+        image = f"{registry}/nb-{pathlib.Path(git_origin).name}:{meta['descr']}-nb2w{version()}{ts}"
 
-        if not config['use_repo_base_image']: 
-            notebook_fullpath_in_container = pathlib.Path('/repo') / (config['notebook_path'].strip("/"))
+        if not dry_run:
+            subprocess.check_call( # cli is more stable than python API
+                ["docker", "build", ".", "-t", image],
+                cwd=tmpdir)     
 
-            logger.info("using notebook_fullpath_in_container: %s", notebook_fullpath_in_container)
-
-            open(pathlib.Path(tmpdir) / "Dockerfile", "a").write(f"""
-FROM python:3.9
-
-ADD nb-repo/requirements.txt /requirements.txt
-RUN pip install -r requirements.txt
-
-""")
-
-        # we could use completely new image too. but lets keep renku etc in it
-        open(pathlib.Path(tmpdir) / "Dockerfile", "a").write(f"""
-RUN pip install nb2workflow[cwl,service,rdf]=={version()}
-
-ENV ODA_WORKFLOW_VERSION="{descr}"
-ENV ODA_WORKFLOW_LAST_AUTHOR="{author}"
-ENV ODA_WORKFLOW_LAST_CHANGED="{last_change_time}"
-ENV ODA_WORKFLOW_NOTEBOOK_PATH="{notebook_fullpath_in_container}"
-
-COPY nb-repo/ /repo/
-
-RUN curl -o /usr/bin/jq -L https://github.com/stedolan/jq/releases/download/jq-1.5/jq-linux64; chmod +x /usr/bin/jq
-RUN for nn in $ODA_WORKFLOW_NOTEBOOK_PATH/*.ipynb; do mv $nn $nn-tmp;  jq '.metadata.kernelspec.name |= "python3"' $nn-tmp > $nn ; rm $nn-tmp ; done
-
-ENTRYPOINT nb2service --debug $ODA_WORKFLOW_NOTEBOOK_PATH --host 0.0.0.0 --port 8000 | cut -c1-500
-""")
-        ts = '-' + datetime.now(timezone.utc).isoformat() if build_timestamp else ''
-        image = f"{registry}/nb-{pathlib.Path(git_origin).name}:{descr}-nb2w{version()}{ts}" # {time.strftime(r'%y%m%d%H%M%S')}"
-
-        subprocess.check_call( # cli is more stable than python API
-            ["docker", "build", ".", "-t", image],
-            cwd=tmpdir)        
-
-        if run_tests: 
+        if run_tests and not dry_run: 
             # TODO: run tests too
+            # TODO: probably better to move this to deploy
             out = subprocess.check_output(
                     ["docker", "run", '--rm', '--entrypoint', 'bash', image, '-c', 
                      ('pip install nb2workflow[rdf,mmoda,service] --upgrade;'
@@ -127,25 +270,37 @@ ENTRYPOINT nb2service --debug $ODA_WORKFLOW_NOTEBOOK_PATH --host 0.0.0.0 --port 
             workflow_dispatcher_signature = None
             workflow_nb_signature = None
         
-    if not local: 
+    if not local and not dry_run: 
         subprocess.check_call( # cli is more stable than python API
             ["docker", "push", image])
     
-    return {"descr": descr,
+    return {"descr": meta['descr'],
             "image": image,
-            "author": author,
-            "last_change_time": last_change_time,
+            "author": meta['author'],
+            "last_change_time": meta['last_change_time'],
             "workflow_dispatcher_signature": workflow_dispatcher_signature,
-            "workflow_nb_signature": workflow_nb_signature}
+            "workflow_nb_signature": workflow_nb_signature,
+            "dockerfile_content": dockerfile_content}
+
 
 def deploy(git_origin, 
            deployment_base_name, 
            namespace="oda-staging", 
-           local=False, run_tests=True, 
-           check_live=True, registry="odahub", 
-           check_live_through = "oda-dispatcher"):
+           local=False, 
+           run_tests=True, 
+           check_live=True, 
+           registry="odahub", 
+           check_live_through = "oda-dispatcher",
+           build_engine = 'docker',
+           build_timestamp = False):
     
-    container = build_container(git_origin, local=local, run_tests=run_tests, registry=registry)
+    container = build_container(git_origin, 
+                                local=local, 
+                                run_tests=run_tests, 
+                                registry=registry, 
+                                engine=build_engine, 
+                                namespace=namespace,
+                                build_timestamp=build_timestamp)
     
     if local:
         subprocess.check_call( # cli is more stable than python API
