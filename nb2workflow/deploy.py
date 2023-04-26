@@ -336,7 +336,7 @@ def deploy(git_origin,
                     p = subprocess.Popen([
                         "kubectl",
                         "exec",
-                        "-it",
+                        #"-it",
                         f"deployments/{check_live_through}",
                         "-n",
                         namespace,
