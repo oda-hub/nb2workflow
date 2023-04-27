@@ -41,6 +41,7 @@ def build_container(git_origin,
                     registry="odahub", 
                     build_timestamp=False,
                     engine = "docker",
+                    cleanup = False
                     **kwargs):
     # TODO: takes time, could it be done asynchronously?
     if engine == "docker":
@@ -124,7 +125,8 @@ def _build_with_kaniko(git_origin,
                       registry="odahub", 
                       local=False,
                       build_timestamp=False,
-                      namespace="oda-staging"):
+                      namespace="oda-staging",
+                      cleanup = True):
     
     #secret should be created beforehand https://github.com/GoogleContainerTools/kaniko#pushing-to-docker-hub
        
@@ -204,7 +206,23 @@ def _build_with_kaniko(git_origin,
             f"job/kaniko-build-{suffix}"
         ])
         
-        # TODO: clear jobs and configmaps (but it may be done by some CronJob)
+        if cleanup:
+            subprocess.check_call([
+                "kubectl",
+                "-n",
+                f"{namespace}",
+                "delete",
+                f"job/kaniko-build-{suffix}"
+            ])
+            
+            subprocess.check_call([
+                "kubectl",
+                "-n",
+                f"{namespace}",
+                "delete",
+                "configmap",
+                f"nb2w-dockerfile-{suffix}"
+            ])
         
         return container_metadata
 
@@ -215,7 +233,11 @@ def _build_with_docker(git_origin,
                     registry="odahub", 
                     build_timestamp=False,
                     dry_run = False,
-                    source_from = 'localdir'):
+                    source_from = 'localdir',
+                    cleanup = False):
+    if cleanup:
+        logger.warning('Post-build cleanup is not implemented for docker builds')
+    
     git_origin = determine_origin(git_origin)
 
     with tempfile.TemporaryDirectory() as tmpdir:        
@@ -292,7 +314,8 @@ def deploy(git_origin,
            registry="odahub", 
            check_live_through = "oda-dispatcher",
            build_engine = 'docker',
-           build_timestamp = False):
+           build_timestamp = False,
+           cleanup = False):
     
     container = build_container(git_origin, 
                                 local=local, 
@@ -300,7 +323,8 @@ def deploy(git_origin,
                                 registry=registry, 
                                 engine=build_engine, 
                                 namespace=namespace,
-                                build_timestamp=build_timestamp)
+                                build_timestamp=build_timestamp,
+                                cleanup = cleanup)
     
     if local:
         subprocess.check_call( # cli is more stable than python API
