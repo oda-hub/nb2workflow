@@ -41,7 +41,7 @@ def build_container(git_origin,
                     registry="odahub", 
                     build_timestamp=False,
                     engine = "docker",
-                    cleanup = False
+                    cleanup = False,
                     **kwargs):
     # TODO: takes time, could it be done asynchronously?
     if engine == "docker":
