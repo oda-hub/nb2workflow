@@ -166,7 +166,8 @@ def _build_with_kaniko(git_origin,
                     spec:
                       containers:
                       - name: kaniko-build
-                        image: gcr.io/kaniko-project/executor:latest
+                        image: gcr.io/kaniko-project/executor:v1.9.2
+                        imagePullPolicy: IfNotPresent
                         args:
                         - "--dockerfile=/tmp/build/Dockerfile"
                         - "--context=dir:///tmp/build"
