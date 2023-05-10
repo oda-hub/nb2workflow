@@ -646,7 +646,7 @@ def root():
     if len(issues) == 0:
         return {
                     "message": "all is ok!",
-                    "versiom": os.getenv("ODA_WORKFLOW_VERSION"),
+                    "version": os.getenv("ODA_WORKFLOW_VERSION"),
                     "last_author": os.getenv("ODA_WORKFLOW_LAST_AUTHOR"),
                     "last_changed": os.getenv("ODA_WORKFLOW_LAST_CHANGED")                    
             }
