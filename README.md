@@ -26,10 +26,17 @@ nb2cwl tests/testrepo/
 
 ## Deploys a service
 
+Building and deploying RESTful (Swagger) service:
+
 ```bash
-nb2deploy https://renkulab.io/gitlab/vladimir.savchenko/oda-sdss legacysurvey
+$ nb2deploy https://renkulab.io/gitlab/vladimir.savchenko/oda-sdss legacysurvey
 ```
 
+Alternatively, using `kaniko`:
+
+```bash
+$ nb2deploy https://renkulab.io/gitlab/astronomy/mmoda/fermi fermi-an-test --build-engine kaniko
+```
 
 ## Motivation
 
