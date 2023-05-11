@@ -22,7 +22,8 @@ default_config = {
     "config_schema_version": "0.1.0",
     "notebook_path": "", # or "notebooks"
     "extra_data": [],
-    "use_repo_base_image": False
+    "use_repo_base_image": False,
+    "filename_pattern": '.*', 
 }
 
 
@@ -103,20 +104,21 @@ def _nb2w_dockerfile_gen(context_dir, git_origin, source_from, meta):
         dockerfile_content += "RUN pip install -r repo/requirements.txt\n"
     
     dockerfile_content += dedent(f"""
-                                  RUN pip install nb2workflow[cwl,service,rdf]=={version()}
-                                  
-                                  ENV ODA_WORKFLOW_VERSION="{meta['descr']}"
-                                  ENV ODA_WORKFLOW_LAST_AUTHOR="{meta['author']}"
-                                  ENV ODA_WORKFLOW_LAST_CHANGED="{meta['last_change_time']}"
-                                  ENV ODA_WORKFLOW_NOTEBOOK_PATH="{notebook_fullpath_in_container}"
-                                  
-                                  RUN curl -o /usr/bin/jq -L https://github.com/stedolan/jq/releases/download/jq-1.5/jq-linux64; \
-                                      chmod +x /usr/bin/jq
-                                  RUN for nn in $ODA_WORKFLOW_NOTEBOOK_PATH/*.ipynb; do mv $nn $nn-tmp; \
-                                      jq '.metadata.kernelspec.name |= "python3"' $nn-tmp > $nn ; rm $nn-tmp ; done
-                                  
-                                  ENTRYPOINT nb2service --debug $ODA_WORKFLOW_NOTEBOOK_PATH --host 0.0.0.0 --port 8000 | cut -c1-500
-                                  """)
+        RUN pip install nb2workflow[cwl,service,rdf]=={version()}
+        
+        ENV ODA_WORKFLOW_VERSION="{meta['descr']}"
+        ENV ODA_WORKFLOW_LAST_AUTHOR="{meta['author']}"
+        ENV ODA_WORKFLOW_LAST_CHANGED="{meta['last_change_time']}"
+        ENV ODA_WORKFLOW_NOTEBOOK_PATH="{notebook_fullpath_in_container}"
+        ENV ODA_WORKFLOW_FILENAME_PATTERN="{config['filename_pattern']}"
+        
+        RUN curl -o /usr/bin/jq -L https://github.com/stedolan/jq/releases/download/jq-1.5/jq-linux64; \
+            chmod +x /usr/bin/jq
+        RUN for nn in $ODA_WORKFLOW_NOTEBOOK_PATH/*.ipynb; do mv $nn $nn-tmp; \
+            jq '.metadata.kernelspec.name |= "python3"' $nn-tmp > $nn ; rm $nn-tmp ; done
+        
+        ENTRYPOINT nb2service --debug $ODA_WORKFLOW_NOTEBOOK_PATH --pattern $ODA_WORKFLOW_FILENAME_PATTERN --host 0.0.0.0 --port 8000 | cut -c1-500
+        """)
     
     with open(pathlib.Path(context_dir) / "Dockerfile", "w") as fd:
         fd.write(dockerfile_content)
