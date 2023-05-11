@@ -92,7 +92,9 @@ def _nb2w_dockerfile_gen(context_dir, git_origin, source_from, meta):
     if source_from == 'localdir':
         dockerfile_content += "COPY nb-repo/ /repo/\n"
     elif source_from == 'git':
-        dockerfile_content += "RUN apt-get install -y git\n"
+        dockerfile_content += ("RUN apt-get install -y git && " 
+                               "curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | bash && " 
+                               "apt-get install -y git-lfs\n")
         dockerfile_content += f"RUN git clone {git_origin} repo\n"
     else:
         raise NotImplementedError('Unknown source code location %s', source_from)
