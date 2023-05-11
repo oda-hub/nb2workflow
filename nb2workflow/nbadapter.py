@@ -561,8 +561,7 @@ def find_notebooks(source, tests=False, pattern = r'.*') -> Dict[str, NotebookAd
 
     def base_filter(fn): 
         good = "output" not in fn and "preproc" not in fn
-        if pattern != r'.*':
-            good = good and re.match(pattern, os.path.basename(fn)) 
+        good = good and re.match(pattern, os.path.basename(fn)) 
         return good
         
 

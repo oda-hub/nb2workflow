@@ -694,7 +694,7 @@ def main():
         root.setLevel(logging.INFO)
         handler.setLevel(logging.INFO)
 
-    app.notebook_adapters = find_notebooks(args.notebook, pattern = args.pattern)
+    app.notebook_adapters = find_notebooks(args.notebook, pattern=args.pattern)
     setup_routes(app)
     app.service_semantic_signature = ontology.service_semantic_signature(
         app.notebook_adapters)
