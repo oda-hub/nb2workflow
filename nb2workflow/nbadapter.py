@@ -557,9 +557,14 @@ if isinstance({output},str) and os.path.exists({output}):
 def notebook_short_name(ipynb_fn):
     return os.path.basename(ipynb_fn).replace(".ipynb","")
 
-def find_notebooks(source, tests=False) -> Dict[str, NotebookAdapter]:
+def find_notebooks(source, tests=False, pattern = r'.*') -> Dict[str, NotebookAdapter]:
 
-    base_filter = lambda fn: "output" not in fn and "preproc" not in fn
+    def base_filter(fn): 
+        good = "output" not in fn and "preproc" not in fn
+        if pattern != r'.*':
+            good = good and re.match(pattern, os.path.basename(fn)) 
+        return good
+        
 
     if tests:
         filt = lambda fn: base_filter(fn) and "/test_" in fn
@@ -567,7 +572,7 @@ def find_notebooks(source, tests=False) -> Dict[str, NotebookAdapter]:
         filt = lambda fn: base_filter(fn) and "/test_" not in fn
 
     if os.path.isdir(source):
-        notebooks=[ fn for fn in glob.glob(source+"/*ipynb") if filt(fn) ]
+        notebooks=[ fn for fn in glob.glob(source+"/*ipynb") if filt(fn) ]        
 
         logger.debug("found notebooks: %s",notebooks)
 
@@ -581,6 +586,8 @@ def find_notebooks(source, tests=False) -> Dict[str, NotebookAdapter]:
 
 
     elif os.path.isfile(source):
+        if pattern != r'.*':
+            logger.warning('Filename pattern is set but source %s is a single file. Ignoring pattern.')
         notebook_adapters={notebook_short_name(source): NotebookAdapter(source)}
 
     else:

@@ -672,6 +672,7 @@ def main():
         '--profile', metavar='service profile', type=str, default="oda")
     parser.add_argument('--debug', action="store_true")
     parser.add_argument('--one-shot', metavar='workflow', type=str)
+    parser.add_argument('--pattern', type=str, default=r'.*')
 
     args = parser.parse_args()
 
@@ -693,7 +694,7 @@ def main():
         root.setLevel(logging.INFO)
         handler.setLevel(logging.INFO)
 
-    app.notebook_adapters = find_notebooks(args.notebook)
+    app.notebook_adapters = find_notebooks(args.notebook, pattern = args.pattern)
     setup_routes(app)
     app.service_semantic_signature = ontology.service_semantic_signature(
         app.notebook_adapters)
