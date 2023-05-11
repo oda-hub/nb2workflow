@@ -149,6 +149,7 @@ def _build_with_kaniko(git_origin,
             "kubectl",
             "create",
             "configmap",
+            "-n", namespace,
             f"nb2w-dockerfile-{suffix}",
             "--from-file=Dockerfile=Dockerfile"
         ], cwd = tmpdir)
@@ -400,12 +401,13 @@ def main():
     parser.add_argument('deployment_name', metavar='deployment_name', type=str)
     parser.add_argument('--namespace', metavar='namespace', type=str, default="oda-staging")
     parser.add_argument('--local', action="store_true", default=False)
+    parser.add_argument('--build-engine', metavar="build_engine", default="docker")
     
     args = parser.parse_args()
 
     setup_logging()
     
-    deploy(args.repository, args.deployment_name, namespace=args.namespace, local=args.local)
+    deploy(args.repository, args.deployment_name, namespace=args.namespace, local=args.local, build_engine=args.build_engine)
 
 
 if __name__ == "__main__":
