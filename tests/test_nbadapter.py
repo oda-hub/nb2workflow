@@ -71,6 +71,25 @@ def test_nbadapter(test_notebook, morph_notebook, caplog):
 
     assert 'spectrum' in output
 
+def test_find_notebooks(caplog):
+    from nb2workflow.nbadapter import find_notebooks, NotebookAdapter
+    
+    nb_dir = 'tests/testfiles'
+    single_nb = 'tests/testfiles/lightcurve.ipynb'
+    
+    nbas = find_notebooks(single_nb)
+    assert len(nbas) == 1
+    
+    nbas = find_notebooks(single_nb, pattern=r'.*bool')
+    assert len(nbas) == 1
+    assert 'Ignoring pattern.' in caplog.text
+    
+    nbas = find_notebooks(nb_dir)
+    assert len(nbas) == 2
+    
+    nbas = find_notebooks(nb_dir, pattern=r'.*bool')
+    assert len(nbas) == 1
+    
 
 def test_nbadapter_repo(test_notebook_repo):
     from nb2workflow.nbadapter import NotebookAdapter, find_notebooks, validate_oda_dispatcher
