@@ -10,6 +10,7 @@ oda_preview = rdflib.Namespace(oda_ontology_preview_prefix)
 
 rdfs = rdflib.Namespace("http://www.w3.org/2000/01/rdf-schema#")
 rdf = rdflib.Namespace("http://www.w3.org/1999/02/22-rdf-syntax-ns#")
+rdf_xmlschema = rdflib.Namespace("http://www.w3.org/2001/XMLSchema#")
 
 wfl_p_ns_str = 'http://odahub.io/workflows/{workflow_name}/parameter_bindings#'
 wfl_o_ns_str = 'http://odahub.io/workflows/{workflow_name}/output_bindings#'
@@ -62,8 +63,12 @@ def test_nb2rdf(test_notebook_repo):
         wfl_p_ns = rdflib.Namespace(wfl_p_ns_str.format(workflow_name=nba.unique_name))
         assert (wfl_p_ns["scwid"], oda["default_value"], rdflib.Literal("066500110010.001")) in G
         assert (wfl_p_ns["scwid"], rdf_type, oda_integral["ScWID"]) in G
+        assert (wfl_p_ns["nbins"], oda["default_value"], rdflib.Literal(100)) in G
+        assert (wfl_p_ns["nbins"], rdf_type, rdf_xmlschema["int"]) in G
 
         wfl_o_ns = rdflib.Namespace(wfl_o_ns_str.format(workflow_name=nba.unique_name))
         assert (wfl_o_ns["spectrum_png"], oda["value"], rdflib.Literal("fn")) in G
         assert (wfl_o_ns["spectrum_png"], rdf_type, oda_preview["png"]) in G
+        assert (wfl_o_ns["spectrum"], oda["value"], rdflib.Literal("h[0].tolist()")) in G
+        assert (wfl_o_ns["spectrum"], rdf_type, oda_preview["png"]) in G
 
