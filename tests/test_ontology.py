@@ -36,5 +36,8 @@ def test_nbadapter_repo_annotations(test_notebook_repo):
     assert (oda["1000integer_15integer_emax_keV_lower_limit_upper_limit"], oda["lower_limit"], rdflib.Literal(15)) in G
 
     
+def test_nb2rdf(test_notebook_repo):
+    from nb2workflow.nbadapter import NotebookAdapter, find_notebooks
+    from nb2workflow import ontology
 
-        
+    nbas = find_notebooks(test_notebook_repo)
