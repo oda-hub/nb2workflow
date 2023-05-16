@@ -161,10 +161,10 @@ def service_semantic_signature_owl(nbas, format="rdfxml"):
 
 
 
-def nb2rdf(notebook_fn: str, domains: Optional[list]=None) -> str:
+def nb2rdf(notebook_fn: str, domains: Optional[list]=None, format="turtle") -> str:
     nba = nbadapter.NotebookAdapter(notebook_fn)
 
-    rdf = service_semantic_signature(dict(local=nba), format="turtle", domains=domains)
+    rdf = service_semantic_signature(dict(local=nba), format=format, domains=domains)
             
     logging.getLogger().info("rdf: %s", rdf)
 
