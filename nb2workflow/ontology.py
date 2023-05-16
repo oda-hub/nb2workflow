@@ -70,7 +70,8 @@ def function_semantic_signature(function_name, location, parameters, output, dom
     oda_ns = rdflib.Namespace('http://odahub.io/ontology#')
     rdf_ns = rdflib.Namespace('http://www.w3.org/1999/02/22-rdf-syntax-ns#')
     wfl_p_ns = rdflib.Namespace(f'http://odahub.io/workflows/{function_name}/parameter_bindings#')
-    
+    wfl_o_ns = rdflib.Namespace(f'http://odahub.io/workflows/{function_name}/output_bindings#')
+
     G.bind('oda', oda_ns)
     G.bind('rdfs', rdf_ns)
     # G.bind('wfl', wfl_p_ns)
@@ -90,7 +91,15 @@ def function_semantic_signature(function_name, location, parameters, output, dom
     if domains is not None:
         for domain in domains:
             G.add((wfl, oda_ns['domain'], oda_ns[domain[0]]))
-                    
+
+    for on, ov in output.items():
+        logger.info('function_semantic_signature output on=%s ov=%s', on, ov)
+        o_uri = wfl_o_ns[on]
+        G.add((o_uri, rdf_ns['type'], rdflib.URIRef(to_xsd_type(ov))))
+        G.add((wfl, oda_ns['outputs'], o_uri))
+        if ov["extra_ttl"] is not None:
+            G.parse(data=ov["extra_ttl"])
+
     return G
 
 
