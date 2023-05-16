@@ -7,14 +7,15 @@ oda_ontology_integral_prefix = "http://odahub.io/ontology/integral#"
 oda_integral = rdflib.Namespace(oda_ontology_integral_prefix)
 oda_ontology_preview_prefix = "http://odahub.io/ontology/preview/"
 oda_preview = rdflib.Namespace(oda_ontology_preview_prefix)
-rdfs_2000 = rdflib.Namespace("http://www.w3.org/2000/01/rdf-schema#")
-rdf_1999 = rdflib.Namespace('http://www.w3.org/1999/02/22-rdf-syntax-ns#')
+
+rdfs = rdflib.Namespace("http://www.w3.org/2000/01/rdf-schema#")
+rdf = rdflib.Namespace("http://www.w3.org/1999/02/22-rdf-syntax-ns#")
 
 wfl_p_ns_str = 'http://odahub.io/workflows/{workflow_name}/parameter_bindings#'
 wfl_o_ns_str = 'http://odahub.io/workflows/{workflow_name}/output_bindings#'
 
-subClassOf = rdfs_2000['subClassOf']
-rdf_type = rdf_1999['type']
+subClassOf = rdfs['subClassOf']
+rdf_type = rdf['type']
 
 
 FORMAT = '%(asctime)-15s %(message)s'
@@ -57,6 +58,7 @@ def test_nb2rdf(test_notebook_repo):
         rdf_nb = ontology.nb2rdf(nba.notebook_fn)
         G.parse(data=rdf_nb)
         G.bind("oda", oda)
+        G.bind('rdfs', rdfs)
         wfl_p_ns = rdflib.Namespace(wfl_p_ns_str.format(workflow_name=nba.unique_name))
         assert (wfl_p_ns["scwid"], oda["default_value"], rdflib.Literal("066500110010.001")) in G
         assert (wfl_p_ns["scwid"], rdf_type, oda_integral["ScWID"]) in G
