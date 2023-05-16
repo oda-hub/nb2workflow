@@ -84,6 +84,7 @@ def function_semantic_signature(function_name, location, parameters, output, dom
         p_uri = wfl_p_ns[pn]
         logger.info('function_semantic_signature parameter p_uri=%s', p_uri)
         G.add((p_uri, rdf_ns['type'], rdflib.URIRef(to_xsd_type(pv))))
+        G.add((p_uri, oda_ns['default_value'], rdflib.Literal(pv['default_value'])))
         G.add((wfl, oda_ns['expects'], p_uri))
         if pv["extra_ttl"] is not None:
             G.parse(data=pv["extra_ttl"])
@@ -96,6 +97,7 @@ def function_semantic_signature(function_name, location, parameters, output, dom
         logger.info('function_semantic_signature output on=%s ov=%s', on, ov)
         o_uri = wfl_o_ns[on]
         G.add((o_uri, rdf_ns['type'], rdflib.URIRef(to_xsd_type(ov))))
+        G.add((o_uri, oda_ns['default_value'], rdflib.Literal(rdflib.URIRef(ov['value']))))
         G.add((wfl, oda_ns['outputs'], o_uri))
         if ov["extra_ttl"] is not None:
             G.parse(data=ov["extra_ttl"])
