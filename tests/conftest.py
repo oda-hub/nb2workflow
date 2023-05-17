@@ -25,7 +25,8 @@ def test_notebook_repo():
     
     if path is None:
         path = os.path.join(os.getcwd(), 'tests/testrepo/')
-        shutil.rmtree(path)
+        if os.path.exists(path):
+            shutil.rmtree(path)
         subprocess.check_call(["git", "clone", "https://github.com/volodymyrss/nbworkflow-test.git", path])
 
     return path
