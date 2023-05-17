@@ -61,9 +61,9 @@ def test_nb2rdf(test_notebook_repo):
         G.bind("oda", oda)
         G.bind('rdfs', rdfs)
         wfl_p_ns = rdflib.Namespace(wfl_p_ns_str.format(workflow_name=nba.unique_name))
-        assert (wfl_p_ns["scwid"], oda["default_value"], rdflib.Literal("066500110010.001")) in G
+        assert (wfl_p_ns["scwid"], oda["value"], rdflib.Literal("066500110010.001")) in G
         assert (wfl_p_ns["scwid"], rdf_type, oda_integral["ScWID"]) in G
-        assert (wfl_p_ns["nbins"], oda["default_value"], rdflib.Literal(100)) in G
+        assert (wfl_p_ns["nbins"], oda["value"], rdflib.Literal(100)) in G
         assert (wfl_p_ns["nbins"], rdf_type, rdf_xmlschema["int"]) in G
 
         wfl_o_ns = rdflib.Namespace(wfl_o_ns_str.format(workflow_name=nba.unique_name))
