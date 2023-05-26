@@ -64,7 +64,9 @@ def test_nb2rdf(test_notebook_repo):
         assert (wfl_p_ns["scwid"], oda["value"], rdflib.Literal("066500110010.001")) in G
         assert (wfl_p_ns["scwid"], rdf_type, oda_integral["ScWID"]) in G
         assert (wfl_p_ns["nbins"], oda["value"], rdflib.Literal(100)) in G
-        assert (wfl_p_ns["nbins"], rdf_type, rdf_xmlschema["int"]) in G
+        assert (wfl_p_ns["nbins"], rdf_type, rdf_xmlschema["integer"]) in G
+        assert (wfl_p_ns["sleep"], oda["value"], rdflib.Literal(0)) in G
+        assert (wfl_p_ns["sleep"], rdf_type, rdf_xmlschema["integer"]) in G
 
         wfl_o_ns = rdflib.Namespace(wfl_o_ns_str.format(workflow_name=nba.unique_name))
         assert (wfl_o_ns["spectrum_png"], oda["value"], rdflib.Literal("fn")) in G
