@@ -44,7 +44,7 @@ def test_nbadapter(test_notebook, morph_notebook, caplog):
     assert 'comment' in parameters['scwid']
     assert parameters['scwid']['owl_type'] == "http://odahub.io/ontology/integral#ScWID"
 
-    assert parameters['enabled']['owl_type'] == "http://www.w3.org/2001/XMLSchema#bool"
+    assert parameters['enabled']['owl_type'] == "http://www.w3.org/2001/XMLSchema#boolean"
 
     outputs = nba.extract_output_declarations()
     print("outputs", outputs)
