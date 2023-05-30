@@ -126,16 +126,27 @@ def parse_nbline(line: str, nb_uri=None) -> Optional[dict]:
 def owl_type_for_python_type(python_type: type):
     out_type = python_type.__name__
 
+    xml_scheme_url = "http://www.w3.org/2001/XMLSchema#"
+    oda_ontology_url = "http://odahub.io/ontology#"
+
     if python_type == int:
         out_type = 'integer'
-
-    if python_type == str:
+        url_prefix = xml_scheme_url
+    elif python_type == str:
         out_type = 'string'
-
-    if python_type == bool:
+        url_prefix = xml_scheme_url
+    elif python_type == bool:
         out_type = 'boolean'
+        url_prefix = xml_scheme_url
+    elif python_type == float:
+        out_type = 'float'
+        url_prefix = xml_scheme_url
+    else:
+        url_prefix = oda_ontology_url
 
-    return "http://www.w3.org/2001/XMLSchema#" + out_type
+    output_url = f"{url_prefix}{out_type}"
+
+    return output_url
 
 class InputParameter:
     raw_line=None 
