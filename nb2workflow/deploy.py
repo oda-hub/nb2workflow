@@ -107,7 +107,7 @@ def _nb2w_dockerfile_gen(context_dir, git_origin, source_from, meta, nb2wversion
         dockerfile_content += "RUN pip install -r repo/requirements.txt\n"
 
     if nb2wversion.startswith('git+'):
-        dockerfile_content += f"RUN pip install git+https://github.com/oda-hub/nb2workflow@{nb2wversion[4:]}?egg=nb2workflow[service]\n"
+        dockerfile_content += f"RUN pip install git+https://github.com/oda-hub/nb2workflow@{nb2wversion[4:]}#egg=nb2workflow[service]\n"
     else:
         dockerfile_content += f"RUN pip install nb2workflow[service]=={nb2wversion}\n"
                     
