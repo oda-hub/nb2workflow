@@ -278,7 +278,7 @@ def _build_with_docker(git_origin,
         dockerfile_content = _nb2w_dockerfile_gen(tmpdir, git_origin, source_from, meta, nb2wversion)
 
         ts = '-' + time.strftime(r'%y%m%d%H%M%S') if build_timestamp else ''
-        image = f"{registry}/nb-{pathlib.Path(git_origin).name}:{meta['descr']}-nb2w{version()}{ts}"
+        image = f"{registry}/nb-{pathlib.Path(git_origin).name}:{meta['descr']}-nb2w{nb2wversion.replace('git+', '')}{ts}"
 
         if not dry_run:
             subprocess.check_call( # cli is more stable than python API
