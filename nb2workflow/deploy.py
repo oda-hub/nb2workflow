@@ -364,6 +364,15 @@ def deploy(git_origin,
             logging.info("will check live")
             while True:
                 try:
+                    p = subprocess.run([
+                        "kubectl",
+                        "-n", namespace, 
+                        "rollout",
+                        "status",
+                        "deployment",
+                        deployment_name,
+                    ], check = True)
+                    
                     p = subprocess.Popen([
                         "kubectl",
                         "exec",
@@ -382,8 +391,8 @@ def deploy(git_origin,
                         logger.info("got valid output json: %s", service_output)
                         break
                 except Exception as e:
-                    logging.info("problem getting response from the service: %s", e)
-                    time.sleep(3)                    
+                    logging.info("backend not yet deployed or problem getting response: %s", e)
+                    time.sleep(10)                    
         else:
             service_output = {}
         
