@@ -14,8 +14,10 @@ jobs:
     runs-on: ubuntu-20.04
     steps:
     - name: actions/checkout
-      uses: actions/checkout@v2
-      # with:
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.ODA_BOT_SECRET }}
       #     persist-credentials: false
 
     - name: Install dependencies
