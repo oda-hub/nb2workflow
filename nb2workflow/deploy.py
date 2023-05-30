@@ -43,14 +43,15 @@ def build_container(git_origin,
                     build_timestamp=False,
                     engine = "docker",
                     cleanup = False,
+                    nb2wversion = version(),
                     **kwargs):
-    # TODO: takes time, could it be done asynchronously?
     if engine == "docker":
         return _build_with_docker(git_origin=git_origin,
                                  local=local,
                                  run_tests=run_tests,
                                  registry = registry,
-                                 build_timestamp=build_timestamp)
+                                 build_timestamp=build_timestamp,
+                                 nb2wversion = nb2wversion)
     elif engine == 'kaniko':
         if run_tests == True:
             logger.warning("KANIKO builder doesn't support run_tests . Will switch off")
@@ -58,13 +59,14 @@ def build_container(git_origin,
                                  registry = registry,
                                  local = local,
                                  build_timestamp=build_timestamp,
-                                 namespace = kwargs['namespace']
+                                 namespace = kwargs['namespace'],
+                                 nb2wversion = nb2wversion
                                  )
     else:
         return NotImplementedError('Unknown container build engine: %s', engine)
 
 
-def _nb2w_dockerfile_gen(context_dir, git_origin, source_from, meta):
+def _nb2w_dockerfile_gen(context_dir, git_origin, source_from, meta, nb2wversion):
     try:
         with open(pathlib.Path(context_dir) / "Dockerfile", "r") as fd:
             dockerfile_content = fd.read()
@@ -103,10 +105,13 @@ def _nb2w_dockerfile_gen(context_dir, git_origin, source_from, meta):
     
     if not config['use_repo_base_image']:         
         dockerfile_content += "RUN pip install -r repo/requirements.txt\n"
-    
-    dockerfile_content += dedent(f"""
-        RUN pip install nb2workflow[cwl,service,rdf]=={version()}
-        
+
+    if nb2wversion.startswith('git+'):
+        dockerfile_content += f"RUN pip install git+https://github.com/oda-hub/nb2workflow@{nb2wversion[4:]}?egg=nb2workflow[service]\n"
+    else:
+        dockerfile_content += f"RUN pip install nb2workflow[service]=={nb2wversion}\n"
+                    
+    dockerfile_content += dedent(f"""       
         ENV ODA_WORKFLOW_VERSION="{meta['descr']}"
         ENV ODA_WORKFLOW_LAST_AUTHOR="{meta['author']}"
         ENV ODA_WORKFLOW_LAST_CHANGED="{meta['last_change_time']}"
@@ -131,7 +136,8 @@ def _build_with_kaniko(git_origin,
                       local=False,
                       build_timestamp=False,
                       namespace="oda-staging",
-                      cleanup = True):
+                      cleanup = True,
+                      nb2wversion = version()):
     
     #secret should be created beforehand https://github.com/GoogleContainerTools/kaniko#pushing-to-docker-hub
        
@@ -139,7 +145,8 @@ def _build_with_kaniko(git_origin,
                                             registry=registry,
                                             build_timestamp=build_timestamp,
                                             dry_run=True,
-                                            source_from='git')
+                                            source_from='git',
+                                            nb2wversion = nb2wversion)
     
     dockerfile_content = container_metadata['dockerfile_content']
     
@@ -241,7 +248,8 @@ def _build_with_docker(git_origin,
                     build_timestamp=False,
                     dry_run = False,
                     source_from = 'localdir',
-                    cleanup = False):
+                    cleanup = False,
+                    nb2wversion = version()):
     if cleanup:
         logger.warning('Post-build cleanup is not implemented for docker builds')
     
@@ -267,7 +275,7 @@ def _build_with_docker(git_origin,
                                     ["git", "log", "-1", "--pretty=format:'%ai'"], # could use all authors too, but it's inside anyway
                                     cwd=local_repo_path ).decode().strip()
 
-        dockerfile_content = _nb2w_dockerfile_gen(tmpdir, git_origin, source_from, meta)
+        dockerfile_content = _nb2w_dockerfile_gen(tmpdir, git_origin, source_from, meta, nb2wversion)
 
         ts = '-' + time.strftime(r'%y%m%d%H%M%S') if build_timestamp else ''
         image = f"{registry}/nb-{pathlib.Path(git_origin).name}:{meta['descr']}-nb2w{version()}{ts}"
@@ -322,7 +330,8 @@ def deploy(git_origin,
            check_live_through = "oda-dispatcher",
            build_engine = 'docker',
            build_timestamp = False,
-           cleanup = False):
+           cleanup = False,
+           nb2wversion = version()):
     
     container = build_container(git_origin, 
                                 local=local, 
@@ -331,7 +340,8 @@ def deploy(git_origin,
                                 engine=build_engine, 
                                 namespace=namespace,
                                 build_timestamp=build_timestamp,
-                                cleanup = cleanup)
+                                cleanup = cleanup,
+                                nb2wversion = nb2wversion)
     
     if local:
         subprocess.check_call( # cli is more stable than python API
@@ -416,12 +426,18 @@ def main():
     parser.add_argument('--namespace', metavar='namespace', type=str, default="oda-staging")
     parser.add_argument('--local', action="store_true", default=False)
     parser.add_argument('--build-engine', metavar="build_engine", default="docker")
+    parser.add_argument('--nb2wversion', metavar="nb2wversion", default=version())
     
     args = parser.parse_args()
 
     setup_logging()
     
-    deploy(args.repository, args.deployment_name, namespace=args.namespace, local=args.local, build_engine=args.build_engine)
+    deploy(args.repository, 
+           args.deployment_name, 
+           namespace=args.namespace, 
+           local=args.local, 
+           build_engine=args.build_engine, 
+           nb2wversion=args.nb2wversion)
 
 
 if __name__ == "__main__":
