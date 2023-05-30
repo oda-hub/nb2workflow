@@ -30,8 +30,12 @@ jobs:
         bump2version patch --verbose --commit --tag
         bump2version release --verbose --commit --tag
 
-    - uses: stefanzweifel/git-auto-commit-action@v4
-
+    - name: Push changes
+      uses: ad-m/github-push-action@master
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        branch: ${{ github.ref }}
+        
     - name: Build package
       run: python -m build
 
