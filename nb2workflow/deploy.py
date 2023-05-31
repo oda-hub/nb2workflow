@@ -123,7 +123,7 @@ def _nb2w_dockerfile_gen(context_dir, git_origin, source_from, meta, nb2wversion
         RUN for nn in $ODA_WORKFLOW_NOTEBOOK_PATH/*.ipynb; do mv $nn $nn-tmp; \
             jq '.metadata.kernelspec.name |= "python3"' $nn-tmp > $nn ; rm $nn-tmp ; done
         
-        ENTRYPOINT nb2service --debug $ODA_WORKFLOW_NOTEBOOK_PATH --pattern $ODA_WORKFLOW_FILENAME_PATTERN --host 0.0.0.0 --port 8000 | cut -c1-500
+        ENTRYPOINT nb2service --debug $ODA_WORKFLOW_NOTEBOOK_PATH --pattern "$ODA_WORKFLOW_FILENAME_PATTERN" --host 0.0.0.0 --port 8000 | cut -c1-500
         """)
     
     with open(pathlib.Path(context_dir) / "Dockerfile", "w") as fd:
@@ -374,11 +374,14 @@ def deploy(git_origin,
             logging.info("will check live")
             while True:
                 try:
+                    # TODO: for this to work well, deployment should have readiness status?
+                    #       then check_live with curl may become redundant
                     p = subprocess.run([
                         "kubectl",
                         "-n", namespace, 
                         "rollout",
                         "status",
+                        "-w",
                         "deployment",
                         deployment_name,
                     ], check = True)
