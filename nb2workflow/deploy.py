@@ -385,14 +385,10 @@ def deploy(git_origin,
                 ["kubectl", "expose", "deployment", deployment_name, "--name", deployment_name, 
                 "--port", "8000", "-n", namespace]
             )
-            
-
         
         if check_live:
             logging.info("will check live")
-            
-            # TODO: for this to work well, deployment should have startupProbe?
-            #       then check_live with curl may become redundant (except service_output)
+
             p = subprocess.run([
                 "kubectl",
                 "-n", namespace, 
@@ -404,6 +400,7 @@ def deploy(git_origin,
                 deployment_name,
             ], check = True)
             
+            # TODO: redundant?
             for i in range(3):
                 try:
                     p = subprocess.Popen([
