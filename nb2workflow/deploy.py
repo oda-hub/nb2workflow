@@ -364,28 +364,48 @@ def deploy(git_origin,
             subprocess.check_call(
                 ["kubectl", "create", "deployment", deployment_name, "-n", namespace, "--image=" + container['image']]
             )
+            
+            subprocess.check_call(
+                ["kubectl", "patch", "deployment", deployment_name, "-n", namespace,
+                "--type", "merge",
+                "-p", 
+                json.dumps(
+                    {"spec":{"template":{"spec":{
+                        "containers":[
+                            {"name": deployment_name, 
+                             "startupProbe": {"httpGet": {"path": "/health", "port": 8000},
+                                              "initialDelaySeconds": 5,
+                                              "periodSeconds": 5}
+                            }
+                        ]}}}})
+                ]
+            )
+            
             subprocess.check_call(
                 ["kubectl", "expose", "deployment", deployment_name, "--name", deployment_name, 
                 "--port", "8000", "-n", namespace]
             )
+            
 
-
+        
         if check_live:
             logging.info("will check live")
-            while True:
+            
+            # TODO: for this to work well, deployment should have startupProbe?
+            #       then check_live with curl may become redundant (except service_output)
+            p = subprocess.run([
+                "kubectl",
+                "-n", namespace, 
+                "rollout",
+                "status",
+                "-w",
+                "--timeout", "10m",
+                "deployment",
+                deployment_name,
+            ], check = True)
+            
+            for i in range(3):
                 try:
-                    # TODO: for this to work well, deployment should have readiness status?
-                    #       then check_live with curl may become redundant
-                    p = subprocess.run([
-                        "kubectl",
-                        "-n", namespace, 
-                        "rollout",
-                        "status",
-                        "-w",
-                        "deployment",
-                        deployment_name,
-                    ], check = True)
-                    
                     p = subprocess.Popen([
                         "kubectl",
                         "exec",
