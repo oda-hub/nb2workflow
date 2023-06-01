@@ -5,7 +5,7 @@ import logging
 import os
 import pathlib
 import re
-import subprocess
+import subprocess as sp
 import tempfile
 import time
 import yaml
@@ -30,7 +30,7 @@ default_config = {
 #TODO: probably want an option to really use the dir
 def determine_origin(repo):
     if os.path.isdir(repo):
-        return subprocess.check_output(
+        return sp.check_output(
             ["git", "remote", "get-url", "origin"],
             cwd=repo).decode().strip()
     else:
@@ -41,30 +41,32 @@ def build_container(git_origin,
                     run_tests=True, 
                     registry="odahub", 
                     build_timestamp=False,
-                    engine = "docker",
-                    cleanup = False,
+                    engine="docker",
+                    cleanup=False,
+                    nb2wversion=version(),
                     **kwargs):
-    # TODO: takes time, could it be done asynchronously?
     if engine == "docker":
         return _build_with_docker(git_origin=git_origin,
                                  local=local,
                                  run_tests=run_tests,
-                                 registry = registry,
-                                 build_timestamp=build_timestamp)
+                                 registry=registry,
+                                 build_timestamp=build_timestamp,
+                                 nb2wversion=nb2wversion)
     elif engine == 'kaniko':
         if run_tests == True:
             logger.warning("KANIKO builder doesn't support run_tests . Will switch off")
         return _build_with_kaniko(git_origin=git_origin,
-                                 registry = registry,
-                                 local = local,
+                                 registry=registry,
+                                 local=local,
                                  build_timestamp=build_timestamp,
-                                 namespace = kwargs['namespace']
+                                 namespace=kwargs['namespace'],
+                                 nb2wversion=nb2wversion
                                  )
     else:
         return NotImplementedError('Unknown container build engine: %s', engine)
 
 
-def _nb2w_dockerfile_gen(context_dir, git_origin, source_from, meta):
+def _nb2w_dockerfile_gen(context_dir, git_origin, source_from, meta, nb2wversion):
     try:
         with open(pathlib.Path(context_dir) / "Dockerfile", "r") as fd:
             dockerfile_content = fd.read()
@@ -103,10 +105,13 @@ def _nb2w_dockerfile_gen(context_dir, git_origin, source_from, meta):
     
     if not config['use_repo_base_image']:         
         dockerfile_content += "RUN pip install -r repo/requirements.txt\n"
-    
-    dockerfile_content += dedent(f"""
-        RUN pip install nb2workflow[cwl,service,rdf]=={version()}
-        
+
+    if nb2wversion.startswith('git+'):
+        dockerfile_content += f"RUN pip install git+https://github.com/oda-hub/nb2workflow@{nb2wversion[4:]}#egg=nb2workflow[service]\n"
+    else:
+        dockerfile_content += f"RUN pip install nb2workflow[service]=={nb2wversion}\n"
+                    
+    dockerfile_content += dedent(f"""       
         ENV ODA_WORKFLOW_VERSION="{meta['descr']}"
         ENV ODA_WORKFLOW_LAST_AUTHOR="{meta['author']}"
         ENV ODA_WORKFLOW_LAST_CHANGED="{meta['last_change_time']}"
@@ -118,7 +123,7 @@ def _nb2w_dockerfile_gen(context_dir, git_origin, source_from, meta):
         RUN for nn in $ODA_WORKFLOW_NOTEBOOK_PATH/*.ipynb; do mv $nn $nn-tmp; \
             jq '.metadata.kernelspec.name |= "python3"' $nn-tmp > $nn ; rm $nn-tmp ; done
         
-        ENTRYPOINT nb2service --debug $ODA_WORKFLOW_NOTEBOOK_PATH --pattern $ODA_WORKFLOW_FILENAME_PATTERN --host 0.0.0.0 --port 8000 | cut -c1-500
+        ENTRYPOINT nb2service --debug $ODA_WORKFLOW_NOTEBOOK_PATH --pattern "$ODA_WORKFLOW_FILENAME_PATTERN" --host 0.0.0.0 --port 8000 | cut -c1-500
         """)
     
     with open(pathlib.Path(context_dir) / "Dockerfile", "w") as fd:
@@ -131,7 +136,8 @@ def _build_with_kaniko(git_origin,
                       local=False,
                       build_timestamp=False,
                       namespace="oda-staging",
-                      cleanup = True):
+                      cleanup=True,
+                      nb2wversion=version()):
     
     #secret should be created beforehand https://github.com/GoogleContainerTools/kaniko#pushing-to-docker-hub
        
@@ -139,7 +145,8 @@ def _build_with_kaniko(git_origin,
                                             registry=registry,
                                             build_timestamp=build_timestamp,
                                             dry_run=True,
-                                            source_from='git')
+                                            source_from='git',
+                                            nb2wversion=nb2wversion)
     
     dockerfile_content = container_metadata['dockerfile_content']
     
@@ -150,14 +157,14 @@ def _build_with_kaniko(git_origin,
         
         suffix = pathlib.Path(tmpdir).name.lower().replace('_', '-')
         
-        subprocess.check_call([
+        sp.check_call([
             "kubectl",
             "create",
             "configmap",
             "-n", namespace,
             f"nb2w-dockerfile-{suffix}",
             "--from-file=Dockerfile=Dockerfile"
-        ], cwd = tmpdir)
+        ], cwd=tmpdir)
         
         dest = '--no-push' if local else f'--destination={container_metadata["image"]}'
         with open(pathlib.Path(tmpdir) / "buildjob.yaml", "w") as fd:
@@ -196,14 +203,14 @@ def _build_with_kaniko(git_origin,
                       restartPolicy: Never
                 """))
         
-        subprocess.check_call([
+        sp.check_call([
             "kubectl",
             "create",
             "-f",
             "buildjob.yaml"
-        ], cwd = tmpdir)
+        ], cwd=tmpdir)
         
-        subprocess.check_call([
+        sp.check_call([
             "kubectl",
             "-n",
             f"{namespace}",
@@ -214,7 +221,7 @@ def _build_with_kaniko(git_origin,
         ])
         
         if cleanup:
-            subprocess.check_call([
+            sp.check_call([
                 "kubectl",
                 "-n",
                 f"{namespace}",
@@ -222,7 +229,7 @@ def _build_with_kaniko(git_origin,
                 f"job/kaniko-build-{suffix}"
             ])
             
-            subprocess.check_call([
+            sp.check_call([
                 "kubectl",
                 "-n",
                 f"{namespace}",
@@ -239,48 +246,49 @@ def _build_with_docker(git_origin,
                     run_tests=True, 
                     registry="odahub", 
                     build_timestamp=False,
-                    dry_run = False,
-                    source_from = 'localdir',
-                    cleanup = False):
+                    dry_run=False,
+                    source_from='localdir',
+                    cleanup=False,
+                    nb2wversion=version()):
     if cleanup:
         logger.warning('Post-build cleanup is not implemented for docker builds')
     
     git_origin = determine_origin(git_origin)
 
     with tempfile.TemporaryDirectory() as tmpdir:        
-        subprocess.check_call(# cli is more stable than python API
+        sp.check_call(# cli is more stable than python API
             ["git", "clone", git_origin, "nb-repo"],
             cwd=tmpdir)
 
         local_repo_path = pathlib.Path(tmpdir) / "nb-repo"
 
         meta = {}
-        meta['descr'] = subprocess.check_output( # cli is more stable than python API
+        meta['descr'] = sp.check_output( # cli is more stable than python API
                             ["git", "describe", "--always", "--tags"],
                             cwd=local_repo_path ).decode().strip()
         
-        meta['author'] = subprocess.check_output( 
+        meta['author'] = sp.check_output( 
                             ["git", "log", "-1", "--pretty=format:'%an <%ae>'"], # could use all authors too, but it's inside anyway
                             cwd=local_repo_path ).decode().strip()
             
-        meta['last_change_time'] = subprocess.check_output( 
+        meta['last_change_time'] = sp.check_output( 
                                     ["git", "log", "-1", "--pretty=format:'%ai'"], # could use all authors too, but it's inside anyway
                                     cwd=local_repo_path ).decode().strip()
 
-        dockerfile_content = _nb2w_dockerfile_gen(tmpdir, git_origin, source_from, meta)
+        dockerfile_content = _nb2w_dockerfile_gen(tmpdir, git_origin, source_from, meta, nb2wversion)
 
         ts = '-' + time.strftime(r'%y%m%d%H%M%S') if build_timestamp else ''
-        image = f"{registry}/nb-{pathlib.Path(git_origin).name}:{meta['descr']}-nb2w{version()}{ts}"
+        image = f"{registry}/nb-{pathlib.Path(git_origin).name}:{meta['descr']}-nb2w{nb2wversion.replace('git+', '')}{ts}"
 
         if not dry_run:
-            subprocess.check_call( # cli is more stable than python API
+            sp.check_call( # cli is more stable than python API
                 ["docker", "build", ".", "-t", image],
                 cwd=tmpdir)     
 
         if run_tests and not dry_run: 
             # TODO: run tests too
             # TODO: probably better to move this to deploy
-            out = subprocess.check_output(
+            out = sp.check_output(
                     ["docker", "run", '--rm', '--entrypoint', 'bash', image, '-c', 
                      ('pip install nb2workflow[rdf,mmoda,service] --upgrade;'
                       'for a in $(ls $ODA_WORKFLOW_NOTEBOOK_PATH/*ipynb | grep -v test_); do'
@@ -300,7 +308,7 @@ def _build_with_docker(git_origin,
             workflow_nb_signature = None
         
     if not local and not dry_run: 
-        subprocess.check_call( # cli is more stable than python API
+        sp.check_call( # cli is more stable than python API
             ["docker", "push", image])
     
     return {"descr": meta['descr'],
@@ -319,10 +327,11 @@ def deploy(git_origin,
            run_tests=True, 
            check_live=True, 
            registry="odahub", 
-           check_live_through = "oda-dispatcher",
-           build_engine = 'docker',
-           build_timestamp = False,
-           cleanup = False):
+           check_live_through="oda-dispatcher",
+           build_engine='docker',
+           build_timestamp=False,
+           cleanup=False,
+           nb2wversion=version()):
     
     container = build_container(git_origin, 
                                 local=local, 
@@ -331,15 +340,16 @@ def deploy(git_origin,
                                 engine=build_engine, 
                                 namespace=namespace,
                                 build_timestamp=build_timestamp,
-                                cleanup = cleanup)
+                                cleanup=cleanup,
+                                nb2wversion=nb2wversion)
     
     if local:
-        subprocess.check_call( # cli is more stable than python API
+        sp.check_call( # cli is more stable than python API
             ["docker", "run", '-p', '8000:8000', container['image']])
     else:
         deployment_name = deployment_base_name + "-backend"
         try:
-            subprocess.check_call(
+            sp.check_call(
                 ["kubectl", "patch", "deployment", deployment_name, "-n", namespace,
                 "--type", "merge",
                 "-p", 
@@ -350,21 +360,50 @@ def deploy(git_origin,
                         ]}}}})
                 ]
             )
-        except Exception as e:
-            subprocess.check_call(
+        except sp.CalledProcessError:
+            sp.check_call(
                 ["kubectl", "create", "deployment", deployment_name, "-n", namespace, "--image=" + container['image']]
             )
-            subprocess.check_call(
+            sp.check_call(
                 ["kubectl", "expose", "deployment", deployment_name, "--name", deployment_name, 
                 "--port", "8000", "-n", namespace]
             )
-
-
+        
+        finally:                    
+            sp.check_call(
+                ["kubectl", "patch", "deployment", deployment_name, "-n", namespace,
+                "--type", "strategic",
+                "-p", 
+                json.dumps(
+                    {"spec":{"template":{"spec":{
+                        "containers":[
+                            {"name": deployment_name, 
+                             "startupProbe": {"httpGet": {"path": "/health", "port": 8000},
+                                              "initialDelaySeconds": 5,
+                                              "periodSeconds": 5}
+                            }
+                        ]}}}})
+                ]
+            )
+        
         if check_live:
             logging.info("will check live")
-            while True:
+
+            p = sp.run([
+                "kubectl",
+                "-n", namespace, 
+                "rollout",
+                "status",
+                "-w",
+                "--timeout", "10m",
+                "deployment",
+                deployment_name,
+            ], check=True)
+            
+            # TODO: redundant?
+            for i in range(3):
                 try:
-                    p = subprocess.Popen([
+                    p = sp.Popen([
                         "kubectl",
                         "exec",
                         #"-it",
@@ -373,7 +412,7 @@ def deploy(git_origin,
                         namespace,
                         "--",
                         "bash", "-c",
-                        f"curl {deployment_name}:8000"], stdout=subprocess.PIPE)
+                        f"curl {deployment_name}:8000"], stdout=sp.PIPE)
                     p.wait()
                     if p.stdout is not None:
                         service_output_json = p.stdout.read()
@@ -383,7 +422,7 @@ def deploy(git_origin,
                         break
                 except Exception as e:
                     logging.info("problem getting response from the service: %s", e)
-                    time.sleep(3)                    
+                    time.sleep(10)                    
         else:
             service_output = {}
         
@@ -407,12 +446,18 @@ def main():
     parser.add_argument('--namespace', metavar='namespace', type=str, default="oda-staging")
     parser.add_argument('--local', action="store_true", default=False)
     parser.add_argument('--build-engine', metavar="build_engine", default="docker")
+    parser.add_argument('--nb2wversion', metavar="nb2wversion", default=version())
     
     args = parser.parse_args()
 
     setup_logging()
     
-    deploy(args.repository, args.deployment_name, namespace=args.namespace, local=args.local, build_engine=args.build_engine)
+    deploy(args.repository, 
+           args.deployment_name, 
+           namespace=args.namespace, 
+           local=args.local, 
+           build_engine=args.build_engine, 
+           nb2wversion=args.nb2wversion)
 
 
 if __name__ == "__main__":
