@@ -3,6 +3,8 @@
 [![Python package](https://github.com/volodymyrss/nb2workflow/actions/workflows/python-package.yml/badge.svg)](https://github.com/volodymyrss/nb2workflow/actions/workflows/python-package.yml)
 [![codecov](https://codecov.io/gh/volodymyrss/nb2workflow/branch/master/graph/badge.svg)](https://codecov.io/gh/volodymyrss/nb2workflow)
 
+This repository helps to use notebook as a workflow.
+
 ## Starts service without container:
 ```bash
 nb2service tests/testrepo/workflow-notebook.ipynb
