@@ -421,7 +421,7 @@ def deploy(git_origin,
                         logger.info("got valid output json: %s", service_output)
                         break
                 except Exception as e:
-                    logging.info("backend not yet deployed or problem getting response: %s", e)
+                    logging.info("problem getting response from the service: %s", e)
                     time.sleep(10)                    
         else:
             service_output = {}
