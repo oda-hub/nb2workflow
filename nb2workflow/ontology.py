@@ -40,24 +40,38 @@ def get_dda():
     return owlready2.get_ontology("http://ddahub.io/ontology/analysis#")
 
 
+def to_odahub_type(p):
+    out_type = 'String'
+
+    if issubclass(p['python_type'], int):
+        out_type = 'Integer'
+
+    if issubclass(p['python_type'], float):
+        out_type = 'Float'
+
+    if issubclass(p['python_type'], bool):
+        out_type = 'Boolean'
+
+    logger.debug("owl type cast from %s to %s", p, repr(out_type))
+
+    return p.get('owl_type', "http://odahub.io/ontology#" + out_type)
+
+
 def to_xsd_type(p):
     # if owlready2 is None:
     #     return
 
-    out_type='string'
+    out_type = 'string'
 
-    if issubclass(p['python_type'],int):
-        out_type='integer'
+    if issubclass(p['python_type'], int):
+        out_type = 'integer'
 
-    if issubclass(p['python_type'],float):
-        out_type='double'
+    if issubclass(p['python_type'], float):
+        out_type = 'double'
 
-    if issubclass(p['python_type'],str):
-        out_type='string'
-
-    logger.debug("owl type cast from %s to %s",p,repr(out_type))
+    logger.debug("owl type cast from %s to %s", p, repr(out_type))
     
-    return p.get('owl_type', "http://www.w3.org/2001/XMLSchema#"+out_type)
+    return p.get('owl_type', "http://www.w3.org/2001/XMLSchema#" + out_type)
 
 
 #TODO: return owl option as an option
