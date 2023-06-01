@@ -364,6 +364,10 @@ def deploy(git_origin,
             sp.check_call(
                 ["kubectl", "create", "deployment", deployment_name, "-n", namespace, "--image=" + container['image']]
             )
+            sp.check_call(
+                ["kubectl", "expose", "deployment", deployment_name, "--name", deployment_name, 
+                "--port", "8000", "-n", namespace]
+            )
         
         finally:                    
             sp.check_call(
@@ -380,11 +384,6 @@ def deploy(git_origin,
                             }
                         ]}}}})
                 ]
-            )
-            
-            sp.check_call(
-                ["kubectl", "expose", "deployment", deployment_name, "--name", deployment_name, 
-                "--port", "8000", "-n", namespace]
             )
         
         if check_live:
