@@ -59,8 +59,8 @@ def build_container(git_origin,
                                  registry = registry,
                                  local = local,
                                  build_timestamp=build_timestamp,
-                                 namespace = kwargs['namespace'],
-                                 nb2wversion = nb2wversion
+                                 namespace=kwargs['namespace'],
+                                 nb2wversion=nb2wversion
                                  )
     else:
         return NotImplementedError('Unknown container build engine: %s', engine)
