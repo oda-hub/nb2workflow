@@ -5,7 +5,7 @@ import logging
 import os
 import pathlib
 import re
-import subprocess
+import subprocess as sp
 import tempfile
 import time
 import yaml
@@ -30,7 +30,7 @@ default_config = {
 #TODO: probably want an option to really use the dir
 def determine_origin(repo):
     if os.path.isdir(repo):
-        return subprocess.check_output(
+        return sp.check_output(
             ["git", "remote", "get-url", "origin"],
             cwd=repo).decode().strip()
     else:
@@ -157,7 +157,7 @@ def _build_with_kaniko(git_origin,
         
         suffix = pathlib.Path(tmpdir).name.lower().replace('_', '-')
         
-        subprocess.check_call([
+        sp.check_call([
             "kubectl",
             "create",
             "configmap",
@@ -203,14 +203,14 @@ def _build_with_kaniko(git_origin,
                       restartPolicy: Never
                 """))
         
-        subprocess.check_call([
+        sp.check_call([
             "kubectl",
             "create",
             "-f",
             "buildjob.yaml"
         ], cwd = tmpdir)
         
-        subprocess.check_call([
+        sp.check_call([
             "kubectl",
             "-n",
             f"{namespace}",
@@ -221,7 +221,7 @@ def _build_with_kaniko(git_origin,
         ])
         
         if cleanup:
-            subprocess.check_call([
+            sp.check_call([
                 "kubectl",
                 "-n",
                 f"{namespace}",
@@ -229,7 +229,7 @@ def _build_with_kaniko(git_origin,
                 f"job/kaniko-build-{suffix}"
             ])
             
-            subprocess.check_call([
+            sp.check_call([
                 "kubectl",
                 "-n",
                 f"{namespace}",
@@ -256,22 +256,22 @@ def _build_with_docker(git_origin,
     git_origin = determine_origin(git_origin)
 
     with tempfile.TemporaryDirectory() as tmpdir:        
-        subprocess.check_call(# cli is more stable than python API
+        sp.check_call(# cli is more stable than python API
             ["git", "clone", git_origin, "nb-repo"],
             cwd=tmpdir)
 
         local_repo_path = pathlib.Path(tmpdir) / "nb-repo"
 
         meta = {}
-        meta['descr'] = subprocess.check_output( # cli is more stable than python API
+        meta['descr'] = sp.check_output( # cli is more stable than python API
                             ["git", "describe", "--always", "--tags"],
                             cwd=local_repo_path ).decode().strip()
         
-        meta['author'] = subprocess.check_output( 
+        meta['author'] = sp.check_output( 
                             ["git", "log", "-1", "--pretty=format:'%an <%ae>'"], # could use all authors too, but it's inside anyway
                             cwd=local_repo_path ).decode().strip()
             
-        meta['last_change_time'] = subprocess.check_output( 
+        meta['last_change_time'] = sp.check_output( 
                                     ["git", "log", "-1", "--pretty=format:'%ai'"], # could use all authors too, but it's inside anyway
                                     cwd=local_repo_path ).decode().strip()
 
@@ -281,14 +281,14 @@ def _build_with_docker(git_origin,
         image = f"{registry}/nb-{pathlib.Path(git_origin).name}:{meta['descr']}-nb2w{nb2wversion.replace('git+', '')}{ts}"
 
         if not dry_run:
-            subprocess.check_call( # cli is more stable than python API
+            sp.check_call( # cli is more stable than python API
                 ["docker", "build", ".", "-t", image],
                 cwd=tmpdir)     
 
         if run_tests and not dry_run: 
             # TODO: run tests too
             # TODO: probably better to move this to deploy
-            out = subprocess.check_output(
+            out = sp.check_output(
                     ["docker", "run", '--rm', '--entrypoint', 'bash', image, '-c', 
                      ('pip install nb2workflow[rdf,mmoda,service] --upgrade;'
                       'for a in $(ls $ODA_WORKFLOW_NOTEBOOK_PATH/*ipynb | grep -v test_); do'
@@ -308,7 +308,7 @@ def _build_with_docker(git_origin,
             workflow_nb_signature = None
         
     if not local and not dry_run: 
-        subprocess.check_call( # cli is more stable than python API
+        sp.check_call( # cli is more stable than python API
             ["docker", "push", image])
     
     return {"descr": meta['descr'],
@@ -344,12 +344,12 @@ def deploy(git_origin,
                                 nb2wversion = nb2wversion)
     
     if local:
-        subprocess.check_call( # cli is more stable than python API
+        sp.check_call( # cli is more stable than python API
             ["docker", "run", '-p', '8000:8000', container['image']])
     else:
         deployment_name = deployment_base_name + "-backend"
         try:
-            subprocess.check_call(
+            sp.check_call(
                 ["kubectl", "patch", "deployment", deployment_name, "-n", namespace,
                 "--type", "merge",
                 "-p", 
@@ -360,14 +360,15 @@ def deploy(git_origin,
                         ]}}}})
                 ]
             )
-        except Exception as e:
-            subprocess.check_call(
+        except sp.CalledProcessError:
+            sp.check_call(
                 ["kubectl", "create", "deployment", deployment_name, "-n", namespace, "--image=" + container['image']]
             )
-            
-            subprocess.check_call(
+        
+        finally:                    
+            sp.check_call(
                 ["kubectl", "patch", "deployment", deployment_name, "-n", namespace,
-                "--type", "merge",
+                "--type", "strategic",
                 "-p", 
                 json.dumps(
                     {"spec":{"template":{"spec":{
@@ -381,7 +382,7 @@ def deploy(git_origin,
                 ]
             )
             
-            subprocess.check_call(
+            sp.check_call(
                 ["kubectl", "expose", "deployment", deployment_name, "--name", deployment_name, 
                 "--port", "8000", "-n", namespace]
             )
@@ -389,7 +390,7 @@ def deploy(git_origin,
         if check_live:
             logging.info("will check live")
 
-            p = subprocess.run([
+            p = sp.run([
                 "kubectl",
                 "-n", namespace, 
                 "rollout",
@@ -403,7 +404,7 @@ def deploy(git_origin,
             # TODO: redundant?
             for i in range(3):
                 try:
-                    p = subprocess.Popen([
+                    p = sp.Popen([
                         "kubectl",
                         "exec",
                         #"-it",
@@ -412,7 +413,7 @@ def deploy(git_origin,
                         namespace,
                         "--",
                         "bash", "-c",
-                        f"curl {deployment_name}:8000"], stdout=subprocess.PIPE)
+                        f"curl {deployment_name}:8000"], stdout=sp.PIPE)
                     p.wait()
                     if p.stdout is not None:
                         service_output_json = p.stdout.read()
