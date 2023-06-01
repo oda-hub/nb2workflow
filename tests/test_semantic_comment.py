@@ -135,14 +135,14 @@ def test_semantic_nbline():
     assert r['owl_type'] == "http://odahub.io/ontology#StartTimeISOT"
 
     r = parse_nbline("tstart_seconds=1 # oda:upper_limit 2") 
-    assert r['owl_type'] == "http://odahub.io/ontology#2integer_integer_upper_limit"
+    assert r['owl_type'] == "http://odahub.io/ontology#2integer_Integer_upper_limit"
     assert normalize(r['extra_ttl']) == normalize("""
         @prefix oda: <http://odahub.io/ontology#> . 
         @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> . 
         @prefix xsd: <http://www.w3.org/2001/XMLSchema#> . 
         @prefix owl: <http://www.w3.org/2002/07/owl#> . 
         
-        oda:2integer_integer_upper_limit rdfs:subClassOf xsd:integer;
+        oda:2integer_Integer_upper_limit rdfs:subClassOf oda:Integer;
                                      oda:upper_limit 2 .
     """)
 

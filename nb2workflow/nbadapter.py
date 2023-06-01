@@ -108,7 +108,7 @@ def parse_nbline(line: str, nb_uri=None) -> Optional[dict]:
             value = value_str
             python_type = str
             
-        parsed_comment = understand_comment_references(comment, fallback_type=owl_type_for_python_type(python_type))        
+        parsed_comment = understand_comment_references(comment, fallback_type=odahub_type_for_python_type(python_type))
         
         logger.info("parameter name=%s value=%s python_type=%s, owl_type=%s extra_ttl=%s", 
                     name, value, python_type, parsed_comment['owl_type'], parsed_comment['extra_ttl'])
@@ -121,6 +121,32 @@ def parse_nbline(line: str, nb_uri=None) -> Optional[dict]:
                     owl_type = parsed_comment.get('owl_type', None),
                     extra_ttl = parsed_comment.get('extra_ttl', None),
                 )
+
+
+def odahub_type_for_python_type(python_type: type):
+    out_type = python_type.__name__
+
+    xml_scheme_url = "http://www.w3.org/2001/XMLSchema#"
+    oda_ontology_url = "http://odahub.io/ontology#"
+
+    if python_type == int:
+        out_type = 'Integer'
+        url_prefix = oda_ontology_url
+    elif python_type == str:
+        out_type = 'String'
+        url_prefix = oda_ontology_url
+    elif python_type == bool:
+        out_type = 'Boolean'
+        url_prefix = oda_ontology_url
+    elif python_type == float:
+        out_type = 'Float'
+        url_prefix = oda_ontology_url
+    else:
+        url_prefix = xml_scheme_url
+
+    output_url = f"{url_prefix}{out_type}"
+
+    return output_url
 
 
 def owl_type_for_python_type(python_type: type):

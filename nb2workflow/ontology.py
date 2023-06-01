@@ -40,24 +40,38 @@ def get_dda():
     return owlready2.get_ontology("http://ddahub.io/ontology/analysis#")
 
 
+def to_odahub_type(p):
+    out_type = 'String'
+
+    if issubclass(p['python_type'], int):
+        out_type = 'Integer'
+
+    if issubclass(p['python_type'], float):
+        out_type = 'Float'
+
+    if issubclass(p['python_type'], bool):
+        out_type = 'Boolean'
+
+    logger.debug("owl type cast from %s to %s", p, repr(out_type))
+
+    return p.get('owl_type', "http://odahub.io/ontology#" + out_type)
+
+
 def to_xsd_type(p):
     # if owlready2 is None:
     #     return
 
-    out_type='string'
+    out_type = 'string'
 
-    if issubclass(p['python_type'],int):
-        out_type='integer'
+    if issubclass(p['python_type'], int):
+        out_type = 'integer'
 
-    if issubclass(p['python_type'],float):
-        out_type='double'
+    if issubclass(p['python_type'], float):
+        out_type = 'double'
 
-    if issubclass(p['python_type'],str):
-        out_type='string'
-
-    logger.debug("owl type cast from %s to %s",p,repr(out_type))
+    logger.debug("owl type cast from %s to %s", p, repr(out_type))
     
-    return p.get('owl_type', "http://www.w3.org/2001/XMLSchema#"+out_type)
+    return p.get('owl_type', "http://www.w3.org/2001/XMLSchema#" + out_type)
 
 
 #TODO: return owl option as an option
@@ -83,7 +97,7 @@ def function_semantic_signature(function_name, location, parameters, output, dom
         logger.info('function_semantic_signature parameter pn=%s pv=%s', pn, pv)
         p_uri = wfl_p_ns[pn]
         logger.info('function_semantic_signature parameter p_uri=%s', p_uri)
-        G.add((p_uri, rdf_ns['type'], rdflib.URIRef(to_xsd_type(pv))))
+        G.add((p_uri, rdf_ns['type'], rdflib.URIRef(to_odahub_type(pv))))
         G.add((p_uri, oda_ns['value'], rdflib.Literal(pv['default_value'])))
         G.add((wfl, oda_ns['expects'], p_uri))
         if pv["extra_ttl"] is not None:
@@ -96,7 +110,7 @@ def function_semantic_signature(function_name, location, parameters, output, dom
     for on, ov in output.items():
         logger.info('function_semantic_signature output on=%s ov=%s', on, ov)
         o_uri = wfl_o_ns[on]
-        G.add((o_uri, rdf_ns['type'], rdflib.URIRef(to_xsd_type(ov))))
+        G.add((o_uri, rdf_ns['type'], rdflib.URIRef(to_odahub_type(ov))))
         G.add((o_uri, oda_ns['value'], rdflib.Literal(ov['value'])))
         G.add((wfl, oda_ns['outputs'], o_uri))
         if ov["extra_ttl"] is not None:
