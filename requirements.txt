@@ -24,4 +24,4 @@ scrapbook
 matplotlib
 pytest
 werkzeug==2.0.3
-nbconvert==7.0.0
+nbconvert>=7.0.0
