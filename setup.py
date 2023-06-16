@@ -81,7 +81,8 @@ setup(name='nb2workflow',
         'pyyaml',
         'scrapbook', 
         'werkzeug==2.0.3',
-        'sentry_sdk'
+        'sentry_sdk',
+        'rdflib'
       ],
 
 
