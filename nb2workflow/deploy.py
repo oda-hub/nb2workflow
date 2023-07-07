@@ -97,7 +97,7 @@ def _nb2w_dockerfile_gen(context_dir, git_origin, source_from, meta, nb2wversion
     logger.info("using notebook_fullpath_in_container: %s", notebook_fullpath_in_container)
 
     if not config['use_repo_base_image']: 
-        dockerfile_content = "FROM miniconda3\n"
+        dockerfile_content = "FROM continuumio/miniconda3\n"
         
     if source_from == 'localdir':
         dockerfile_content += "COPY nb-repo/ /repo/\n"
@@ -125,8 +125,8 @@ def _nb2w_dockerfile_gen(context_dir, git_origin, source_from, meta, nb2wversion
                 
         # Make RUN commands use the new environment:  
         if conda_env_name != 'base': #'base' environment activation is already in .bashrc of the base image
-            dockerfile_content += f'RUN echo "conda activate {conda_env_name}" >> ~/.bashrc'
-        dockerfile_content += 'SHELL ["/bin/bash", "--login", "-c"]'
+            dockerfile_content += f'RUN echo "conda activate {conda_env_name}" >> ~/.bashrc\n'
+        dockerfile_content += 'SHELL ["/bin/bash", "--login", "-c"]\n'
             
         dockerfile_content += "RUN pip install -r repo/requirements.txt\n"
 
