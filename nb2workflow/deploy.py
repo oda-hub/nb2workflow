@@ -153,7 +153,7 @@ def _nb2w_dockerfile_gen(context_dir, git_origin, source_from, meta, nb2wversion
         RUN chmod +x /tini
         
         RUN echo -e "#!/bin/bash --login\\n\\nconda activate {conda_env_name}\\n exec $@" > /entrypoint.sh; \
-            chmod +x /entrypont.sh
+            chmod +x /entrypoint.sh
         
         ENTRYPOINT ["/tini", "--", "/entrypoint.sh"]
         
