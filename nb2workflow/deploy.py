@@ -79,18 +79,25 @@ def _nb2w_dockerfile_gen(context_dir, git_origin, source_from, meta, nb2wversion
 
     config = default_config.copy()
     if os.path.exists(config_fn):
-        extra_config = yaml.safe_load(open(config_fn))
+        with open(config_fn, 'r') as fd:
+            extra_config = yaml.safe_load(fd)
         logger.info("extra config from %s: %s", config_fn, extra_config)
         config.update(extra_config)
     else:
-        logger.info("no extra config in %s", config_fn)
+        logger.info("no extra config in %s", config_fn)   
     logger.info("complete config: %s", config)
 
+    conda_env_name = 'base'
+    env_fn = local_repo_path / "environment.yml"
+    if os.path.exists(env_fn):
+        with open(env_fn, 'r') as fd:
+            conda_env_name = yaml.safe_load(fd)['name']
+    
     notebook_fullpath_in_container = pathlib.Path('/repo') / (config['notebook_path'].strip("/"))
     logger.info("using notebook_fullpath_in_container: %s", notebook_fullpath_in_container)
 
     if not config['use_repo_base_image']: 
-        dockerfile_content = "FROM python:3.9\n"
+        dockerfile_content = "FROM miniconda3\n"
         
     if source_from == 'localdir':
         dockerfile_content += "COPY nb-repo/ /repo/\n"
@@ -103,7 +110,24 @@ def _nb2w_dockerfile_gen(context_dir, git_origin, source_from, meta, nb2wversion
     else:
         raise NotImplementedError('Unknown source code location %s', source_from)
     
-    if not config['use_repo_base_image']:         
+    if not config['use_repo_base_image']:
+        if os.path.exists( local_repo_path / 'environment.yml' ):
+            if conda_env_name == 'base':
+                dockerfile_content += dedent(f"""
+                    RUN conda env update -f repo/environment.yml ; \
+                        conda install -n {conda_env_name} pip
+                    """)
+            else:
+                dockerfile_content += dedent(f"""
+                    RUN conda env create -f repo/environment.yml ; \
+                        conda install -n {conda_env_name} pip
+                    """)
+                
+        # Make RUN commands use the new environment:  
+        if conda_env_name != 'base': #'base' environment activation is already in .bashrc of the base image
+            dockerfile_content += f'RUN echo "conda activate {conda_env_name}" >> ~/.bashrc'
+        dockerfile_content += 'SHELL ["/bin/bash", "--login", "-c"]'
+            
         dockerfile_content += "RUN pip install -r repo/requirements.txt\n"
 
     if nb2wversion.startswith('git+'):
@@ -123,7 +147,22 @@ def _nb2w_dockerfile_gen(context_dir, git_origin, source_from, meta, nb2wversion
         RUN for nn in $ODA_WORKFLOW_NOTEBOOK_PATH/*.ipynb; do mv $nn $nn-tmp; \
             jq '.metadata.kernelspec.name |= "python3"' $nn-tmp > $nn ; rm $nn-tmp ; done
         
-        ENTRYPOINT nb2service --debug $ODA_WORKFLOW_NOTEBOOK_PATH --pattern "$ODA_WORKFLOW_FILENAME_PATTERN" --host 0.0.0.0 --port 8000 | cut -c1-500
+        # Add Tini
+        ENV TINI_VERSION v0.19.0
+        ADD https://github.com/krallin/tini/releases/download/${{TINI_VERSION}}/tini /tini
+        RUN chmod +x /tini
+        
+        RUN echo -e "#!/bin/bash --login\n\nconda activate {conda_env_name}\n exec $@" > /entrypoint.sh; \
+            chmod +x /entrypont.sh
+        
+        ENTRYPOINT ["/tini", "--", "/entrypoint.sh"]
+        
+        CMD ["nb2service", \
+             "--debug", \
+             "${{ODA_WORKFLOW_NOTEBOOK_PATH}}", \
+             "--pattern", "${{ODA_WORKFLOW_FILENAME_PATTERN}}", \
+             "--host", "0.0.0.0", \
+             "--port", "8000"]
         """)
     
     with open(pathlib.Path(context_dir) / "Dockerfile", "w") as fd:
