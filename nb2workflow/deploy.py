@@ -100,7 +100,7 @@ def _nb2w_dockerfile_gen(context_dir, git_origin, source_from, meta, nb2wversion
         dockerfile_content = "FROM continuumio/miniconda3\n"
         
     if source_from == 'localdir':
-        dockerfile_content += "COPY nb-repo/ /repo/\n"
+        dockerfile_content += "RUN apt-get update && apt-get install -y curl\n COPY nb-repo/ /repo/\n"
     elif source_from == 'git':
         dockerfile_content += ("RUN apt-get update && apt-get install -y git curl&& " 
                                "curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | bash && " 
