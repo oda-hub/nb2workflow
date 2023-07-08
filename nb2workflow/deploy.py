@@ -87,48 +87,53 @@ def _nb2w_dockerfile_gen(context_dir, git_origin, source_from, meta, nb2wversion
         logger.info("no extra config in %s", config_fn)   
     logger.info("complete config: %s", config)
 
-    conda_env_name = 'base'
-    env_fn = local_repo_path / "environment.yml"
-    if os.path.exists(env_fn):
-        with open(env_fn, 'r') as fd:
-            conda_env_name = yaml.safe_load(fd)['name']
-    
     notebook_fullpath_in_container = pathlib.Path('/repo') / (config['notebook_path'].strip("/"))
     logger.info("using notebook_fullpath_in_container: %s", notebook_fullpath_in_container)
 
     if not config['use_repo_base_image']: 
-        dockerfile_content = "FROM continuumio/miniconda3\n"
-        
+        dockerfile_content = "FROM mambaorg/micromamba\n"
+    else:
+        dockerfile_content += "ENV MAMBA_USER=${NB_USER:-root}\n"
+        # run as root is the fallback for non-jupyter based images
+    
+    dockerfile_content += ("USER root\n"
+                           "RUN apt-get update && apt-get install -y git curl\n")
+
     if source_from == 'localdir':
-        dockerfile_content += "RUN apt-get update && apt-get install -y curl\n COPY nb-repo/ /repo/\n"
+        dockerfile_content += ("COPY --chown=$MAMBA_USER:$MAMBA_USER nb-repo/ /repo/\n"
+                               "USER $MAMBA_USER\n")
     elif source_from == 'git':
-        dockerfile_content += ("RUN apt-get update && apt-get install -y git curl&& " 
-                               "curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | bash && " 
-                               "apt-get install -y git-lfs &&"
-                               "git lfs install\n")
-        dockerfile_content += f"RUN git clone {git_origin} repo\n"
+        dockerfile_content += ("RUN curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | bash && "
+                               "apt-get install -y git-lfs && " 
+                               "RUN mkdir /repo && chown $MAMBA_USER:$MAMBA_USER /repo && "
+                               "USER $MAMBA_USER\n"
+                               "RUN git lfs install\n")
+        dockerfile_content += f"RUN git clone {git_origin} /repo\n"
     else:
         raise NotImplementedError('Unknown source code location %s', source_from)
-    
+       
     if not config['use_repo_base_image']:
+        has_conda_env = False
         if os.path.exists( local_repo_path / 'environment.yml' ):
-            if conda_env_name == 'base':
-                dockerfile_content += dedent(f"""
-                    RUN conda env update -f repo/environment.yml ; \
-                        conda install -n {conda_env_name} pip
-                    """)
-            else:
-                dockerfile_content += dedent(f"""
-                    RUN conda env create -f repo/environment.yml ; \
-                        conda install -n {conda_env_name} pip
-                    """)
-                
-        # Make RUN commands use the new environment:  
-        if conda_env_name != 'base': #'base' environment activation is already in .bashrc of the base image
-            dockerfile_content += f'RUN echo "conda activate {conda_env_name}" >> ~/.bashrc\n'
-        dockerfile_content += 'SHELL ["/bin/bash", "--login", "-c"]\n'
+            with open(local_repo_path / 'environment.yml') as fd:
+                parsed_env = yaml.safe_load(fd)
+                if 'dependencies' in parsed_env:
+                    has_conda_env = True
+                    
+        if has_conda_env:
+            dockerfile_content += dedent(f"""
+                RUN micromamba install -y -n base -f /repo/environment.yml && \
+                    micromamba install -y -n base pip && \
+                    micromamba clean --all --yes
+                """)
+        else:
+            dockerfile_content += dedent(f"""
+                RUN micromamba install -y -n base -c conda-forge python=3.9 pip && \
+                    micromamba clean --all --yes
+                """)
             
-        dockerfile_content += "RUN pip install -r repo/requirements.txt\n"
+        dockerfile_content += 'ARG MAMBA_DOCKERFILE_ACTIVATE=1\n'
+        dockerfile_content += "RUN pip install -r /repo/requirements.txt\n"
 
     if nb2wversion.startswith('git+'):
         dockerfile_content += f"RUN pip install git+https://github.com/oda-hub/nb2workflow@{nb2wversion[4:]}#egg=nb2workflow[service]\n"
@@ -140,17 +145,10 @@ def _nb2w_dockerfile_gen(context_dir, git_origin, source_from, meta, nb2wversion
         ENV ODA_WORKFLOW_LAST_AUTHOR="{meta['author']}"
         ENV ODA_WORKFLOW_LAST_CHANGED="{meta['last_change_time']}"
         
-        RUN curl -o /usr/bin/jq -L https://github.com/stedolan/jq/releases/download/jq-1.5/jq-linux64; \
-            chmod +x /usr/bin/jq
+        RUN curl -o /tmp/jq -L https://github.com/stedolan/jq/releases/download/jq-1.5/jq-linux64; \
+            chmod +x /tmp/jq
         RUN for nn in {notebook_fullpath_in_container}/*.ipynb; do mv $nn $nn-tmp; \
-            jq '.metadata.kernelspec.name |= "python3"' $nn-tmp > $nn ; rm $nn-tmp ; done
-        
-        # Add Tini
-        ENV TINI_VERSION v0.19.0
-        ADD https://github.com/krallin/tini/releases/download/${{TINI_VERSION}}/tini /tini
-        RUN chmod +x /tini
-        
-        ENTRYPOINT ["/tini", "--"]
+            /tmp/jq '.metadata.kernelspec.name |= "python3"' $nn-tmp > $nn ; rm $nn-tmp ; done
         
         CMD nb2service --debug --pattern '{config['filename_pattern']}' --host 0.0.0.0 --port 8000 {notebook_fullpath_in_container}
         """)
@@ -245,7 +243,7 @@ def _build_with_kaniko(git_origin,
             f"{namespace}",
             "wait",
             "--for=condition=complete",
-            "--timeout=10m",
+            "--timeout=30m",
             f"job/kaniko-build-{suffix}"
         ])
         
@@ -331,7 +329,9 @@ def _build_with_docker(git_origin,
             workflow_dispatcher_signature = re.search(rb"^WORKFLOW-DISPATCHER-SIGNATURE: (.*?)$", out, re.M)
             if workflow_dispatcher_signature is not None:
                 workflow_dispatcher_signature = json.loads(workflow_dispatcher_signature.group(1).decode())
-            workflow_nb_signature = json.loads(re.search(rb"^WORKFLOW-NB-SIGNATURE: (.*?)$", out, re.M).group(1).decode())
+            workflow_nb_signature = re.search(rb"^WORKFLOW-NB-SIGNATURE: (.*?)$", out, re.M)
+            if workflow_nb_signature is not None:
+                workflow_nb_signature = json.loads(workflow_nb_signature.group(1).decode())
         else:
             workflow_dispatcher_signature = None
             workflow_nb_signature = None
