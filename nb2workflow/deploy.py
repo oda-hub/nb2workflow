@@ -105,7 +105,7 @@ def _nb2w_dockerfile_gen(context_dir, git_origin, source_from, meta, nb2wversion
     elif source_from == 'git':
         dockerfile_content += ("RUN curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | bash && "
                                "apt-get install -y git-lfs && " 
-                               "RUN mkdir /repo && chown $MAMBA_USER:$MAMBA_USER /repo && "
+                               "mkdir /repo && chown $MAMBA_USER:$MAMBA_USER /repo\n"
                                "USER $MAMBA_USER\n"
                                "RUN git lfs install\n")
         dockerfile_content += f"RUN git clone {git_origin} /repo\n"
