@@ -97,7 +97,7 @@ def _nb2w_dockerfile_gen(context_dir, git_origin, source_from, meta, nb2wversion
         # run as root is the fallback for non-jupyter based images
     
     dockerfile_content += ("USER root\n"
-                           "RUN apt-get update && apt-get install -y git curl\n")
+                           "RUN apt-get update && apt-get install -y git curl wget build-essential\n")
 
     if source_from == 'localdir':
         dockerfile_content += ("COPY --chown=$MAMBA_USER:$MAMBA_USER nb-repo/ /repo/\n"
