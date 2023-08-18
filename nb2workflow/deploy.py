@@ -479,11 +479,12 @@ def deploy(git_origin,
         sp.check_call( # cli is more stable than python API
             ["docker", "run", '-p', '8000:8000', container['image']])
     else:
-        deploy_k8s(container, 
-                   deployment_base_name, 
-                   namespace=namespace,
-                   check_live=check_live, 
-                   check_live_through=check_live_through)
+        deployment_info = deploy_k8s(container, 
+                                     deployment_base_name, 
+                                     namespace=namespace,
+                                     check_live=check_live, 
+                                     check_live_through=check_live_through)
+        return deployment_info
 
 
 def main():
