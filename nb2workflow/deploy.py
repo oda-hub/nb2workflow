@@ -205,7 +205,6 @@ def _build_with_kaniko(git_origin,
                         - "--dockerfile=/tmp/build/Dockerfile"
                         - "--context=dir:///tmp/build"
                         - "--push-retry=3"
-                        - "--cache=true"
                         - "{dest}"
                           
                         volumeMounts:
