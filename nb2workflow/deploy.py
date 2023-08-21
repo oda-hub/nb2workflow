@@ -193,10 +193,10 @@ def _build_with_kaniko(git_origin,
                   name: kaniko-build-{suffix}
                   namespace: {namespace}
                 spec:
+                  backoffLimit: 3
+                  ttlSecondsAfterFinished: 86400                
                   template:
                     spec:
-                      backoffLimit: 3
-                      ttlSecondsAfterFinished: 86400
                       containers:
                       - name: kaniko-build
                         image: gcr.io/kaniko-project/executor:v1.9.2
