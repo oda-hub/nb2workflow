@@ -37,13 +37,17 @@ def determine_origin(repo):
         return repo
 
 def check_job_status(job_name, namespace="default"):
-    config.load_kube_config()
+    try:
+        config.load_incluster_config()
+    except config.ConfigException:
+        config.load_kube_config()
+        # bot do this in pod genarally, but still allow to operate externally
     batch_v1 = client.BatchV1Api()
     response = batch_v1.read_namespaced_job_status(job_name, namespace)
     return response.status.conditions
 
 
-class ContainerBuildException(RuntimeError): 
+class ContainerBuildException(Exception): 
     def __init__(self, message = '', buildlog=None):
         super().__init__(message)
         self.buildlog = buildlog
