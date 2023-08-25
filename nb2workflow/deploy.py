@@ -14,7 +14,7 @@ from . import version
 from datetime import datetime, timezone
 from textwrap import dedent
 import uuid
-
+from kubernetes import client, config
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +35,19 @@ def determine_origin(repo):
             cwd=repo).decode().strip()
     else:
         return repo
+
+def check_job_status(job_name, namespace="default"):
+    config.load_kube_config()
+    batch_v1 = client.BatchV1Api()
+    response = batch_v1.read_namespaced_job_status(job_name, namespace)
+    return response.status.conditions
+
+
+class ContainerBuildException(RuntimeError): 
+    def __init__(self, message = '', buildlog=None):
+        super().__init__(message)
+        self.buildlog = buildlog
+        
 
 def build_container(git_origin, 
                     local=False, 
@@ -193,7 +206,7 @@ def _build_with_kaniko(git_origin,
                   name: kaniko-build-{suffix}
                   namespace: {namespace}
                 spec:
-                  backoffLimit: 3
+                  backoffLimit: 1
                   ttlSecondsAfterFinished: 86400                
                   template:
                     spec:
@@ -241,15 +254,19 @@ def _build_with_kaniko(git_origin,
                 "buildjob.yaml"
             ], cwd=tmpdir)
             
-            sp.check_call([
-                "kubectl",
-                "-n",
-                f"{namespace}",
-                "wait",
-                "--for=condition=complete",
-                "--timeout=120m",
-                f"job/kaniko-build-{suffix}"
-            ])
+            while True:
+                time.sleep(10)
+                job_status = check_job_status(f"kaniko-build-{suffix}", namespace)
+                if job_status is not None:
+                    if job_status[0]['type'] == 'Complete':
+                        break
+                    if job_status[0]['type'] == 'Failed':
+                        buildlog = sp.check_output([
+                            'kubectl',
+                            'logs',
+                            f"job/kaniko-build-{suffix}"
+                            ])
+                        raise ContainerBuildException('', buildlog)
             
         finally:
             if cleanup:
