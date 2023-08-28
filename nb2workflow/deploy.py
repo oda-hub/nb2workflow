@@ -14,7 +14,7 @@ from . import version
 from datetime import datetime, timezone
 from textwrap import dedent
 import uuid
-
+from kubernetes import client, config
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +35,23 @@ def determine_origin(repo):
             cwd=repo).decode().strip()
     else:
         return repo
+
+def check_job_status(job_name, namespace="default"):
+    try:
+        config.load_incluster_config()
+    except config.ConfigException:
+        config.load_kube_config()
+        # bot does this in pod generally, but still allows to operate externally
+    batch_v1 = client.BatchV1Api()
+    response = batch_v1.read_namespaced_job_status(job_name, namespace)
+    return response.status.conditions
+
+
+class ContainerBuildException(Exception): 
+    def __init__(self, message = '', buildlog=None):
+        super().__init__(message)
+        self.buildlog = buildlog
+        
 
 def build_container(git_origin, 
                     local=False, 
@@ -183,16 +200,7 @@ def _build_with_kaniko(git_origin,
             fd.write(dockerfile_content)
         
         suffix = pathlib.Path(tmpdir).name.lower().replace('_', '-')
-        
-        sp.check_call([
-            "kubectl",
-            "create",
-            "configmap",
-            "-n", namespace,
-            f"nb2w-dockerfile-{suffix}",
-            "--from-file=Dockerfile=Dockerfile"
-        ], cwd=tmpdir)
-        
+               
         dest = '--no-push' if local else f'--destination={container_metadata["image"]}'
         with open(pathlib.Path(tmpdir) / "buildjob.yaml", "w") as fd:
             fd.write(dedent(f"""\
@@ -202,6 +210,8 @@ def _build_with_kaniko(git_origin,
                   name: kaniko-build-{suffix}
                   namespace: {namespace}
                 spec:
+                  backoffLimit: 1
+                  ttlSecondsAfterFinished: 86400                
                   template:
                     spec:
                       containers:
@@ -211,6 +221,7 @@ def _build_with_kaniko(git_origin,
                         args:
                         - "--dockerfile=/tmp/build/Dockerfile"
                         - "--context=dir:///tmp/build"
+                        - "--push-retry=3"
                         - "{dest}"
                           
                         volumeMounts:
@@ -230,40 +241,55 @@ def _build_with_kaniko(git_origin,
                       restartPolicy: Never
                 """))
         
-        sp.check_call([
-            "kubectl",
-            "create",
-            "-f",
-            "buildjob.yaml"
-        ], cwd=tmpdir)
-        
-        sp.check_call([
-            "kubectl",
-            "-n",
-            f"{namespace}",
-            "wait",
-            "--for=condition=complete",
-            "--timeout=30m",
-            f"job/kaniko-build-{suffix}"
-        ])
-        
-        if cleanup:
+        try:
             sp.check_call([
                 "kubectl",
-                "-n",
-                f"{namespace}",
-                "delete",
-                f"job/kaniko-build-{suffix}"
-            ])
-            
-            sp.check_call([
-                "kubectl",
-                "-n",
-                f"{namespace}",
-                "delete",
+                "create",
                 "configmap",
-                f"nb2w-dockerfile-{suffix}"
-            ])
+                "-n", namespace,
+                f"nb2w-dockerfile-{suffix}",
+                "--from-file=Dockerfile=Dockerfile"
+            ], cwd=tmpdir)
+                    
+            sp.check_call([
+                "kubectl",
+                "create",
+                "-f",
+                "buildjob.yaml"
+            ], cwd=tmpdir)
+            
+            while True:
+                time.sleep(10)
+                job_status = check_job_status(f"kaniko-build-{suffix}", namespace)
+                if job_status is not None:
+                    if job_status[0].type == 'Complete':
+                        break
+                    if job_status[0].type == 'Failed':
+                        buildlog = sp.check_output([
+                            'kubectl',
+                            'logs',
+                            f"job/kaniko-build-{suffix}"
+                            ])
+                        raise ContainerBuildException('', buildlog)
+            
+        finally:
+            if cleanup:
+                sp.check_call([
+                    "kubectl",
+                    "-n",
+                    f"{namespace}",
+                    "delete",
+                    f"job/kaniko-build-{suffix}"
+                ])
+                
+                sp.check_call([
+                    "kubectl",
+                    "-n",
+                    f"{namespace}",
+                    "delete",
+                    "configmap",
+                    f"nb2w-dockerfile-{suffix}"
+                ])
         
         return container_metadata
 
@@ -348,6 +374,103 @@ def _build_with_docker(git_origin,
             "workflow_nb_signature": workflow_nb_signature,
             "dockerfile_content": dockerfile_content}
 
+def deploy_k8s(container_info, 
+           deployment_base_name, 
+           namespace="oda-staging", 
+           check_live=True, 
+           check_live_through="oda-dispatcher"):
+    
+    deployment_name = deployment_base_name + "-backend"
+    try:
+        sp.check_call(
+            ["kubectl", "patch", "deployment", deployment_name, "-n", namespace,
+            "--type", "merge",
+            "-p", 
+            json.dumps(
+                {"spec":{"template":{"spec":{
+                    "containers":[
+                        {"name": deployment_name, "image": container_info['image']}
+                    ]}}}})
+            ]
+        )
+    except sp.CalledProcessError:
+        sp.check_call(
+            ["kubectl", "create", "deployment", deployment_name, "-n", namespace, "--image=" + container_info['image']]
+        )
+        sp.check_call(
+            ["kubectl", "expose", "deployment", deployment_name, "--name", deployment_name, 
+            "--port", "8000", "-n", namespace]
+        )
+    
+    finally:                    
+        sp.check_call(
+            ["kubectl", "patch", "deployment", deployment_name, "-n", namespace,
+            "--type", "strategic",
+            "-p", 
+            json.dumps(
+                {"spec":{"template":{"spec":{
+                    "containers":[
+                        {"name": deployment_name, 
+                            "startupProbe": {"httpGet": {"path": "/health", "port": 8000},
+                                            "initialDelaySeconds": 5,
+                                            "periodSeconds": 5}
+                        }
+                    ]}}}})
+            ]
+        )
+    
+    if check_live:
+        logging.info("will check live")
+
+        p = sp.run([
+            "kubectl",
+            "-n", namespace, 
+            "rollout",
+            "status",
+            "-w",
+            "--timeout", "10m",
+            "deployment",
+            deployment_name,
+        ], check=True)
+        
+        # TODO: redundant?
+        for i in range(3):
+            try:
+                p = sp.Popen([
+                    "kubectl",
+                    "exec",
+                    #"-it",
+                    f"deployments/{check_live_through}",
+                    "-n",
+                    namespace,
+                    "--",
+                    "bash", "-c",
+                    f"curl {deployment_name}:8000"], stdout=sp.PIPE)
+                p.wait()
+                if p.stdout is not None:
+                    service_output_json = p.stdout.read()
+                    logger.info("got valid output: %s", service_output_json)
+                    service_output = json.loads(service_output_json.decode())
+                    logger.info("got valid output json: %s", service_output)
+                    break
+            except Exception as e:
+                logging.info("problem getting response from the service: %s", e)
+                time.sleep(10)                    
+    else:
+        service_output = {}
+    
+    return {
+        "deployment_name": deployment_name,
+        "namespace": namespace,
+        "description": container_info['descr'],
+        "image": container_info['image'],
+        "author": container_info['author'],
+        "last_change_time": container_info['last_change_time'],
+        "workflow_dispatcher_signature": container_info['workflow_dispatcher_signature'],
+        "workflow_nb_signature": container_info['workflow_nb_signature'],
+        "service_output": service_output
+    }
+
 
 def deploy(git_origin, 
            deployment_base_name, 
@@ -376,96 +499,12 @@ def deploy(git_origin,
         sp.check_call( # cli is more stable than python API
             ["docker", "run", '-p', '8000:8000', container['image']])
     else:
-        deployment_name = deployment_base_name + "-backend"
-        try:
-            sp.check_call(
-                ["kubectl", "patch", "deployment", deployment_name, "-n", namespace,
-                "--type", "merge",
-                "-p", 
-                json.dumps(
-                    {"spec":{"template":{"spec":{
-                        "containers":[
-                            {"name": deployment_name, "image": container['image']}
-                        ]}}}})
-                ]
-            )
-        except sp.CalledProcessError:
-            sp.check_call(
-                ["kubectl", "create", "deployment", deployment_name, "-n", namespace, "--image=" + container['image']]
-            )
-            sp.check_call(
-                ["kubectl", "expose", "deployment", deployment_name, "--name", deployment_name, 
-                "--port", "8000", "-n", namespace]
-            )
-        
-        finally:                    
-            sp.check_call(
-                ["kubectl", "patch", "deployment", deployment_name, "-n", namespace,
-                "--type", "strategic",
-                "-p", 
-                json.dumps(
-                    {"spec":{"template":{"spec":{
-                        "containers":[
-                            {"name": deployment_name, 
-                             "startupProbe": {"httpGet": {"path": "/health", "port": 8000},
-                                              "initialDelaySeconds": 5,
-                                              "periodSeconds": 5}
-                            }
-                        ]}}}})
-                ]
-            )
-        
-        if check_live:
-            logging.info("will check live")
-
-            p = sp.run([
-                "kubectl",
-                "-n", namespace, 
-                "rollout",
-                "status",
-                "-w",
-                "--timeout", "10m",
-                "deployment",
-                deployment_name,
-            ], check=True)
-            
-            # TODO: redundant?
-            for i in range(3):
-                try:
-                    p = sp.Popen([
-                        "kubectl",
-                        "exec",
-                        #"-it",
-                        f"deployments/{check_live_through}",
-                        "-n",
-                        namespace,
-                        "--",
-                        "bash", "-c",
-                        f"curl {deployment_name}:8000"], stdout=sp.PIPE)
-                    p.wait()
-                    if p.stdout is not None:
-                        service_output_json = p.stdout.read()
-                        logger.info("got valid output: %s", service_output_json)
-                        service_output = json.loads(service_output_json.decode())
-                        logger.info("got valid output json: %s", service_output)
-                        break
-                except Exception as e:
-                    logging.info("problem getting response from the service: %s", e)
-                    time.sleep(10)                    
-        else:
-            service_output = {}
-        
-        return {
-            "deployment_name": deployment_name,
-            "namespace": namespace,
-            "description": container['descr'],
-            "image": container['image'],
-            "author": container['author'],
-            "last_change_time": container['last_change_time'],
-            "workflow_dispatcher_signature": container['workflow_dispatcher_signature'],
-            "workflow_nb_signature": container['workflow_nb_signature'],
-            "service_output": service_output
-        }
+        deployment_info = deploy_k8s(container, 
+                                     deployment_base_name, 
+                                     namespace=namespace,
+                                     check_live=check_live, 
+                                     check_live_through=check_live_through)
+        return deployment_info
 
 
 def main():

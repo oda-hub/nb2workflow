@@ -60,6 +60,9 @@ setup(name='nb2workflow',
         ],
         "mmoda":[
             'oda_api'
+        ],
+        "k8s":[
+            'kubernetes'
         ]
       },
 
