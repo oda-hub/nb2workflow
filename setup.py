@@ -27,6 +27,7 @@ setup(name='nb2workflow',
             'nbrun=nb2workflow.nbadapter:main',
             'nbinspect=nb2workflow.nbadapter:main_inspect',
             'nbreduce=nb2workflow.nbadapter:main_reduce',
+            'nb2galaxy=nb2workflow.galaxy:main',
             ]
       },
       
