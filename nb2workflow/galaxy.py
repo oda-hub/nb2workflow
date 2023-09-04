@@ -53,7 +53,7 @@ class ModOntology(Ontology):
 ontology_path = '/home/dsavchenko/Projects/MMODA/ontology/ontology.ttl'
 
 
-global_req = []
+global_req = ['ipython']
 
 
 class GalaxyParameter:
@@ -312,7 +312,7 @@ def to_galaxy(input_nb, toolname, requirements_path, out_dir):
                     req.text = m.group(0)
                 
     comm = ET.SubElement(tool_root, 'command', detect_errors='exit_code')
-    comm.text = "python '$__tool_directory__/script.py' inputs.json"
+    comm.text = "ipython '$__tool_directory__/script.py' inputs.json"
     # NOTE: CDATA if needed https://gist.github.com/zlalanne/5711847
 
     conf = ET.SubElement(tool_root, 'configfiles')
