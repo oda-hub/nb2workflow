@@ -303,7 +303,7 @@ def to_galaxy(input_nb, toolname, requirements_path, out_dir):
                 # TODO: this is just an example as galaxy doesn't use pip for resolving
                 #       we still want to find correspondance in conda-forge and also use envitronment.yml
                 #       also package version (does galaxy allow gt/lt?)
-                m = re.match(r'[^#(git)]\S+', line)
+                m = re.match(r'(?!#|git)\S+', line)
                 if m is not None:
                     req = ET.SubElement(reqs, 
                                         'requirement', 
