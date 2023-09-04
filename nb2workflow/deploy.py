@@ -265,11 +265,15 @@ def _build_with_kaniko(git_origin,
                     if job_status[0].type == 'Complete':
                         break
                     if job_status[0].type == 'Failed':
-                        buildlog = sp.check_output([
-                            'kubectl',
-                            'logs',
-                            f"job/kaniko-build-{suffix}"
-                            ])
+                        try:
+                            buildlog = sp.check_output([
+                                'kubectl',
+                                'logs',
+                                f"job/kaniko-build-{suffix}"
+                                ])
+                        except sp.CalledProcessError:
+                            buildlog = None
+                            logger.error('Error getting buildlog from %s', f"job/kaniko-build-{suffix}")
                         raise ContainerBuildException('', buildlog)
             
         finally:
