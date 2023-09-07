@@ -191,8 +191,13 @@ def _nb2script(nba):
                 try:
                     import numpy as np
                     _numpy_available = True
-                except:
+                except ImportError:
                     _numpy_available = False
+                
+                try:
+                    from oda_api.json import CustomJSONEncoder
+                except ImportError:
+                    from json import JSONEncoder as CustomJSONEncoder
                 
                 _galaxy_wd = os.getcwd()
                 """))
@@ -239,7 +244,7 @@ def _nb2script(nba):
                     _galaxy_meta_data[_outn] = {'ext': '_sniff_'}
                 else:
                     with open(_galaxy_outfile_name, 'w') as fd:
-                        json.dump(_outv.encode(), fd)
+                        json.dump(_outv, fd, cls=CustomJSONEncoder)
                     _galaxy_meta_data[_outn] = {'ext': 'json'}
             """)
     
