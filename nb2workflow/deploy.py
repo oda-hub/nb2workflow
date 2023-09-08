@@ -140,7 +140,7 @@ def _nb2w_dockerfile_gen(context_dir, git_origin, source_from, meta, nb2wversion
         if has_conda_env:
             dockerfile_content += dedent(f"""
                 RUN micromamba install -y -n base -f /repo/environment.yml && \
-                    micromamba install -y -n base pip && \
+                    micromamba install -y -n base -c conda-forge pip && \
                     micromamba clean --all --yes
                 """)
         else:
