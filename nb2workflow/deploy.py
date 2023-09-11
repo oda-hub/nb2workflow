@@ -85,12 +85,6 @@ def build_container(git_origin,
 
 
 def _nb2w_dockerfile_gen(context_dir, git_origin, source_from, meta, nb2wversion):
-    try:
-        with open(pathlib.Path(context_dir) / "Dockerfile", "r") as fd:
-            dockerfile_content = fd.read()
-            dockerfile_content += "\n"
-    except FileNotFoundError:
-        dockerfile_content = ""
     
     local_repo_path = pathlib.Path(context_dir) / "nb-repo"
     config_fn = local_repo_path / "mmoda.yaml"
@@ -104,6 +98,15 @@ def _nb2w_dockerfile_gen(context_dir, git_origin, source_from, meta, nb2wversion
     else:
         logger.info("no extra config in %s", config_fn)   
     logger.info("complete config: %s", config)
+    
+    if config['use_repo_base_image']:
+        try:
+            with open(pathlib.Path(context_dir) / "Dockerfile", "r") as fd:
+                dockerfile_content = fd.read()
+                dockerfile_content += "\n"
+        except FileNotFoundError:
+            logger.error('No Dockerfile found in the repo. Fallback to micromamba base. Context dir content: %s', str(os.listdir(context_dir)))
+            config['use_repo_base_image'] = False
 
     notebook_fullpath_in_container = pathlib.Path('/repo') / (config['notebook_path'].strip("/"))
     logger.info("using notebook_fullpath_in_container: %s", notebook_fullpath_in_container)
