@@ -48,9 +48,10 @@ def check_job_status(job_name, namespace="default"):
 
 
 class ContainerBuildException(Exception): 
-    def __init__(self, message = '', buildlog=None):
+    def __init__(self, message = '', dockerfile=None, buildlog=None):
         super().__init__(message)
         self.buildlog = buildlog
+        self.dockerfile = dockerfile
         
 
 def build_container(git_origin, 
@@ -270,7 +271,9 @@ def _build_with_kaniko(git_origin,
                             'logs',
                             f"job/kaniko-build-{suffix}"
                             ])
-                        raise ContainerBuildException('', buildlog)
+                        raise ContainerBuildException('', 
+                                                      dockerfile=dockerfile_content, 
+                                                      buildlog=buildlog)
             
         finally:
             if cleanup:
