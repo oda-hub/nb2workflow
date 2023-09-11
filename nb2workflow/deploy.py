@@ -101,11 +101,11 @@ def _nb2w_dockerfile_gen(context_dir, git_origin, source_from, meta, nb2wversion
     
     if config['use_repo_base_image']:
         try:
-            with open(pathlib.Path(context_dir) / "Dockerfile", "r") as fd:
+            with open(pathlib.Path(local_repo_path) / "Dockerfile", "r") as fd:
                 dockerfile_content = fd.read()
                 dockerfile_content += "\n"
         except FileNotFoundError:
-            logger.error('No Dockerfile found in the repo. Fallback to micromamba base. Context dir content: %s', str(os.listdir(context_dir)))
+            logger.error('No Dockerfile found in the repo. Fallback to micromamba base. Repo content: %s', str(os.listdir(local_repo_path)))
             config['use_repo_base_image'] = False
 
     notebook_fullpath_in_container = pathlib.Path('/repo') / (config['notebook_path'].strip("/"))
