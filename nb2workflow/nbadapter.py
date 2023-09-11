@@ -544,8 +544,9 @@ if isinstance({output},str) and os.path.exists({output}):
         sb.glue(variable_name + "_content", encoded)
     else:
         # TODO: make a customizable upload to different DL platforms; before that it should be enabled with caution    
-        os.makedirs("/tmp/nb2w-store", exist_ok=True)
-        url = "file:///tmp/nb2w-store/" + str(hashlib.md5(content).hexdigest())
+        nb2w_store_base = os.getenv("NB2W_CACHE", os.getenv("HOME") + "/.cache/nb2workflow/bigoutputs")
+        os.makedirs(nb2w_store_base, exist_ok=True)
+        url = "file://" + nb2w_store_base +  "/" + str(hashlib.md5(content).hexdigest())
         print("storing file to URL", url)
         with open(url.replace("file://", ""), "wb") as f:
             f.write(content)
