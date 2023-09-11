@@ -86,7 +86,7 @@ def build_container(git_origin,
 
 def _nb2w_dockerfile_gen(context_dir, git_origin, source_from, meta, nb2wversion):
     
-    local_repo_path = pathlib.Path(context_dir) / "nb-repo"
+    local_repo_path = pathlib.Path(context_dir)
     config_fn = local_repo_path / "mmoda.yaml"
 
     config = default_config.copy()
@@ -121,7 +121,7 @@ def _nb2w_dockerfile_gen(context_dir, git_origin, source_from, meta, nb2wversion
                            "RUN apt-get update && apt-get install -y git curl wget build-essential\n")
 
     if source_from == 'localdir':
-        dockerfile_content += ("COPY --chown=$MAMBA_USER:$MAMBA_USER nb-repo/ /repo/\n"
+        dockerfile_content += ("COPY --chown=$MAMBA_USER:$MAMBA_USER . /repo/\n"
                                "USER $MAMBA_USER\n")
     elif source_from == 'git':
         dockerfile_content += ("RUN curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | bash && "
@@ -204,7 +204,9 @@ def _build_with_kaniko(git_origin,
             fd.write(dockerfile_content)
         
         suffix = pathlib.Path(tmpdir).name.lower().replace('_', '-')
-               
+        
+        # TODO: if we want to use renku base image, we need somehow put repo into build context 
+        #       probably, make side container to fetch from repo?
         dest = '--no-push' if local else f'--destination={container_metadata["image"]}'
         with open(pathlib.Path(tmpdir) / "buildjob.yaml", "w") as fd:
             fd.write(dedent(f"""\
@@ -334,7 +336,7 @@ def _build_with_docker(git_origin,
                                     ["git", "log", "-1", "--pretty=format:'%ai'"], # could use all authors too, but it's inside anyway
                                     cwd=local_repo_path ).decode().strip()
 
-        dockerfile_content = _nb2w_dockerfile_gen(tmpdir, git_origin, source_from, meta, nb2wversion)
+        dockerfile_content = _nb2w_dockerfile_gen(local_repo_path, git_origin, source_from, meta, nb2wversion)
 
         ts = '-' + time.strftime(r'%y%m%d%H%M%S') if build_timestamp else ''
         image = f"{registry}/nb-{pathlib.Path(git_origin).name}:{meta['descr']}-nb2w{nb2wversion.replace('git+', '')}{ts}"
@@ -342,7 +344,7 @@ def _build_with_docker(git_origin,
         if not dry_run:
             sp.check_call( # cli is more stable than python API
                 ["docker", "build", ".", "-t", image],
-                cwd=tmpdir)     
+                cwd=local_repo_path)     
 
         if run_tests and not dry_run: 
             # TODO: run tests too
