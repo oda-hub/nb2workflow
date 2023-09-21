@@ -8,7 +8,7 @@ import logging
 
 from cdci_data_analysis.analysis.ontology import Ontology
 # TODO: ontology module must be separated from the dispatcher
-from nb2workflow.nbadapter import NotebookAdapter
+from nb2workflow.nbadapter import NotebookAdapter, find_notebooks
 
 import nbformat
 from nbconvert.exporters import ScriptExporter
@@ -142,14 +142,18 @@ class GalaxyParameter:
         return element
 
 class GalaxyOutput:
-    def __init__(self, name, is_oda):
+    def __init__(self, name, is_oda, dprod=None):
         self.name = name
-        self.dataname = f"out_{self.name}"
+        if dprod is None:
+            dprod=''
+        else:
+            dprod += '_'
+        self.dataname = f"out_{dprod}{self.name}"
         self.is_oda = is_oda
         self.outfile_name = f"{name}_galaxy.output"
     
     @classmethod
-    def from_inspect(cls, outp_details):
+    def from_inspect(cls, outp_details, dprod=None):
         onto = ModOntology(ontology_path)
 
         owl_uri = outp_details['owl_type']
@@ -161,7 +165,7 @@ class GalaxyOutput:
         else:
             is_oda = False
         
-        return cls(outp_details['name'], is_oda)
+        return cls(outp_details['name'], is_oda, dprod)
 
     def to_xml_tree(self):
         attrs = {'label': "${tool.name} -> %s"%self.name,
@@ -212,10 +216,11 @@ def _nb2script(nba):
     # NOTE: validation of args is external
     inject_read = nbformat.v4.new_code_cell(
         dedent("""
-            with open(sys.argv[1], 'r') as fd:
+            with open('inputs.json', 'r') as fd:
                 inp_dic = json.load(fd)
-            for vn, vv in inp_dic.items():
-                globals()[vn] = type(globals()[vn])(vv)
+            for vn, vv in inp_dic['data_product'].items():
+                if vn != '_selector':
+                    globals()[vn] = type(globals()[vn])(vv)
             """))
     inject_read.metadata['tags'] = ['injected-input']
     mynb.cells.insert(inject_pos, inject_read)
@@ -224,7 +229,7 @@ def _nb2script(nba):
     outp_code += "_galaxy_meta_data = {}\n"
     
     for vn, vv in outputs.items():
-        outp = GalaxyOutput.from_inspect(vv)
+        outp = GalaxyOutput.from_inspect(vv, nba.name)
         if outp.is_oda:
             outp_code += f"_oda_outs.append(('{outp.dataname}', '{outp.outfile_name}', {vn}))\n"
         else:
@@ -267,6 +272,7 @@ def _nb2script(nba):
     outp_code += dedent("""
                         with open(os.path.join(_galaxy_wd, 'galaxy.json'), 'w') as fd:
                             json.dump(_galaxy_meta_data, fd)
+                        print('*** Job finished successfully ***')
                         """)
 
     inject_write = nbformat.v4.new_code_cell(outp_code)
@@ -280,14 +286,8 @@ def _nb2script(nba):
 
 # TODO: several notebooks
 def to_galaxy(input_nb, toolname, requirements_path, out_dir):
-    nba = NotebookAdapter(input_nb)
-    inputs = nba.input_parameters
-
-    script_str = _nb2script(nba)
+    nbas = find_notebooks(input_nb)
     
-    with open(os.path.join(out_dir, 'script.py'), 'w') as fd:
-        fd.write(script_str)
-
     tool_root = ET.Element('tool',
                         id=toolname.replace(' ', '_'),
                         name=toolname,
@@ -317,22 +317,43 @@ def to_galaxy(input_nb, toolname, requirements_path, out_dir):
                     req.text = m.group(0)
                 
     comm = ET.SubElement(tool_root, 'command', detect_errors='exit_code')
-    comm.text = "ipython '$__tool_directory__/script.py' inputs.json"
+    comm.text = "ipython '$__tool_directory__/${data_product._selector}.py'" 
     # NOTE: CDATA if needed https://gist.github.com/zlalanne/5711847
 
     conf = ET.SubElement(tool_root, 'configfiles')
     inp = ET.SubElement(conf, 'inputs', name='inputs', filename='inputs.json')
     
     inps = ET.SubElement(tool_root, 'inputs')
-    for pn, pv in inputs.items():
-        galaxy_par = GalaxyParameter.from_inspect(pv)
-        inps.append(galaxy_par.to_xml_tree())
-
+    dprod_cond = ET.SubElement(inps, 'conditional', name='data_product')
+    dprod_sel = ET.SubElement(dprod_cond, 'param', name="_selector", type="select", label = "Data Product")
+    sflag = True
+    for name in nbas.keys():
+        opt = ET.SubElement(dprod_sel, 'option', value=name, selected='true' if sflag else 'false')
+        opt.text = name
+        sflag = False
+    
     outps = ET.SubElement(tool_root, 'outputs')
-    outputs = nba.extract_output_declarations()
-    for outn, outv in outputs.items():
-        outp = GalaxyOutput.from_inspect(outv)
-        outps.append(outp.to_xml_tree())
+            
+    for nb_name, nba in nbas.items():    
+        when = ET.SubElement(dprod_cond, 'when', value=nb_name)
+        inputs = nba.input_parameters
+
+        script_str = _nb2script(nba)
+        with open(os.path.join(out_dir, f'{nb_name}.py'), 'w') as fd:
+            fd.write(script_str)
+
+        for pv in inputs.values():
+            galaxy_par = GalaxyParameter.from_inspect(pv)
+            when.append(galaxy_par.to_xml_tree())
+
+        outputs = nba.extract_output_declarations()
+        for outv in outputs.values():
+            outp = GalaxyOutput.from_inspect(outv, nb_name)
+            outp_tree = outp.to_xml_tree()
+            fltr = ET.SubElement(outp_tree, 'filter')
+            fltr.text = f"data_product['_selector'] == '{nb_name}'"
+            outps.append(outp_tree)
+            
 
     #TODO: tests
 
@@ -365,6 +386,7 @@ def main():
     toolname = args.name
     requirements_path = args.requirements_path   
     
+    os.makedirs(output_dir, exist_ok=True)
     to_galaxy(input_nb, toolname, requirements_path, output_dir)
 
 if __name__ == '__main__':
