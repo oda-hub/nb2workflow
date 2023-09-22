@@ -218,7 +218,12 @@ def _nb2script(nba):
         dedent("""
             with open('inputs.json', 'r') as fd:
                 inp_dic = json.load(fd)
-            for vn, vv in inp_dic['data_product'].items():
+            if '_data_product' in inp_dic.keys():
+                inp_pdic = inp_dic['_data_product']
+            else:
+                inp_pdic = inp_dic
+                
+            for vn, vv in inp_pdic.items():
                 if vn != '_selector':
                     globals()[vn] = type(globals()[vn])(vv)
             """))
@@ -285,8 +290,8 @@ def _nb2script(nba):
     return script
 
 # TODO: several notebooks
-def to_galaxy(input_nb, toolname, requirements_path, out_dir):
-    nbas = find_notebooks(input_nb)
+def to_galaxy(input_path, toolname, requirements_path, out_dir):
+    nbas = find_notebooks(input_path)
     
     tool_root = ET.Element('tool',
                         id=toolname.replace(' ', '_'),
@@ -317,25 +322,32 @@ def to_galaxy(input_nb, toolname, requirements_path, out_dir):
                     req.text = m.group(0)
                 
     comm = ET.SubElement(tool_root, 'command', detect_errors='exit_code')
-    comm.text = "ipython '$__tool_directory__/${data_product._selector}.py'" 
+    if len(nbas) > 1:
+        comm.text = "ipython '$__tool_directory__/${_data_product._selector}.py'" 
+    else:
+        comm.text = f"ipython '$__tool_directory__/{list(nbas.keys())[0]}.py'"
     # NOTE: CDATA if needed https://gist.github.com/zlalanne/5711847
 
     conf = ET.SubElement(tool_root, 'configfiles')
     inp = ET.SubElement(conf, 'inputs', name='inputs', filename='inputs.json')
     
     inps = ET.SubElement(tool_root, 'inputs')
-    dprod_cond = ET.SubElement(inps, 'conditional', name='data_product')
-    dprod_sel = ET.SubElement(dprod_cond, 'param', name="_selector", type="select", label = "Data Product")
-    sflag = True
-    for name in nbas.keys():
-        opt = ET.SubElement(dprod_sel, 'option', value=name, selected='true' if sflag else 'false')
-        opt.text = name
-        sflag = False
-    
     outps = ET.SubElement(tool_root, 'outputs')
+    
+    if len(nbas) > 1:
+        dprod_cond = ET.SubElement(inps, 'conditional', name='_data_product')
+        dprod_sel = ET.SubElement(dprod_cond, 'param', name="_selector", type="select", label = "Data Product")
+        sflag = True
+        for name in nbas.keys():
+            opt = ET.SubElement(dprod_sel, 'option', value=name, selected='true' if sflag else 'false')
+            opt.text = name
+            sflag = False
             
-    for nb_name, nba in nbas.items():    
-        when = ET.SubElement(dprod_cond, 'when', value=nb_name)
+    for nb_name, nba in nbas.items():
+        if len(nbas) > 1:
+            when = ET.SubElement(dprod_cond, 'when', value=nb_name)
+        else:
+            when = inps
         inputs = nba.input_parameters
 
         script_str = _nb2script(nba)
@@ -346,12 +358,14 @@ def to_galaxy(input_nb, toolname, requirements_path, out_dir):
             galaxy_par = GalaxyParameter.from_inspect(pv)
             when.append(galaxy_par.to_xml_tree())
 
+
         outputs = nba.extract_output_declarations()
         for outv in outputs.values():
             outp = GalaxyOutput.from_inspect(outv, nb_name)
             outp_tree = outp.to_xml_tree()
-            fltr = ET.SubElement(outp_tree, 'filter')
-            fltr.text = f"data_product['_selector'] == '{nb_name}'"
+            if len(nbas) > 1:
+                fltr = ET.SubElement(outp_tree, 'filter')
+                fltr.text = f"_data_product['_selector'] == '{nb_name}'"
             outps.append(outp_tree)
             
 
