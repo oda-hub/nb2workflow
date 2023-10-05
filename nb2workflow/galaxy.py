@@ -289,7 +289,6 @@ def _nb2script(nba):
     
     return script
 
-# TODO: several notebooks
 def to_galaxy(input_path, toolname, requirements_path, out_dir):
     nbas = find_notebooks(input_path)
     
