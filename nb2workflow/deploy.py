@@ -200,7 +200,7 @@ def _build_with_kaniko(git_origin,
         with open(pathlib.Path(tmpdir) / "Dockerfile", "w") as fd:
             fd.write(dockerfile_content)
         
-        suffix = pathlib.Path(tmpdir).name.lower().replace('_', '-')
+        suffix = pathlib.Path(tmpdir).name.lower().replace('_', '-').rstrip('-')
                
         dest = '--no-push' if local else f'--destination={container_metadata["image"]}'
         with open(pathlib.Path(tmpdir) / "buildjob.yaml", "w") as fd:
