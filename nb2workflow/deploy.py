@@ -140,13 +140,14 @@ def _nb2w_dockerfile_gen(context_dir, git_origin, source_from, meta, nb2wversion
                     
         if has_conda_env:
             dockerfile_content += dedent(f"""
-                RUN micromamba install -y -n base -f /repo/environment.yml && \
+                RUN sed -i '/dependencies/a \ \ - python=3.10' /repo/environment.yml && \
+                    micromamba install -y -n base -f /repo/environment.yml && \
                     micromamba install -y -n base -c conda-forge pip && \
                     micromamba clean --all --yes
                 """)
         else:
             dockerfile_content += dedent(f"""
-                RUN micromamba install -y -n base -c conda-forge python=3.9 pip && \
+                RUN micromamba install -y -n base -c conda-forge python=3.10 pip && \
                     micromamba clean --all --yes
                 """)
             
