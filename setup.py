@@ -6,7 +6,7 @@ if {'pytest', 'test', 'ptr'}.intersection(sys.argv):
     setup_requires.append('pytest-runner')
 
 setup(name='nb2workflow',
-      version = '1.3.50',
+      version = '1.3.51',
       description='convert notebook to workflow',
       author='Volodymyr Savchenko',
       author_email='contact@volodymyrsavchenko.com',
@@ -14,7 +14,7 @@ setup(name='nb2workflow',
       packages=['nb2workflow'],
       zip_safe=False,
 
-      python_requires='>=3.9',
+      python_requires='>=3.9,<3.12',
 
       entry_points={
           'console_scripts': [
