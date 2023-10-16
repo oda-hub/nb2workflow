@@ -426,7 +426,7 @@ class NotebookAdapter:
             except Exception as e:
                 logger.warning("git clone failed: %s, will attempt copytree", e)
 
-                os.rmdir(tmpdir)
+                shutil.rmtree(tmpdir)
 
                 shutil.copytree(os.path.dirname(os.path.realpath(self.notebook_fn)), tmpdir)
         else:
