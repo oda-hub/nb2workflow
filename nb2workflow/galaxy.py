@@ -6,6 +6,8 @@ from textwrap import dedent
 import argparse
 import logging
 
+import yaml
+
 from cdci_data_analysis.analysis.ontology import Ontology
 # TODO: ontology module must be separated from the dispatcher
 from nb2workflow.nbadapter import NotebookAdapter, find_notebooks
@@ -289,7 +291,73 @@ def _nb2script(nba):
     
     return script
 
-def to_galaxy(input_path, toolname, requirements_path, out_dir):
+def _parse_environment_yml(filepath, available_channels):
+    
+    match_spec = re.compile(r'^(?P<pac>[^=<> ]+)\s*(?P<eq>={0,2})(?P<uneq>[<>]?=?)(?P<ver>.*)$')
+    # TODO: currently only basic version spec 
+    #       see https://github.com/conda/conda/blob/d58be31dadac66a14a7c488eab41004eaf578f50/conda/models/match_spec.py#L74
+    #           https://docs.conda.io/projects/conda-build/en/stable/resources/package-spec.html#package-match-specifications
+    with open(filepath, 'r') as fd:
+        env_yaml = yaml.safe_load(fd)
+    
+    if env_yaml.get('dependencies'):
+        if env_yaml.get('channels'):
+            extra_channels = set(env_yaml['channels']) - set(available_channels)
+            if extra_channels:
+                raise ValueError('Conda channels %s are not supported by galaxy instance', extra_channels)
+        else:
+            logger.warning('Conda channels are not defined in evironment file.')
+        
+        reqs_elements = []
+        for dep in env_yaml['dependencies']:
+            m = match_spec.match(dep)
+            if m is None:
+                raise ValueError('Dependency spec not recognised for %s', dep)
+
+            varg = {}
+            if m.group('ver'):
+                varg['version'] = m.group('uneq') + m.group('ver') if m.group('uneq') else m.group('ver')
+            reqs_elements.append(ET.Element('requirement', type='package', **varg))
+            reqs_elements[-1].text = m.group('pac')
+        return reqs_elements
+    else:
+        return []
+            
+def _parse_requirements_txt(filepath):
+
+    match_spec = re.compile(r'^(?P<pac>[A-Z0-9][A-Z0-9._-]*[A-Z0-9])\s*(?:\[.*\])?\s*(?P<eq>[~=]{0,2})(?P<uneq>[<>]?=?)\s*(?P<ver>[0-9.\*]*)', re.I)
+    # TODO: basic, see https://pip.pypa.io/en/stable/reference/requirement-specifiers/
+    
+    logger.warning('Package names in PyPI may not coincide with those in conda. Please revise galaxy tool requirements after generation.')
+    
+    with open(filepath, 'r') as fd:
+        reqs_elements = []       
+        for line in fd:
+            if line.startswith('#') or re.match(r'^\s*$', line):
+                continue
+            elif line.startswith('git+'):
+                logger.warning('Guessing package name from git repository name')
+                pac = line.split('/')[-1]
+                pac = pac.split('.')[0]
+                reqs_elements.append(ET.Element('requirement', type='package'))
+                reqs_elements[-1].text = pac
+            else:
+                m = match_spec.match(line)
+                if m is None:
+                    raise ValueError('Dependency spec not recognised for %s', line)
+                varg = {}
+                if m.group('ver'):
+                    varg['version'] = m.group('uneq') + m.group('ver') if m.group('uneq') else m.group('ver')
+                reqs_elements.append(ET.Element('requirement', type='package', **varg))
+                reqs_elements[-1].text = m.group('pac')
+    
+    return reqs_elements
+                
+
+def to_galaxy(input_path, toolname, out_dir, 
+              requirements_file = None, 
+              conda_environment_file = None, 
+              available_channels = ['default', 'conda-forge', 'bioconda', 'fermi']):
     nbas = find_notebooks(input_path)
     
     tool_root = ET.Element('tool',
@@ -306,19 +374,12 @@ def to_galaxy(input_path, toolname, requirements_path, out_dir):
                             type='package'
                             )
         req.text = greq
-    if requirements_path is not None:
-        with open(requirements_path, 'r') as fd:
-            for line in fd:
-                # TODO: this is just an example as galaxy doesn't use pip for resolving
-                #       we still want to find correspondance in conda-forge and also use envitronment.yml
-                #       also package version (does galaxy allow gt/lt?)
-                m = re.match(r'(?!#|git)\S+', line)
-                if m is not None:
-                    req = ET.SubElement(reqs, 
-                                        'requirement', 
-                                        type='package'
-                                        )
-                    req.text = m.group(0)
+        
+    if requirements_file is not None:
+        reqs.extend(_parse_requirements_txt(requirements_file))
+    
+    if conda_environment_file is not None:
+        reqs.extend(_parse_environment_yml(conda_environment_file, available_channels))
                 
     comm = ET.SubElement(tool_root, 'command', detect_errors='exit_code')
     if len(nbas) > 1:
@@ -391,16 +452,18 @@ def main():
     parser.add_argument('notebook', type=str)
     parser.add_argument('outdir', type=str)
     parser.add_argument('--name', type=str, default='example')
-    parser.add_argument('--requirements_path', required=False)
+    parser.add_argument('--requirements_txt', required=False)
+    parser.add_argument('--environment_yml', required=False)
     args = parser.parse_args()
     
     input_nb = args.notebook
     output_dir = args.outdir
     toolname = args.name
-    requirements_path = args.requirements_path   
+    requirements_txt = args.requirements_txt
+    environment_yml = args.environment_yml
     
     os.makedirs(output_dir, exist_ok=True)
-    to_galaxy(input_nb, toolname, requirements_path, output_dir)
+    to_galaxy(input_nb, toolname, output_dir, requirements_txt, environment_yml)
 
 if __name__ == '__main__':
     main()
