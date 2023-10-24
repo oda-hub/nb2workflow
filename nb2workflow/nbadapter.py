@@ -62,6 +62,18 @@ def cast_parameter(x,par):
             return True
         else:
             raise ValueError(f'Parameter {par["name"]} value "{x}" can not be interpreted as boolean.')
+    if par['python_type'] in [list, dict]:
+        try:
+            if type(x) is str:
+                decoded = json.loads(x)
+            else:
+                decoded = x
+            if type(decoded) is par['python_type']:
+                return decoded
+            else:
+                raise ValueError
+        except:
+            raise ValueError(f'Parameter {par["name"]} value "{x}" can not be interpreted as {par["python_type"].__name__}.')
     return par['python_type'](x)
 
 
