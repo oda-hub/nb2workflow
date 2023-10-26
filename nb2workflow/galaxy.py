@@ -8,46 +8,13 @@ import logging
 
 import yaml
 
-from cdci_data_analysis.analysis.ontology import Ontology
-# TODO: ontology module must be separated from the dispatcher
+from oda_api.ontology_helper import Ontology
 from nb2workflow.nbadapter import NotebookAdapter, find_notebooks
 
 import nbformat
 from nbconvert.exporters import ScriptExporter
 
 logger = logging.getLogger()
-
-# NOTE: to include into the base class when separated from dispatcher
-class ModOntology(Ontology):
-    def get_oda_label(self, param_uri):
-        if param_uri.startswith("http"): param_uri = f"<{param_uri}>"
-
-        query = "SELECT ?label WHERE {%s oda:label ?label}" % (param_uri)
-        
-        qres = self.g.query(query)
-   
-        if len(qres) == 0: return None
-        
-        label = " ".join([str(x[0]) for x in qres])
-        
-        return label
-
-    def is_data_product(self, owl_uri, include_parameter_products=True):
-        if owl_uri.startswith("http"): owl_uri = f"<{owl_uri}>"
-        
-        filt_param = 'MINUS{?cl rdfs:subClassOf* oda:ParameterProduct. }' if not include_parameter_products else ''
-        query = dedent("""
-                       SELECT (count(?cl) as ?count) WHERE {
-                       VALUES ?cl { %s } 
-                       ?cl rdfs:subClassOf* oda:DataProduct. 
-                       %s
-                       }
-                       """ % (owl_uri, filt_param))
-        qres = self.g.query(query)
-        
-        if int(list(qres)[0][0]) == 0: return False
-        
-        return True
         
                
 # TODO: configurable
@@ -57,6 +24,7 @@ ontology_path = '/home/dsavchenko/Projects/MMODA/ontology/ontology.ttl'
 
 global_req = ['ipython']
 
+_success_text = '*** Job finished successfully ***'
 
 class GalaxyParameter:
     def __init__(self, 
@@ -89,7 +57,7 @@ class GalaxyParameter:
     
     @classmethod
     def from_inspect(cls, par_details):
-        onto = ModOntology(ontology_path)
+        onto = Ontology(ontology_path)
 
         owl_uri = par_details['owl_type']
         
@@ -156,7 +124,7 @@ class GalaxyOutput:
     
     @classmethod
     def from_inspect(cls, outp_details, dprod=None):
-        onto = ModOntology(ontology_path)
+        onto = Ontology(ontology_path)
 
         owl_uri = outp_details['owl_type']
         if outp_details['extra_ttl'] is not None:
@@ -276,10 +244,10 @@ def _nb2script(nba):
                     _galaxy_meta_data[_outn] = {'ext': 'expression.json'}
             """)
 
-    outp_code += dedent("""
+    outp_code += dedent(f"""
                         with open(os.path.join(_galaxy_wd, 'galaxy.json'), 'w') as fd:
                             json.dump(_galaxy_meta_data, fd)
-                        print('*** Job finished successfully ***')
+                        print("{_success_text}")
                         """)
 
     inject_write = nbformat.v4.new_code_cell(outp_code)
@@ -291,6 +259,8 @@ def _nb2script(nba):
     
     return script
 
+# FIXME: seems galaxy only support exact versions. So e.g. 'oda-api>=1.44' will not work, resulting in `conda install 'oda-api=>=1.44'`. 
+# at least warn about it, but better resolve automatically somehow. (In both parsers.)
 def _parse_environment_yml(filepath, available_channels):
     
     match_spec = re.compile(r'^(?P<pac>[^=<> ]+)\s*(?P<eq>={0,2})(?P<uneq>[<>]?=?)(?P<ver>.*)$')
@@ -354,16 +324,20 @@ def _parse_requirements_txt(filepath):
     return reqs_elements
                 
 
-def to_galaxy(input_path, toolname, out_dir, 
+def to_galaxy(input_path, 
+              toolname, 
+              out_dir, 
+              tool_version = '0.1.0+galaxy0',
               requirements_file = None, 
               conda_environment_file = None, 
-              available_channels = ['default', 'conda-forge', 'bioconda', 'fermi']):
+              available_channels = ['default', 'conda-forge', 'bioconda', 'fermi'],
+              ):
     nbas = find_notebooks(input_path)
     
     tool_root = ET.Element('tool',
                         id=toolname.replace(' ', '_'),
                         name=toolname,
-                        version='0.1.0+galaxy0', #TODO:
+                        version=tool_version, #TODO:
                         profile='23.0')
 
     reqs = ET.SubElement(tool_root, 'requirements')
@@ -389,10 +363,12 @@ def to_galaxy(input_path, toolname, out_dir,
     # NOTE: CDATA if needed https://gist.github.com/zlalanne/5711847
 
     conf = ET.SubElement(tool_root, 'configfiles')
-    inp = ET.SubElement(conf, 'inputs', name='inputs', filename='inputs.json')
+    conf.append(ET.Element('inputs', name='inputs', filename='inputs.json'))
     
     inps = ET.SubElement(tool_root, 'inputs')
     outps = ET.SubElement(tool_root, 'outputs')
+    tests = ET.SubElement(tool_root, 'tests')
+    
     
     if len(nbas) > 1:
         dprod_cond = ET.SubElement(inps, 'conditional', name='_data_product')
@@ -404,11 +380,18 @@ def to_galaxy(input_path, toolname, out_dir,
             sflag = False
             
     for nb_name, nba in nbas.items():
+        inputs = nba.input_parameters
+        outputs = nba.extract_output_declarations()
+        
+        default_test = ET.SubElement(tests, 'test', expect_num_outputs=str(len(outputs)))
+        
         if len(nbas) > 1:
             when = ET.SubElement(dprod_cond, 'when', value=nb_name)
+            test_par_root = ET.SubElement(default_test, 'conditional', name='_data_product')
+            test_par_root.append(ET.Element('param', name='_selector', value=nb_name))
         else:
             when = inps
-        inputs = nba.input_parameters
+            test_par_root = default_test
 
         script_str = _nb2script(nba)
         with open(os.path.join(out_dir, f'{nb_name}.py'), 'w') as fd:
@@ -417,9 +400,8 @@ def to_galaxy(input_path, toolname, out_dir,
         for pv in inputs.values():
             galaxy_par = GalaxyParameter.from_inspect(pv)
             when.append(galaxy_par.to_xml_tree())
+            test_par_root.append(ET.Element('param', name=galaxy_par.name, value=str(galaxy_par.default_value)))
 
-
-        outputs = nba.extract_output_declarations()
         for outv in outputs.values():
             outp = GalaxyOutput.from_inspect(outv, nb_name)
             outp_tree = outp.to_xml_tree()
@@ -428,9 +410,9 @@ def to_galaxy(input_path, toolname, out_dir,
                 fltr.text = f"_data_product['_selector'] == '{nb_name}'"
             outps.append(outp_tree)
             
-
-    #TODO: tests
-
+        assert_stdout = ET.SubElement(default_test, 'assert_stdout')
+        assert_stdout.append(ET.Element('has_text', text=_success_text))
+        
     help_block = ET.SubElement(tool_root, 'help')
     help_block.text = 'help me!' # TODO:
 
@@ -452,6 +434,7 @@ def main():
     parser.add_argument('notebook', type=str)
     parser.add_argument('outdir', type=str)
     parser.add_argument('--name', type=str, default='example')
+    parser.add_argument('--tool_version', type=str, default='0.1.0+galaxy0')
     parser.add_argument('--requirements_txt', required=False)
     parser.add_argument('--environment_yml', required=False)
     args = parser.parse_args()
@@ -461,9 +444,15 @@ def main():
     toolname = args.name
     requirements_txt = args.requirements_txt
     environment_yml = args.environment_yml
+    tool_version = args.tool_version
     
     os.makedirs(output_dir, exist_ok=True)
-    to_galaxy(input_nb, toolname, output_dir, requirements_txt, environment_yml)
+    to_galaxy(input_nb, 
+              toolname, 
+              output_dir, 
+              tool_version=tool_version,
+              requirements_file=requirements_txt, 
+              conda_environment_file=environment_yml)
 
 if __name__ == '__main__':
     main()
