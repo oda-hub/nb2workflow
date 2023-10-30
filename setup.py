@@ -64,6 +64,10 @@ setup(name='nb2workflow',
         ],
         "k8s":[
             'kubernetes'
+        ],
+        'galaxy':[
+            'oda_api',
+            'ensureconda',
         ]
       },
 

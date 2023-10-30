@@ -7,6 +7,7 @@ import argparse
 import logging
 
 import yaml
+import json
 
 from oda_api.ontology_helper import Ontology
 from nb2workflow.nbadapter import NotebookAdapter, find_notebooks
@@ -14,13 +15,15 @@ from nb2workflow.nbadapter import NotebookAdapter, find_notebooks
 import nbformat
 from nbconvert.exporters import ScriptExporter
 
+from ensureconda.api import ensureconda
+import subprocess as sp
+
+import tempfile
+
 logger = logging.getLogger()
         
                
-# TODO: configurable
-#ontology_path = 'http://odahub.io/ontology/ontology.ttl'
-ontology_path = '/home/dsavchenko/Projects/MMODA/ontology/ontology.ttl'
-
+default_ontology_path = 'http://odahub.io/ontology/ontology.ttl'
 
 global_req = ['ipython']
 
@@ -56,7 +59,7 @@ class GalaxyParameter:
                 
     
     @classmethod
-    def from_inspect(cls, par_details):
+    def from_inspect(cls, par_details, ontology_path):
         onto = Ontology(ontology_path)
 
         owl_uri = par_details['owl_type']
@@ -123,7 +126,7 @@ class GalaxyOutput:
         self.outfile_name = f"{name}_galaxy.output"
     
     @classmethod
-    def from_inspect(cls, outp_details, dprod=None):
+    def from_inspect(cls, outp_details, ontology_path, dprod=None):
         onto = Ontology(ontology_path)
 
         owl_uri = outp_details['owl_type']
@@ -150,7 +153,7 @@ class GalaxyOutput:
     
         
             
-def _nb2script(nba):
+def _nb2script(nba, ontology_path):
     input_nb = nba.notebook_fn
     mynb = nbformat.read(input_nb, as_version=4)
     outputs = nba.extract_output_declarations()
@@ -204,7 +207,7 @@ def _nb2script(nba):
     outp_code += "_galaxy_meta_data = {}\n"
     
     for vn, vv in outputs.items():
-        outp = GalaxyOutput.from_inspect(vv, nba.name)
+        outp = GalaxyOutput.from_inspect(vv, ontology_path=ontology_path, dprod=nba.name)
         if outp.is_oda:
             outp_code += f"_oda_outs.append(('{outp.dataname}', '{outp.outfile_name}', {vn}))\n"
         else:
@@ -259,69 +262,141 @@ def _nb2script(nba):
     
     return script
 
-# FIXME: seems galaxy only support exact versions. So e.g. 'oda-api>=1.44' will not work, resulting in `conda install 'oda-api=>=1.44'`. 
-# at least warn about it, but better resolve automatically somehow. (In both parsers.)
-def _parse_environment_yml(filepath, available_channels):
+
+class Requirements:
     
-    match_spec = re.compile(r'^(?P<pac>[^=<> ]+)\s*(?P<eq>={0,2})(?P<uneq>[<>]?=?)(?P<ver>.*)$')
-    # TODO: currently only basic version spec 
-    #       see https://github.com/conda/conda/blob/d58be31dadac66a14a7c488eab41004eaf578f50/conda/models/match_spec.py#L74
-    #           https://docs.conda.io/projects/conda-build/en/stable/resources/package-spec.html#package-match-specifications
-    with open(filepath, 'r') as fd:
-        env_yaml = yaml.safe_load(fd)
-    
-    if env_yaml.get('dependencies'):
-        if env_yaml.get('channels'):
-            extra_channels = set(env_yaml['channels']) - set(available_channels)
-            if extra_channels:
-                raise ValueError('Conda channels %s are not supported by galaxy instance', extra_channels)
-        else:
-            logger.warning('Conda channels are not defined in evironment file.')
+    def __init__(self, available_channels, conda_env_yml = None, requirements_txt = None):
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.fullenv_file_path = os.path.join(self.tmpdir.name, 'environment.yml')
         
-        reqs_elements = []
-        for dep in env_yaml['dependencies']:
-            m = match_spec.match(dep)
-            if m is None:
-                raise ValueError('Dependency spec not recognised for %s', dep)
+        self.micromamba = self._get_micromamba_binary()
+        
+        boilerplate_env_dict = {'channels': available_channels, 'dependencies': global_req}
+        
+        if conda_env_yml is not None:
+            with open(conda_env_yml, 'r') as fd:
+                self.env_dict = yaml.safe_load(fd)
 
-            varg = {}
-            if m.group('ver'):
-                varg['version'] = m.group('uneq') + m.group('ver') if m.group('uneq') else m.group('ver')
-            reqs_elements.append(ET.Element('requirement', type='package', **varg))
-            reqs_elements[-1].text = m.group('pac')
-        return reqs_elements
-    else:
-        return []
-            
-def _parse_requirements_txt(filepath):
-
-    match_spec = re.compile(r'^(?P<pac>[A-Z0-9][A-Z0-9._-]*[A-Z0-9])\s*(?:\[.*\])?\s*(?P<eq>[~=]{0,2})(?P<uneq>[<>]?=?)\s*(?P<ver>[0-9.\*]*)', re.I)
-    # TODO: basic, see https://pip.pypa.io/en/stable/reference/requirement-specifiers/
-    
-    logger.warning('Package names in PyPI may not coincide with those in conda. Please revise galaxy tool requirements after generation.')
-    
-    with open(filepath, 'r') as fd:
-        reqs_elements = []       
-        for line in fd:
-            if line.startswith('#') or re.match(r'^\s*$', line):
-                continue
-            elif line.startswith('git+'):
-                logger.warning('Guessing package name from git repository name')
-                pac = line.split('/')[-1]
-                pac = pac.split('.')[0]
-                reqs_elements.append(ET.Element('requirement', type='package'))
-                reqs_elements[-1].text = pac
+            if self.env_dict.get('dependencies'):
+                if self.env_dict.get('channels'):
+                    extra_channels = set(self.env_dict['channels']) - set(available_channels)
+                    if extra_channels:
+                        raise ValueError('Conda channels %s are not supported by galaxy instance', extra_channels)
+                else:
+                    logger.warning('Conda channels are not defined in evironment file.')
+                self.env_dict['channels'] = available_channels
+                self.env_dict['dependencies'].extend(global_req)
             else:
-                m = match_spec.match(line)
-                if m is None:
-                    raise ValueError('Dependency spec not recognised for %s', line)
-                varg = {}
-                if m.group('ver'):
-                    varg['version'] = m.group('uneq') + m.group('ver') if m.group('uneq') else m.group('ver')
-                reqs_elements.append(ET.Element('requirement', type='package', **varg))
-                reqs_elements[-1].text = m.group('pac')
+                self.env_dict = boilerplate_env_dict
+        else:
+            self.env_dict = boilerplate_env_dict
+        
+        match_spec = re.compile(r'^(?P<pac>[^=<> ]+)')
+        self._direct_dependencies = []
+        for dep in self.env_dict['dependencies']:
+            m = match_spec.match(dep)
+            self._direct_dependencies.append((m.group('pac'), '', 0, ''))
+        
+        if requirements_txt is not None:
+            pip_reqs = self._parse_requirements_txt(requirements_txt)
+            
+            channels_cl = []
+            for ch in self.env_dict['channels']:
+                channels_cl.append('-c')
+                channels_cl.append(ch)
+                
+            for req in pip_reqs:              
+                run_cmd = [self.micromamba, 'search', '--json']
+                run_cmd.extend(channels_cl)
+                run_cmd.append(req[0]+req[1])
+                
+                search_res = sp.run(run_cmd, check=True, capture_output=True, text=True)
+                search_json = json.loads(search_res.stdout)
+                if search_json['result']['pkgs']:
+                    self._direct_dependencies.append(req)
+                    self.env_dict['dependencies'].append(req[0]+req[1])
+                else:
+                    self._direct_dependencies.append((req[0], req[1], 2, req[3]))
+            
+        with open(self.fullenv_file_path, 'w') as fd:
+            yaml.dump(self.env_dict, fd)
+            
+        resolved_env = self._resolve_environment_yml()
+        
+        self.final_dependencies = {}
+        for dep in self._direct_dependencies:
+            if dep[2] == 2:
+                self.final_dependencies[dep[0]] = (dep[1], dep[2], dep[3])
+            elif dep[0] in self.final_dependencies.keys():
+                continue
+            else:
+                self.final_dependencies[dep[0]] = (resolved_env[dep[0]], dep[2], dep[3])
+        
+    def _resolve_environment_yml(self):
+        
+        run_command = [str(self.micromamba),
+                    'env', 'create',
+                    '-n', '__temp_env_name',
+                    '--dry-run',
+                    '--json',
+                    '-f', str(self.fullenv_file_path)]
+        run_proc = sp.run(run_command, capture_output=True, check=True, text=True)
+        resolved_env = json.loads(run_proc.stdout)['actions']['FETCH']
+        resolved_env = {x['name']: x['version'] for x in resolved_env}
+        
+        return resolved_env
+
+    def to_xml_tree(self):
+        reqs_elements = []
+        for name, det in self.final_dependencies.items():
+            if det[1] == 2:
+                reqs_elements.append(ET.Comment(
+                    f"Requirements string {det[2]} can't be resolved with conda!"))
+            else:
+                reqs_elements.append(ET.Element('requirement',
+                                                type='package',
+                                                version = det[0]))
+                reqs_elements[-1].text = name
+        
+        return reqs_elements
     
-    return reqs_elements
+    @staticmethod
+    def _parse_requirements_txt(filepath):
+
+        match_spec = re.compile(r'^(?P<pac>[A-Z0-9][A-Z0-9._-]*[A-Z0-9])\s*(?:\[.*\])?\s*(?P<eq>[~=]{0,2})(?P<uneq>[<>]?=?)\s*(?P<ver>[0-9.\*]*)', re.I)
+        match_from_url = re.compile(r'^(?P<pac>[A-Z0-9][A-Z0-9._-]*[A-Z0-9])\s*@(?P<path>.*)', re.I)
+        
+        # TODO: basic, see https://pip.pypa.io/en/stable/reference/requirement-specifiers/
+        
+        with open(filepath, 'r') as fd:
+            reqs_str_list = []       
+            for line in fd:
+                if line.startswith('#') or re.match(r'^\s*$', line):
+                    continue
+                elif line.startswith('git+'):
+                    raise ValueError('Dependency from git repo is not supported: %s', line)
+                elif match_from_url.match(line):
+                    raise ValueError('Dependency from url is not supported %s', line)
+                else:
+                    m = match_spec.match(line)
+                    if m is None:
+                        raise ValueError('Dependency spec not recognised for %s', line)
+                    if m.group('ver'):
+                        ver = m.group('uneq') + m.group('ver') if m.group('uneq') else m.group('eq') + m.group('ver')
+                    else:
+                        ver = ''
+                    reqs_str_list.append((m.group('pac'), ver, 1, line))
+        
+        return reqs_str_list
+
+    @staticmethod
+    def _get_micromamba_binary(): 
+        mamba_bin = ensureconda(no_install=False, 
+                                micromamba=True, 
+                                mamba=False, 
+                                conda=False, 
+                                conda_exe=False)
+        return mamba_bin
                 
 
 def to_galaxy(input_path, 
@@ -330,7 +405,8 @@ def to_galaxy(input_path,
               tool_version = '0.1.0+galaxy0',
               requirements_file = None, 
               conda_environment_file = None, 
-              available_channels = ['default', 'conda-forge', 'bioconda', 'fermi'],
+              available_channels = ['default', 'conda-forge'],
+              ontology_path = default_ontology_path,
               ):
     nbas = find_notebooks(input_path)
     
@@ -342,18 +418,9 @@ def to_galaxy(input_path,
 
     reqs = ET.SubElement(tool_root, 'requirements')
 
-    for greq in global_req:
-        req = ET.SubElement(reqs, 
-                            'requirement', 
-                            type='package'
-                            )
-        req.text = greq
-        
-    if requirements_file is not None:
-        reqs.extend(_parse_requirements_txt(requirements_file))
-    
-    if conda_environment_file is not None:
-        reqs.extend(_parse_environment_yml(conda_environment_file, available_channels))
+    reqs.extend(Requirements(available_channels=available_channels, 
+                             conda_env_yml=conda_environment_file,
+                             requirements_txt=requirements_file).to_xml_tree())
                 
     comm = ET.SubElement(tool_root, 'command', detect_errors='exit_code')
     if len(nbas) > 1:
@@ -393,17 +460,17 @@ def to_galaxy(input_path,
             when = inps
             test_par_root = default_test
 
-        script_str = _nb2script(nba)
+        script_str = _nb2script(nba, ontology_path)
         with open(os.path.join(out_dir, f'{nb_name}.py'), 'w') as fd:
             fd.write(script_str)
 
         for pv in inputs.values():
-            galaxy_par = GalaxyParameter.from_inspect(pv)
+            galaxy_par = GalaxyParameter.from_inspect(pv, ontology_path=ontology_path)
             when.append(galaxy_par.to_xml_tree())
             test_par_root.append(ET.Element('param', name=galaxy_par.name, value=str(galaxy_par.default_value)))
 
         for outv in outputs.values():
-            outp = GalaxyOutput.from_inspect(outv, nb_name)
+            outp = GalaxyOutput.from_inspect(outv, ontology_path=ontology_path, dprod=nb_name)
             outp_tree = outp.to_xml_tree()
             if len(nbas) > 1:
                 fltr = ET.SubElement(outp_tree, 'filter')
@@ -437,6 +504,7 @@ def main():
     parser.add_argument('--tool_version', type=str, default='0.1.0+galaxy0')
     parser.add_argument('--requirements_txt', required=False)
     parser.add_argument('--environment_yml', required=False)
+    parser.add_argument('--ontology_path', required=False)
     args = parser.parse_args()
     
     input_nb = args.notebook
@@ -445,6 +513,9 @@ def main():
     requirements_txt = args.requirements_txt
     environment_yml = args.environment_yml
     tool_version = args.tool_version
+    ontology_path = args.ontology_path
+    if ontology_path is None:
+        ontology_path = default_ontology_path
     
     os.makedirs(output_dir, exist_ok=True)
     to_galaxy(input_nb, 
@@ -452,7 +523,8 @@ def main():
               output_dir, 
               tool_version=tool_version,
               requirements_file=requirements_txt, 
-              conda_environment_file=environment_yml)
+              conda_environment_file=environment_yml,
+              ontology_path=ontology_path)
 
 if __name__ == '__main__':
     main()
