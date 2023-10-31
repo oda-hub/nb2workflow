@@ -305,7 +305,10 @@ class Requirements:
                 channels_cl.append('-c')
                 channels_cl.append(ch)
                 
-            for req in pip_reqs:              
+            for req in pip_reqs:
+                if req[2] == 2:
+                    self._direct_dependencies.append(req)
+                    continue              
                 run_cmd = [self.micromamba, 'search', '--json']
                 run_cmd.extend(channels_cl)
                 run_cmd.append(req[0]+req[1])
@@ -316,6 +319,7 @@ class Requirements:
                     self._direct_dependencies.append(req)
                     self.env_dict['dependencies'].append(req[0]+req[1])
                 else:
+                    logger.warning(f'Dependency {req[0]} not found in conda channels.')
                     self._direct_dependencies.append((req[0], req[1], 2, req[3]))
             
         with open(self.fullenv_file_path, 'w') as fd:
@@ -331,7 +335,8 @@ class Requirements:
                 continue
             else:
                 self.final_dependencies[dep[0]] = (resolved_env[dep[0]], dep[2], dep[3])
-        
+                
+                
     def _resolve_environment_yml(self):
         
         run_command = [str(self.micromamba),
@@ -351,7 +356,8 @@ class Requirements:
         for name, det in self.final_dependencies.items():
             if det[1] == 2:
                 reqs_elements.append(ET.Comment(
-                    f"Requirements string {det[2]} can't be resolved with conda!"))
+                    (f"Requirements string '{det[2]}' can't be converted automatically. "
+                     "Please add the galaxy/conda requirement manually or modify the requirements file!")))
             else:
                 reqs_elements.append(ET.Element('requirement',
                                                 type='package',
@@ -374,13 +380,16 @@ class Requirements:
                 if line.startswith('#') or re.match(r'^\s*$', line):
                     continue
                 elif line.startswith('git+'):
-                    raise ValueError('Dependency from git repo is not supported: %s', line)
+                    logger.warning('Dependency from git repo is not supported: %s', line)
+                    reqs_str_list.append((line, '', 2, line))
                 elif match_from_url.match(line):
-                    raise ValueError('Dependency from url is not supported %s', line)
+                    logger.warning('Dependency from url is not supported %s', line)
+                    reqs_str_list.append((line, '', 2, line))
                 else:
                     m = match_spec.match(line)
                     if m is None:
-                        raise ValueError('Dependency spec not recognised for %s', line)
+                        logger.warning('Dependency spec not recognised for %s', line)
+                        reqs_str_list.append((line, '', 2, line))
                     if m.group('ver'):
                         ver = m.group('uneq') + m.group('ver') if m.group('uneq') else m.group('eq') + m.group('ver')
                     else:
