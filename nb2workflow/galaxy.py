@@ -437,8 +437,7 @@ def _read_help_file(filepath):
         with open(filepath, 'r') as fd:
             help_text = fd.read()
     elif filepath.endswith('.md'):
-        with open(filepath, 'r') as fd:
-            help_md = fd.read()
+        # TODO: test and adapt formatting arguments
         help_text = pypandoc.convert_file(filepath, 'rst')
     else:
         NotImplementedError('Unknown help file extension.')
