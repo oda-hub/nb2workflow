@@ -454,6 +454,9 @@ def to_galaxy(input_path,
               available_channels = ['default', 'conda-forge'],
               ontology_path = default_ontology_path,
               ):
+    
+    os.makedirs(out_dir, exist_ok=True)
+    
     nbas = find_notebooks(input_path)
     
     tool_root = ET.Element('tool',
