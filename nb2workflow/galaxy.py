@@ -18,6 +18,9 @@ from nbconvert.exporters import ScriptExporter
 from ensureconda.api import ensureconda
 import subprocess as sp
 
+import bibtexparser as bib
+import pypandoc
+
 import tempfile
 
 logger = logging.getLogger()
@@ -413,7 +416,33 @@ class Requirements:
                                 conda=False, 
                                 conda_exe=False)
         return mamba_bin
-                
+
+def _split_bibfile(filepath):
+    # parse bibfile and return only entries (no preamble/comments/strings) as list of strings
+    biblib = bib.parse_file(filepath)
+    
+    out = []
+    for ent in biblib.entries:
+        tmplib = bib.Library()
+        tmplib.add(ent)
+        outstr = bib.write_string(tmplib)
+        outstr = outstr.replace('\n', '\n\t\t')
+        if outstr.endswith('\n\t\t'):
+            outstr = outstr[:-3]
+        out.append(outstr)
+    return out
+
+def _read_help_file(filepath):
+    if filepath.endswith('.rst'):
+        with open(filepath, 'r') as fd:
+            help_text = fd.read()
+    elif filepath.endswith('.md'):
+        with open(filepath, 'r') as fd:
+            help_md = fd.read()
+        help_text = pypandoc.convert_file(filepath, 'rst')
+    else:
+        NotImplementedError('Unknown help file extension.')
+    return help_text
 
 def to_galaxy(input_path, 
               toolname, 
@@ -421,6 +450,8 @@ def to_galaxy(input_path,
               tool_version = '0.1.0+galaxy0',
               requirements_file = None, 
               conda_environment_file = None, 
+              citations_bibfile = None,
+              help_file = None,
               available_channels = ['default', 'conda-forge'],
               ontology_path = default_ontology_path,
               ):
@@ -429,7 +460,7 @@ def to_galaxy(input_path,
     tool_root = ET.Element('tool',
                         id=toolname.replace(' ', '_'),
                         name=toolname,
-                        version=tool_version, #TODO:
+                        version=tool_version, 
                         profile='23.0')
 
     reqs = ET.SubElement(tool_root, 'requirements')
@@ -495,13 +526,18 @@ def to_galaxy(input_path,
             
         assert_stdout = ET.SubElement(default_test, 'assert_stdout')
         assert_stdout.append(ET.Element('has_text', text=_success_text))
-        
-    help_block = ET.SubElement(tool_root, 'help')
-    help_block.text = 'help me!' # TODO:
-
-    citats = ET.SubElement(tool_root, 'citations')
-    citate = ET.SubElement(citats, 'citation', type='doi')
-    citate.text = '10.5281/zenodo.6299481' # TODO:
+    
+    if help_file is not None:    
+        help_block = ET.SubElement(tool_root, 'help')
+        help_text = _read_help_file(help_file)
+        help_block.text = help_text
+    
+    if citations_bibfile is not None:
+        citats = ET.SubElement(tool_root, 'citations')
+        bibentries = _split_bibfile(citations_bibfile)
+        for entry in bibentries:
+            citate = ET.SubElement(citats, 'citation', type='bibtex')
+            citate.text = entry
 
     tree = ET.ElementTree(tool_root)
     ET.indent(tree)
@@ -521,6 +557,8 @@ def main():
     parser.add_argument('--requirements_txt', required=False)
     parser.add_argument('--environment_yml', required=False)
     parser.add_argument('--ontology_path', required=False)
+    parser.add_argument('--citations_bibfile', required=False)
+    parser.add_argument('--help_file', required=False)
     args = parser.parse_args()
     
     input_nb = args.notebook
@@ -532,6 +570,8 @@ def main():
     ontology_path = args.ontology_path
     if ontology_path is None:
         ontology_path = default_ontology_path
+    bibfile = args.citations_bibfile
+    help_file = args.help_file
     
     os.makedirs(output_dir, exist_ok=True)
     to_galaxy(input_nb, 
@@ -540,6 +580,8 @@ def main():
               tool_version=tool_version,
               requirements_file=requirements_txt, 
               conda_environment_file=environment_yml,
+              citations_bibfile=bibfile,
+              help_file=help_file,
               ontology_path=ontology_path)
 
 if __name__ == '__main__':

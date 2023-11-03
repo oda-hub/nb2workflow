@@ -68,6 +68,8 @@ setup(name='nb2workflow',
         'galaxy':[
             'oda_api',
             'ensureconda',
+            'bibtexparser >= 2.0.0b3',
+            'pypandoc_binary',
         ]
       },
 
