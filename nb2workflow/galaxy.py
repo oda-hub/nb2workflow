@@ -119,7 +119,9 @@ class GalaxyOutput:
         self.name = name
         if dprod is None:
             dprod=''
+            self.dprod = dprod
         else:
+            self.dprod = dprod
             dprod += '_'
         self.dataname = f"out_{dprod}{self.name}"
         self.is_oda = is_oda
@@ -141,7 +143,12 @@ class GalaxyOutput:
         return cls(outp_details['name'], is_oda, dprod)
 
     def to_xml_tree(self):
-        attrs = {'label': "${tool.name} -> %s"%self.name,
+        if self.dprod is None:
+            label = "${tool.name} -> %s"%self.name 
+        else:
+            label = "${tool.name} -> %s %s"%(self.dprod, self.name)
+            
+        attrs = {'label': label,
                  'name': self.dataname,
                  #'auto_format': 'true', 
                  'format': 'auto',
