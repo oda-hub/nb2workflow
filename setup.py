@@ -45,9 +45,6 @@ setup(name='nb2workflow',
             'owlready2==0.11',
             'oda-knowledge-base',
         ],
-        "cwl":[
-            "cwlgen",
-        ],
         "docker":[
             'docker',
             'checksumdir',
