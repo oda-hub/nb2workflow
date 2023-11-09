@@ -90,6 +90,9 @@ class GalaxyParameter:
                    allowed_values=allowed_values)
 
     def to_xml_tree(self):
+        
+        # TODO: consider using https://github.com/hexylena/galaxyxml
+        
         attrs = {'name': self.name,
                  'type': self.partype}
         if self.default_value is not None and self.partype != 'select':
