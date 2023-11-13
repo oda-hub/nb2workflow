@@ -16,7 +16,7 @@ enable_cache = False
 
 try:
     import sentry_sdk
-    sentry_sdk.init(os.environ.get("SENTRY_URI", open("/cdci-resources/sentry-uri").read().strip()))
+    sentry_sdk.init(dsn="https://63ae106793010d836c74830fa75b300c@o264756.ingest.sentry.io/4506186624335872")
 except ImportError:
     sentry_sdk = None
 except Exception as e:
