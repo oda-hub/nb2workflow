@@ -406,7 +406,8 @@ def deploy_k8s(container_info,
             "--port", "8000", "-n", namespace]
         )
     
-    finally:                    
+    finally:
+        time.sleep(5) # avoid race condition. time for deployment to be created in k8s
         sp.check_call(
             ["kubectl", "patch", "deployment", deployment_name, "-n", namespace,
             "--type", "strategic",
