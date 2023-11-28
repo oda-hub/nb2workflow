@@ -175,7 +175,7 @@ class AsyncWorkflow:
         nba = NotebookAdapter(template_nba.notebook_fn)
 
         try:
-            exceptions = nba.execute(self.params['request_parameters'], callback=self.callback)
+            exceptions = nba.execute(self.params['request_parameters'], callback_url=self.callback)
         except PapermillWorkflowIncomplete as e:
             logger.info("found incomplete workflow: %s, rescheduling", repr(e))
 
