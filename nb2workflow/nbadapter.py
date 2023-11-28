@@ -407,13 +407,13 @@ class NotebookAdapter:
 
         
 
-    def execute(self, parameters, progress_bar = True, log_output = True, inplace=False, callback=None):
+    def execute(self, parameters, progress_bar = True, log_output = True, inplace=False, callback_url=None):
         t0 = time.time()
 
         logstasher.log(dict(origin="nb2workflow.execute", event="starting", parameters=parameters, workflow_name=notebook_short_name(self.notebook_fn), health=current_health()))
 
         logger.info("starting job")
-        exceptions = self._execute(parameters, progress_bar, log_output, inplace, callback=callback)
+        exceptions = self._execute(parameters, progress_bar, log_output, inplace, callback_url=callback_url)
             
         tspent = time.time() - t0
         logstasher.log(dict(origin="nb2workflow.execute", 
@@ -426,7 +426,7 @@ class NotebookAdapter:
 
         return exceptions
 
-    def _execute(self, parameters, progress_bar = True, log_output = True, inplace=False, callback=None):
+    def _execute(self, parameters, progress_bar = True, log_output = True, inplace=False, callback_url=None):
 
         if not inplace :
             tmpdir = self.new_tmpdir()
@@ -446,8 +446,8 @@ class NotebookAdapter:
             tmpdir =os.path.dirname(os.path.realpath(self.notebook_fn))
             logger.info("executing inplace, no tmpdir is input dir: %s", tmpdir)
 
-        if callback:
-            self._pass_callback(tmpdir, callback)
+        if callback_url:
+            self._pass_callback_url(tmpdir, callback_url)
         
         self.update_summary(state="started", parameters=parameters)
 
@@ -490,15 +490,15 @@ class NotebookAdapter:
 
         return exceptions
 
-    def _pass_callback(self, workdir: str, callback: str):
+    def _pass_callback_url(self, workdir: str, callback_url: str):
         """
-        save callback to file .oda_api_callback in the notebook dir were it can be accessed by ODA API
+        save callback_url to file .oda_api_callback in the notebook dir were it can be accessed by ODA API
         :param notebook_path: full path to the notebook
         """
         callback_file = ".oda_api_callback"  # perhaps it would be better to define this constant in a common lib
         callback_file_path = os.path.join(workdir, callback_file)
         with open(callback_file_path, 'wt') as output:
-            print(callback, file=output)
+            print(callback_url, file=output)
         logger.info("callback file created: %s", callback_file_path)
 
     def extract_pm_output(self):
