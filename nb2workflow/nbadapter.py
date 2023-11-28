@@ -492,7 +492,7 @@ class NotebookAdapter:
 
     def _pass_callback_url(self, workdir: str, callback_url: str):
         """
-        save callback_url to file .oda_api_callback in the notebook dir were it can be accessed by ODA API
+        save callback_url to file .oda_api_callback in the notebook dir where it can be accessed by ODA API
         :param workdir: directory to save notebook in
         """
         callback_file = ".oda_api_callback"  # perhaps it would be better to define this constant in a common lib
