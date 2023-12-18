@@ -3,8 +3,11 @@ import nb2workflow
 import logging
 import threading
 import time
+from os import path
+import json
 
 logger = logging.getLogger(__name__)
+status_callback_file = "status.json"
 
 @pytest.fixture
 def app():
@@ -16,7 +19,7 @@ def app():
 
 
 def test_progress_callback(client):
-    callback_url = 'file://callback.json'
+    callback_url = 'file://' + status_callback_file
     query_string = dict(
         a=20,
         _async_request='yes',
@@ -54,3 +57,11 @@ def test_progress_callback(client):
 
     test_worker_thread.join()
     assert r.json['data']['output']['callback'] == callback_url
+
+    workdir = r.json['data']['jobdir']
+    with open(path.join(workdir, status_callback_file)) as json_file:
+        progress_params = json.load(json_file)
+
+    test_data = dict(action='progress', stage='simulation', progress=50, substage='spectra', subprogress=30, message='some message')
+    assert progress_params == test_data
+
