@@ -141,6 +141,8 @@ def test_service_async_repo(client):
 
         logger.info('service returns %s %s', r, r.json)
 
+        assert 'jobdir' in r.json['workflow_status']
+        
         if r.json['workflow_status'] == 'done':
             logger.info('workflow done!')
             break
