@@ -238,18 +238,23 @@ class InputParameter:
 class NotebookAdapter:
     limit_output_attachment_file = None
 
-    def __init__(self, notebook_fn):
+    def __init__(self, notebook_fn, tempdir_cache=None):
         self.notebook_fn = os.path.abspath(notebook_fn)
         self.name = notebook_short_name(notebook_fn)
+        self.tempdir_cache = tempdir_cache
         logger.debug("notebook adapter for %s", self.notebook_fn)
         logger.debug(self.extract_parameters())
 
-    def new_tmpdir(self):
+    def new_tmpdir(self, cache_key=None):
         logger.debug("tmpdir was "+getattr(self,'_tmpdir','unset'))
         self._tmpdir = None
         logger.debug("tmpdir became %s", self._tmpdir)
 
-        return self.tmpdir
+        newdir = self.tmpdir
+        if ( self.tempdir_cache is not None ) and ( cache_key is not None ):
+            self.tempdir_cache[cache_key] = newdir
+        
+        return newdir
 
     @property
     def tmpdir(self):
@@ -407,12 +412,12 @@ class NotebookAdapter:
 
         
 
-    def execute(self, parameters, progress_bar = True, log_output = True, inplace=False):
+    def execute(self, parameters, progress_bar = True, log_output = True, inplace=False, tmpdir_key=None):
         t0 = time.time()
         logstasher.log(dict(origin="nb2workflow.execute", event="starting", parameters=parameters, workflow_name=notebook_short_name(self.notebook_fn), health=current_health()))
 
         logger.info("starting job")
-        exceptions = self._execute(parameters, progress_bar, log_output, inplace)
+        exceptions = self._execute(parameters, progress_bar, log_output, inplace, tmpdir_key)
             
         tspent = time.time() - t0
         logstasher.log(dict(origin="nb2workflow.execute", 
@@ -425,10 +430,10 @@ class NotebookAdapter:
 
         return exceptions
 
-    def _execute(self, parameters, progress_bar = True, log_output = True, inplace=False):
+    def _execute(self, parameters, progress_bar = True, log_output = True, inplace=False, tmpdir_key=None):
 
         if not inplace :
-            tmpdir = self.new_tmpdir()
+            tmpdir = self.new_tmpdir(tmpdir_key)
             logger.info("new tmpdir: %s", tmpdir)
 
             try:
