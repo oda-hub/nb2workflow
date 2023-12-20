@@ -553,7 +553,7 @@ def to_galaxy(input_path,
     tree = ET.ElementTree(tool_root)
     ET.indent(tree)
     
-    out_xml_path = os.path.join(out_dir, f"{toolname}.xml")
+    out_xml_path = os.path.join(out_dir, f"{tid}.xml")
     tree.write(out_xml_path)
 
 # %%
