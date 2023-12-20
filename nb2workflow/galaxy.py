@@ -449,6 +449,7 @@ def _read_help_file(filepath):
 def to_galaxy(input_path, 
               toolname, 
               out_dir, 
+              tool_id = None,
               tool_version = '0.1.0+galaxy0',
               requirements_file = None, 
               conda_environment_file = None, 
@@ -462,8 +463,13 @@ def to_galaxy(input_path,
     
     nbas = find_notebooks(input_path)
     
+    if tool_id is not None:
+        tid = tool_id
+    else:
+        tid = re.sub(r'[^a-z0-9_]', '_', toolname.lower())
+    
     tool_root = ET.Element('tool',
-                        id=toolname.replace(' ', '_'),
+                        id=tid,
                         name=toolname,
                         version=tool_version, 
                         profile='23.0')
