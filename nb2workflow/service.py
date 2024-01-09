@@ -103,6 +103,7 @@ def create_app():
 app = create_app()
 
 app.async_workflows = dict()
+app.async_workflow_jobdirs = dict()
 app.started_at = datetime.datetime.now()
 
 
@@ -172,10 +173,10 @@ class AsyncWorkflow:
 
         template_nba = app.notebook_adapters.get(self.target)
 
-        nba = NotebookAdapter(template_nba.notebook_fn)
+        nba = NotebookAdapter(template_nba.notebook_fn, tempdir_cache=app.async_workflow_jobdirs)
 
         try:
-            exceptions = nba.execute(self.params['request_parameters'], callback_url=self.callback)
+            exceptions = nba.execute(self.params['request_parameters'], callback_url=self.callback, tmpdir_key=self.key)
         except PapermillWorkflowIncomplete as e:
             logger.info("found incomplete workflow: %s, rescheduling", repr(e))
 
@@ -286,19 +287,34 @@ def workflow(target, background=False, async_request=False):
         print('cache key/value', key, value)
 
         if value is None:
-            async_task = AsyncWorkflow(
-                key=key, target=target, params=interpreted_parameters, callback=async_request_callback)
-
-            async_queue.put(async_task)
+            async_task = AsyncWorkflow(key=key,
+                                       target=target,
+                                       params=interpreted_parameters,
+                                       callback=async_request_callback)
 
             app.async_workflows[key] = 'submitted'
-            return make_response(jsonify(workflow_status="submitted", comment="task created"), 201)
+            async_queue.put(async_task)
 
-        elif value in ['started', 'submitted']:
-            return make_response(jsonify(workflow_status=value, comment="task is "+value), 201)
+            return make_response(jsonify(workflow_status="submitted",
+                                         comment="task created"),
+                                 201)
+
+        elif value == 'submitted':
+            return make_response(jsonify(workflow_status=value,
+                                         comment="task is "+value),
+                                 201)
+
+        elif value == 'started':
+            return make_response(jsonify(workflow_status=value,
+                                         comment="task is "+value,
+                                         jobdir=app.async_workflow_jobdirs.get(key)),
+                                 201)
 
         else:
-            return make_response(jsonify(workflow_status="done", data=value, comment=""), 200)
+            return make_response(jsonify(workflow_status="done",
+                                         data=value,
+                                         comment=""),
+                                 200)
 
     if len(issues) > 0:
         return make_response(jsonify(issues=issues), 400)
