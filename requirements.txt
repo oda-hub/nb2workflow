@@ -5,7 +5,7 @@ flask-cors
 python-consul
 apscheduler
 rdflib
-owlready2
+owlready2==0.11
 docker
 checksumdir
 numpy

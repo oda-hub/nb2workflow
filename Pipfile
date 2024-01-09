@@ -31,7 +31,7 @@ APScheduler = "*"
 Flask = "*"
 Flask-Cors = "*"
 "ruamel.yaml" = "*"
-Owlready2 = "*"
+Owlready2 = "==0.11"
 PyYAML = "*"
 cwl_runner = "*"
 nb2workflow = {path = "."}
