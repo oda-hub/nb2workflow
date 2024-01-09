@@ -56,6 +56,9 @@ def test_progress_callback(client):
         time.sleep(0.1)
 
     test_worker_thread.join()
+    assert 'data' in r.json
+    assert 'output' in r.json['data']
+    assert 'callback' in r.json['data']['output']
     assert r.json['data']['output']['callback'] == callback_url
 
     workdir = r.json['data']['jobdir']
