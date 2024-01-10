@@ -253,7 +253,7 @@ class NotebookAdapter:
         newdir = self.tmpdir
         if ( self.tempdir_cache is not None ) and ( cache_key is not None ):
             self.tempdir_cache[cache_key] = newdir
-        
+
         return newdir
 
     @property
@@ -412,12 +412,12 @@ class NotebookAdapter:
 
         
 
-    def execute(self, parameters, progress_bar = True, log_output = True, inplace=False, tmpdir_key=None):
+    def execute(self, parameters, progress_bar = True, log_output = True, inplace=False, tmpdir_key=None, callback_url=None):
         t0 = time.time()
         logstasher.log(dict(origin="nb2workflow.execute", event="starting", parameters=parameters, workflow_name=notebook_short_name(self.notebook_fn), health=current_health()))
 
         logger.info("starting job")
-        exceptions = self._execute(parameters, progress_bar, log_output, inplace, tmpdir_key)
+        exceptions = self._execute(parameters, progress_bar, log_output, inplace, callback_url=callback_url, tmpdir_key=tmpdir_key)
             
         tspent = time.time() - t0
         logstasher.log(dict(origin="nb2workflow.execute", 
@@ -430,7 +430,7 @@ class NotebookAdapter:
 
         return exceptions
 
-    def _execute(self, parameters, progress_bar = True, log_output = True, inplace=False, tmpdir_key=None):
+    def _execute(self, parameters, progress_bar = True, log_output = True, inplace=False, callback_url=None, tmpdir_key=None):
 
         if not inplace :
             tmpdir = self.new_tmpdir(tmpdir_key)
@@ -450,7 +450,9 @@ class NotebookAdapter:
             tmpdir =os.path.dirname(os.path.realpath(self.notebook_fn))
             logger.info("executing inplace, no tmpdir is input dir: %s", tmpdir)
 
-        
+        if callback_url:
+            self._pass_callback_url(tmpdir, callback_url)
+
         self.update_summary(state="started", parameters=parameters)
 
         self.inject_output_gathering()
@@ -491,6 +493,17 @@ class NotebookAdapter:
             self.update_summary(state="failed", exceptions=list(map(workflows.serialize_workflow_exception, exceptions)))
 
         return exceptions
+
+    def _pass_callback_url(self, workdir: str, callback_url: str):
+        """
+        save callback_url to file .oda_api_callback in the notebook dir where it can be accessed by ODA API
+        :param workdir: directory to save notebook in
+        """
+        callback_file = ".oda_api_callback"  # perhaps it would be better to define this constant in a common lib
+        callback_file_path = os.path.join(workdir, callback_file)
+        with open(callback_file_path, 'wt') as output:
+            print(callback_url, file=output)
+        logger.info("callback file created: %s", callback_file_path)
 
     def extract_pm_output(self):
         nb = sb.read_notebook(self.output_notebook_fn)
