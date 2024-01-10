@@ -431,20 +431,22 @@ class NotebookAdapter:
         return exceptions
 
     def _execute(self, parameters, progress_bar = True, log_output = True, inplace=False, callback_url=None, tmpdir_key=None):
-
         if not inplace :
             tmpdir = self.new_tmpdir(tmpdir_key)
             logger.info("new tmpdir: %s", tmpdir)
-
+            git_output = ''
             try:
-                output = subprocess.check_output(["git","clone", "--recurse-submodules", os.path.dirname(os.path.realpath(self.notebook_fn)), tmpdir])
-                # output = subprocess.check_output(["git","clone", "--depth", "1", "file://" + os.path.dirname(os.path.realpath(self.notebook_fn)), tmpdir])
-                logger.info("git clone output: %s", output)
+                command = ["git","clone", "--recurse-submodules", os.path.dirname(os.path.realpath(self.notebook_fn)), tmpdir]
+                result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                git_output = result.stdout.decode('utf-8')
+                if result.returncode != 0:
+                    raise Exception(f'exit code {result.returncode}')
+                logger.info("git clone output: %s", git_output)
             except Exception as e:
                 logger.warning("git clone failed: %s, will attempt copytree", e)
-
-                shutil.rmtree(tmpdir)
-
+                if "'git-lfs filter-process' failed" in git_output:
+                    raise Exception("git-lfs is not initialized")
+                os.rmdir(tmpdir)
                 shutil.copytree(os.path.dirname(os.path.realpath(self.notebook_fn)), tmpdir)
         else:
             tmpdir =os.path.dirname(os.path.realpath(self.notebook_fn))
