@@ -62,6 +62,18 @@ def cast_parameter(x,par):
             return True
         else:
             raise ValueError(f'Parameter {par["name"]} value "{x}" can not be interpreted as boolean.')
+    if par['python_type'] in [list, dict]:
+        try:
+            if type(x) is str:
+                decoded = json.loads(x)
+            else:
+                decoded = x
+            if type(decoded) is par['python_type']:
+                return decoded
+            else:
+                raise ValueError
+        except:
+            raise ValueError(f'Parameter {par["name"]} value "{x}" can not be interpreted as {par["python_type"].__name__}.')
     return par['python_type'](x)
 
 
@@ -226,18 +238,23 @@ class InputParameter:
 class NotebookAdapter:
     limit_output_attachment_file = None
 
-    def __init__(self, notebook_fn):
+    def __init__(self, notebook_fn, tempdir_cache=None):
         self.notebook_fn = os.path.abspath(notebook_fn)
         self.name = notebook_short_name(notebook_fn)
+        self.tempdir_cache = tempdir_cache
         logger.debug("notebook adapter for %s", self.notebook_fn)
         logger.debug(self.extract_parameters())
 
-    def new_tmpdir(self):
+    def new_tmpdir(self, cache_key=None):
         logger.debug("tmpdir was "+getattr(self,'_tmpdir','unset'))
         self._tmpdir = None
         logger.debug("tmpdir became %s", self._tmpdir)
 
-        return self.tmpdir
+        newdir = self.tmpdir
+        if ( self.tempdir_cache is not None ) and ( cache_key is not None ):
+            self.tempdir_cache[cache_key] = newdir
+
+        return newdir
 
     @property
     def tmpdir(self):
@@ -395,12 +412,12 @@ class NotebookAdapter:
 
         
 
-    def execute(self, parameters, progress_bar = True, log_output = True, inplace=False):
+    def execute(self, parameters, progress_bar = True, log_output = True, inplace=False, tmpdir_key=None, callback_url=None):
         t0 = time.time()
         logstasher.log(dict(origin="nb2workflow.execute", event="starting", parameters=parameters, workflow_name=notebook_short_name(self.notebook_fn), health=current_health()))
 
         logger.info("starting job")
-        exceptions = self._execute(parameters, progress_bar, log_output, inplace)
+        exceptions = self._execute(parameters, progress_bar, log_output, inplace, callback_url=callback_url, tmpdir_key=tmpdir_key)
             
         tspent = time.time() - t0
         logstasher.log(dict(origin="nb2workflow.execute", 
@@ -413,10 +430,10 @@ class NotebookAdapter:
 
         return exceptions
 
-    def _execute(self, parameters, progress_bar = True, log_output = True, inplace=False):
+    def _execute(self, parameters, progress_bar = True, log_output = True, inplace=False, callback_url=None, tmpdir_key=None):
 
         if not inplace :
-            tmpdir = self.new_tmpdir()
+            tmpdir = self.new_tmpdir(tmpdir_key)
             logger.info("new tmpdir: %s", tmpdir)
 
             try:
@@ -433,7 +450,9 @@ class NotebookAdapter:
             tmpdir =os.path.dirname(os.path.realpath(self.notebook_fn))
             logger.info("executing inplace, no tmpdir is input dir: %s", tmpdir)
 
-        
+        if callback_url:
+            self._pass_callback_url(tmpdir, callback_url)
+
         self.update_summary(state="started", parameters=parameters)
 
         self.inject_output_gathering()
@@ -474,6 +493,17 @@ class NotebookAdapter:
             self.update_summary(state="failed", exceptions=list(map(workflows.serialize_workflow_exception, exceptions)))
 
         return exceptions
+
+    def _pass_callback_url(self, workdir: str, callback_url: str):
+        """
+        save callback_url to file .oda_api_callback in the notebook dir where it can be accessed by ODA API
+        :param workdir: directory to save notebook in
+        """
+        callback_file = ".oda_api_callback"  # perhaps it would be better to define this constant in a common lib
+        callback_file_path = os.path.join(workdir, callback_file)
+        with open(callback_file_path, 'wt') as output:
+            print(callback_url, file=output)
+        logger.info("callback file created: %s", callback_file_path)
 
     def extract_pm_output(self):
         nb = sb.read_notebook(self.output_notebook_fn)
