@@ -434,20 +434,29 @@ class NotebookAdapter:
         if not inplace :
             tmpdir = self.new_tmpdir(tmpdir_key)
             logger.info("new tmpdir: %s", tmpdir)
-            git_output = ''
-            try:
-                command = ["git","clone", "--recurse-submodules", os.path.dirname(os.path.realpath(self.notebook_fn)), tmpdir]
-                result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-                git_output = result.stdout.decode('utf-8')
-                if result.returncode != 0:
-                    raise Exception(f'exit code {result.returncode}')
+
+            command = ["git","clone", "--recurse-submodules", os.path.dirname(os.path.realpath(self.notebook_fn)), tmpdir]
+            result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            git_output = result.stdout.decode('utf-8')
+            if result.returncode != 0:
+                logger.warning(f"git clone failed with code: {result.returncode}")
+                logger.warning("git clone output: %s", git_output)
+                try:
+                    os.rmdir(tmpdir)
+                except OSError: # directory is not empty
+                    # this error may occure if the repo was originally cloned by the different version of git utility
+                    # e.g. when repo is mounted with docker run -v
+                    if 'git-lfs' in git_output:
+                        # the known solution is just to initialize git-lfs in advance
+                        message = "git-lfs is not initialized"
+                    else:
+                        message = "unknown git clone error, see logs for details"
+                    raise Exception(message)
+                else:
+                    logger.warning("will attempt copytree")
+                    shutil.copytree(os.path.dirname(os.path.realpath(self.notebook_fn)), tmpdir)
+            else:
                 logger.info("git clone output: %s", git_output)
-            except Exception as e:
-                logger.warning("git clone failed: %s, will attempt copytree", e)
-                if "'git-lfs filter-process' failed" in git_output:
-                    raise Exception("git-lfs is not initialized")
-                os.rmdir(tmpdir)
-                shutil.copytree(os.path.dirname(os.path.realpath(self.notebook_fn)), tmpdir)
         else:
             tmpdir =os.path.dirname(os.path.realpath(self.notebook_fn))
             logger.info("executing inplace, no tmpdir is input dir: %s", tmpdir)
