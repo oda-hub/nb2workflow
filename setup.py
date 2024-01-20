@@ -85,7 +85,8 @@ setup(name='nb2workflow',
         'scrapbook', 
         'werkzeug==2.0.3',
         'sentry_sdk',
-        'rdflib'
+        'rdflib',
+        'GitPython'
       ],
 
 
