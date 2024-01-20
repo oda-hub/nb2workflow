@@ -31,7 +31,7 @@ from nb2workflow.logging_setup import setup_logging
 from nb2workflow.json import CustomJSONEncoder
 
 from nb2workflow.semantics import understand_comment_references, oda_ontology_prefix
-
+from git import Repo, InvalidGitRepositoryError, GitCommandError
 import logging
 
 logger=logging.getLogger(__name__)
@@ -434,29 +434,22 @@ class NotebookAdapter:
         if not inplace :
             tmpdir = self.new_tmpdir(tmpdir_key)
             logger.info("new tmpdir: %s", tmpdir)
-
-            command = ["git","clone", "--recurse-submodules", os.path.dirname(os.path.realpath(self.notebook_fn)), tmpdir]
-            result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-            git_output = result.stdout.decode('utf-8')
-            if result.returncode != 0:
-                logger.warning(f"git clone failed with code: {result.returncode}")
-                logger.warning("git clone output: %s", git_output)
-                try:
-                    os.rmdir(tmpdir)
-                except OSError: # directory is not empty
+            repo_dir = os.path.dirname(os.path.realpath(self.notebook_fn))
+            try:
+                repo = Repo(repo_dir)
+                repo.clone(tmpdir, multi_options=["--recurse-submodules"])
+            except InvalidGitRepositoryError:
+                logger.warning(f"repository {repo_dir} is invalid, will attempt copytree")
+                os.rmdir(tmpdir)
+                shutil.copytree(os.path.dirname(os.path.realpath(self.notebook_fn)), tmpdir)
+            except GitCommandError as e:
+                logger.warning(f"git command error: {e}")
+                if 'git-lfs' in str(e):
                     # this error may occure if the repo was originally cloned by the different version of git utility
                     # e.g. when repo is mounted with docker run -v
-                    if 'git-lfs' in git_output:
-                        # the known solution is just to initialize git-lfs in advance
-                        message = "git-lfs is not initialized"
-                    else:
-                        message = "unknown git clone error, see logs for details"
-                    raise Exception(message)
+                    raise Exception("git-lfs is not initialized")
                 else:
-                    logger.warning("will attempt copytree")
-                    shutil.copytree(os.path.dirname(os.path.realpath(self.notebook_fn)), tmpdir)
-            else:
-                logger.info("git clone output: %s", git_output)
+                    raise e
         else:
             tmpdir =os.path.dirname(os.path.realpath(self.notebook_fn))
             logger.info("executing inplace, no tmpdir is input dir: %s", tmpdir)
