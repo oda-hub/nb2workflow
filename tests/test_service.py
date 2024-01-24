@@ -125,8 +125,8 @@ def test_service_async_repo(client):
 
 
     while True:
-        if os.path.exists(callback_fn):
-            callback_json = json.load(open(callback_fn))
+        # if os.path.exists(callback_fn):
+        #     callback_json = json.load(open(callback_fn))
             # assert callback_json['action'] == 'done'
         
         options = client.get('/api/v1.0/options')
