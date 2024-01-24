@@ -451,22 +451,11 @@ class NotebookAdapter:
             tmpdir =os.path.dirname(os.path.realpath(self.notebook_fn))
             logger.info("executing inplace, no tmpdir is input dir: %s", tmpdir)
 
-        self.update_summary(state="started", parameters=parameters)
-        
         if callback_url:
             self._pass_callback_url(tmpdir, callback_url)
-            
-            payload = {'action': 'progress'}
-            if re.match('^file://', callback_url):
-                with open(callback_url.replace('file://', ''), "w") as fd:
-                    json.dump(payload, fd)
-                logger.info('stored callback in a file %s', callback_url)
-            elif re.match('^https?://', callback_url):
-                r = requests.get(callback_url, params = payload)
-                logger.info('callback %s returns %s : %s', r.url, r.status_code, r.text)
-            else:
-                raise NotImplementedError('Callback url protocol is not supported.')
 
+        self.update_summary(state="started", parameters=parameters)
+        
         self.inject_output_gathering()
         exceptions = []
 
