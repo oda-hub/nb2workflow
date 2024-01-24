@@ -455,8 +455,17 @@ class NotebookAdapter:
         
         if callback_url:
             self._pass_callback_url(tmpdir, callback_url)
-            r = requests.get(callback_url, params = {'action': 'progress'})
-            logger.info('callback %s returns %s : %s', r.url, r.status_code, r.text)
+            
+            payload = {'action': 'progress'}
+            if re.match('^file://', callback_url):
+                with open(callback_url.replace('file://', ''), "w") as fd:
+                    json.dump(payload, fd)
+                logger.info('stored callback in a file %s', callback_url)
+            elif re.match('^https?://', callback_url):
+                r = requests.get(callback_url, params = payload)
+                logger.info('callback %s returns %s : %s', r.url, r.status_code, r.text)
+            else:
+                raise NotImplementedError('Callback url protocol is not supported.')
 
         self.inject_output_gathering()
         exceptions = []
