@@ -17,7 +17,6 @@ import argparse
 import json
 import base64
 import rdflib
-import requests
 
 import papermill as pm
 import scrapbook as sb
@@ -455,7 +454,7 @@ class NotebookAdapter:
             self._pass_callback_url(tmpdir, callback_url)
 
         self.update_summary(state="started", parameters=parameters)
-        
+
         self.inject_output_gathering()
         exceptions = []
 

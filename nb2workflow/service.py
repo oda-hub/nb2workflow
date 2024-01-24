@@ -168,12 +168,12 @@ class AsyncWorkflow:
             async_queue.put(self)
             app.async_workflows[self.key] = 'submitted'
             return
-
-        app.async_workflows[self.key] = 'started'
-
+       
         template_nba = app.notebook_adapters.get(self.target)
-
         nba = NotebookAdapter(template_nba.notebook_fn, tempdir_cache=app.async_workflow_jobdirs)
+        
+        app.async_workflows[self.key] = 'started'
+        self.perform_callback(action='progress')
 
         try:
             exceptions = nba.execute(self.params['request_parameters'], callback_url=self.callback, tmpdir_key=self.key)
@@ -223,7 +223,7 @@ class AsyncWorkflow:
 
         self.perform_callback()
 
-    def perform_callback(self):
+    def perform_callback(self, action = 'done'):
         if self.callback is None:
             logger.info('no callback registered, skipping')
             return
@@ -234,7 +234,7 @@ class AsyncWorkflow:
         result = app.async_workflows[self.key]
 
         callback_payload = dict(
-            action='done'
+            action=action
         )
         
         if re.match('^file://', self.callback):
