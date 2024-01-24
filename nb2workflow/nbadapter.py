@@ -17,6 +17,7 @@ import argparse
 import json
 import base64
 import rdflib
+import requests
 
 import papermill as pm
 import scrapbook as sb
@@ -450,10 +451,12 @@ class NotebookAdapter:
             tmpdir =os.path.dirname(os.path.realpath(self.notebook_fn))
             logger.info("executing inplace, no tmpdir is input dir: %s", tmpdir)
 
+        self.update_summary(state="started", parameters=parameters)
+        
         if callback_url:
             self._pass_callback_url(tmpdir, callback_url)
-
-        self.update_summary(state="started", parameters=parameters)
+            r = requests.get(callback_url, params = {'action': 'progress'})
+            logger.info('callback %s returns %s : %s', r.url, r.status_code, r.text)
 
         self.inject_output_gathering()
         exceptions = []
