@@ -223,7 +223,7 @@ class AsyncWorkflow:
 
         self.perform_callback()
 
-    def perform_callback(self, action = 'done'):
+    def perform_callback(self, action='done'):
         if self.callback is None:
             logger.info('no callback registered, skipping')
             return
