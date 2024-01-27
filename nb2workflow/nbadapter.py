@@ -445,9 +445,9 @@ class NotebookAdapter:
             except GitCommandError as e:
                 logger.warning(f"git command error: {e}")
                 if 'git-lfs' in str(e):
-                    # this error may occure if the repo was originally cloned by the different version of git utility
+                    # this error may occur if the repo was originally cloned by the different version of git utility
                     # e.g. when repo is mounted with docker run -v
-                    raise Exception("git-lfs is not initialized")
+                    raise Exception("We got some problem cloning the repository, the problem seems to be related to git-lfs. You might want to try reinitializing git-lfs with 'git-lfs install; git-lfs pull'")
                 else:
                     raise e
         else:
