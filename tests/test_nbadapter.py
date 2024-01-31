@@ -123,7 +123,7 @@ def test_nbadapter_repo(test_notebook_repo):
 
         validate_oda_dispatcher(nba)
 
-@pytest.mark.skip(reason="Not implemented")
+@pytest.mark.skip(reason="Reproducing this condition in the test is difficult")
 def test_nbadapter_lfs_repo(test_notebook_lfs_repo):
     from nb2workflow.nbadapter import NotebookAdapter, find_notebooks, validate_oda_dispatcher
 
