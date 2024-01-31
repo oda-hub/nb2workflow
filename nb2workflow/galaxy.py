@@ -426,13 +426,16 @@ def _split_bibfile(filepath):
     
     out = []
     for ent in biblib.entries:
-        tmplib = bib.Library()
-        tmplib.add(ent)
-        outstr = bib.write_string(tmplib)
-        outstr = outstr.replace('\n', '\n\t\t')
-        if outstr.endswith('\n\t\t'):
-            outstr = outstr[:-3]
-        out.append(outstr)
+        if 'doi' in [x.key for x in ent.fields if x.value]:
+            out.append(('doi', [x.value for x in ent.fields if x.key=='doi'][0]))
+        else:
+            tmplib = bib.Library()
+            tmplib.add(ent)
+            outstr = bib.write_string(tmplib)
+            outstr = outstr.replace('\n', '\n\t\t')
+            if outstr.endswith('\n\t\t'):
+                outstr = outstr[:-3]
+            out.append(('bibtex', outstr))
     return out
 
 def _read_help_file(filepath):
@@ -547,8 +550,8 @@ def to_galaxy(input_path,
         citats = ET.SubElement(tool_root, 'citations')
         bibentries = _split_bibfile(citations_bibfile)
         for entry in bibentries:
-            citate = ET.SubElement(citats, 'citation', type='bibtex')
-            citate.text = entry
+            citate = ET.SubElement(citats, 'citation', type=entry[0])
+            citate.text = entry[1]
 
     tree = ET.ElementTree(tool_root)
     ET.indent(tree)
