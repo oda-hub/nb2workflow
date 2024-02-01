@@ -123,6 +123,29 @@ def test_nbadapter_repo(test_notebook_repo):
 
         validate_oda_dispatcher(nba)
 
+@pytest.mark.skip(reason="Reproducing this condition in the test is difficult")
+def test_nbadapter_lfs_repo(test_notebook_lfs_repo):
+    from nb2workflow.nbadapter import NotebookAdapter, find_notebooks, validate_oda_dispatcher
+
+    nbas = find_notebooks(test_notebook_lfs_repo)
+
+    assert len(nbas) >= 1
+
+    for nba_name, nba in nbas.items():
+        print("notebook", nba_name)
+
+        if os.path.exists(nba.output_notebook_fn):
+            os.remove(nba.output_notebook_fn)
+
+        if os.path.exists(nba.preproc_notebook_fn):
+            os.remove(nba.preproc_notebook_fn)
+
+        try:
+            nba.execute(dict())
+            assert False, 'nba.execute is expected to fail'
+        except Exception as ex:
+            assert ex.message == "git-lfs is not initialized"
+        break
 
 def test_nbreduce(test_notebook):
     from nb2workflow.nbadapter import NotebookAdapter, nbreduce, setup_logging

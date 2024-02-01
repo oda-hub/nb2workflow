@@ -31,7 +31,7 @@ from nb2workflow.logging_setup import setup_logging
 from nb2workflow.json import CustomJSONEncoder
 
 from nb2workflow.semantics import understand_comment_references, oda_ontology_prefix
-
+from git import Repo, InvalidGitRepositoryError, GitCommandError
 import logging
 
 logger=logging.getLogger(__name__)
@@ -431,21 +431,25 @@ class NotebookAdapter:
         return exceptions
 
     def _execute(self, parameters, progress_bar = True, log_output = True, inplace=False, callback_url=None, tmpdir_key=None):
-
         if not inplace :
             tmpdir = self.new_tmpdir(tmpdir_key)
             logger.info("new tmpdir: %s", tmpdir)
-
+            repo_dir = os.path.dirname(os.path.realpath(self.notebook_fn))
             try:
-                output = subprocess.check_output(["git","clone", "--recurse-submodules", os.path.dirname(os.path.realpath(self.notebook_fn)), tmpdir])
-                # output = subprocess.check_output(["git","clone", "--depth", "1", "file://" + os.path.dirname(os.path.realpath(self.notebook_fn)), tmpdir])
-                logger.info("git clone output: %s", output)
-            except Exception as e:
-                logger.warning("git clone failed: %s, will attempt copytree", e)
-
+                repo = Repo(repo_dir)
+                repo.clone(tmpdir, multi_options=["--recurse-submodules"])
+            except InvalidGitRepositoryError:
+                logger.warning(f"repository {repo_dir} is invalid, will attempt copytree")
                 os.rmdir(tmpdir)
-
                 shutil.copytree(os.path.dirname(os.path.realpath(self.notebook_fn)), tmpdir)
+            except GitCommandError as e:
+                logger.warning(f"git command error: {e}")
+                if 'git-lfs' in str(e):
+                    # this error may occur if the repo was originally cloned by the different version of git utility
+                    # e.g. when repo is mounted with docker run -v
+                    raise Exception("We got some problem cloning the repository, the problem seems to be related to git-lfs. You might want to try reinitializing git-lfs with 'git-lfs install; git-lfs pull'")
+                else:
+                    raise e
         else:
             tmpdir =os.path.dirname(os.path.realpath(self.notebook_fn))
             logger.info("executing inplace, no tmpdir is input dir: %s", tmpdir)
