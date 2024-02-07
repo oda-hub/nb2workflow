@@ -28,7 +28,7 @@ logger = logging.getLogger()
                
 default_ontology_path = 'http://odahub.io/ontology/ontology.ttl'
 
-global_req = ['ipython']
+global_req = []
 
 _success_text = '*** Job finished successfully ***'
 
@@ -278,13 +278,13 @@ def _nb2script(nba, ontology_path):
 
 class Requirements:
     
-    def __init__(self, available_channels, conda_env_yml = None, requirements_txt = None):
+    def __init__(self, available_channels, conda_env_yml = None, requirements_txt = None, extra_req = []):
         self.tmpdir = tempfile.TemporaryDirectory()
         self.fullenv_file_path = os.path.join(self.tmpdir.name, 'environment.yml')
         
         self.micromamba = self._get_micromamba_binary()
         
-        boilerplate_env_dict = {'channels': available_channels, 'dependencies': global_req}
+        boilerplate_env_dict = {'channels': available_channels, 'dependencies': extra_req}
         
         if conda_env_yml is not None:
             with open(conda_env_yml, 'r') as fd:
@@ -298,7 +298,7 @@ class Requirements:
                 else:
                     logger.warning('Conda channels are not defined in evironment file.')
                 self.env_dict['channels'] = available_channels
-                self.env_dict['dependencies'].extend(global_req)
+                self.env_dict['dependencies'].extend(extra_req)
             else:
                 self.env_dict = boilerplate_env_dict
         else:
@@ -478,18 +478,13 @@ def to_galaxy(input_path,
                         profile='23.0')
 
     reqs = ET.SubElement(tool_root, 'requirements')
-
-    reqs.extend(Requirements(available_channels=available_channels, 
-                             conda_env_yml=conda_environment_file,
-                             requirements_txt=requirements_file).to_xml_tree())
+    extra_req = global_req
+    # will be populated after script generation to check if ipython is needed
                 
     comm = ET.SubElement(tool_root, 'command', detect_errors='exit_code')
-    if len(nbas) > 1:
-        comm.text = "ipython '$__tool_directory__/${_data_product._selector}.py'" 
-    else:
-        comm.text = f"ipython '$__tool_directory__/{list(nbas.keys())[0]}.py'"
-    # NOTE: CDATA if needed https://gist.github.com/zlalanne/5711847
-
+    python_binary = 'python'
+    # the same to decide python/ipython
+    
     conf = ET.SubElement(tool_root, 'configfiles')
     conf.append(ET.Element('inputs', name='inputs', filename='inputs.json'))
     
@@ -522,6 +517,11 @@ def to_galaxy(input_path,
             test_par_root = default_test
 
         script_str = _nb2script(nba, ontology_path)
+        if 'get_ipython()' in script_str:
+            python_binary = 'ipython'
+            if 'ipython' not in extra_req:
+                extra_req.append('ipython')
+        
         with open(os.path.join(out_dir, f'{nb_name}.py'), 'w') as fd:
             fd.write(script_str)
 
@@ -540,7 +540,17 @@ def to_galaxy(input_path,
             
         assert_stdout = ET.SubElement(default_test, 'assert_stdout')
         assert_stdout.append(ET.Element('has_text', text=_success_text))
-    
+
+    reqs.extend(Requirements(available_channels=available_channels, 
+                             conda_env_yml=conda_environment_file,
+                             requirements_txt=requirements_file,
+                             extra_req=extra_req).to_xml_tree())
+    if len(nbas) > 1:
+        comm.text = python_binary + " '$__tool_directory__/${_data_product._selector}.py'" 
+    else:
+        comm.text = f"{python_binary} '$__tool_directory__/{list(nbas.keys())[0]}.py'"
+    # NOTE: CDATA if needed https://gist.github.com/zlalanne/5711847
+        
     if help_file is not None:    
         help_block = ET.SubElement(tool_root, 'help')
         help_text = _read_help_file(help_file)
