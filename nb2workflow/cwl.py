@@ -2,7 +2,7 @@ import argparse
 import logging
 import os
 
-import cwlgen
+import cwl_utils
 
 import nb2workflow.nbadapter as nbadapter
 

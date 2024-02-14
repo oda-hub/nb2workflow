@@ -46,7 +46,7 @@ setup(name='nb2workflow',
             'oda-knowledge-base',
         ],
         "cwl":[
-            "cwlgen",
+            "cwl-utils",
         ],
         "docker":[
             'docker',
