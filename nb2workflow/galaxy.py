@@ -22,6 +22,7 @@ import bibtexparser as bib
 import pypandoc
 
 import tempfile
+import black
 
 logger = logging.getLogger()
         
@@ -273,6 +274,21 @@ def _nb2script(nba, ontology_path):
     exporter = ScriptExporter()
     script, resources = exporter.from_notebook_node(mynb)
     
+    # restyling
+    script = re.sub(r'^# In\[[\d\s]*\]:$', '', script)
+    
+    if 'get_ipython' in script:
+        script = 'from IPython import get_ipython\n' + script
+    
+    BLACK_MODE = black.Mode(target_versions={black.TargetVersion.PY37}, line_length=79)
+    try:
+        script = black.format_file_contents(script, fast=False, mode=BLACK_MODE)
+    except black.NothingChanged:
+        pass
+    finally:
+        if script[-1] != "\n":
+            script += "\n"
+        
     return script
 
 
