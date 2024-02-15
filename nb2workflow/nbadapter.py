@@ -17,11 +17,15 @@ import argparse
 import json
 import base64
 import rdflib
+import copy
+import validators
+import requests
 
 import papermill as pm
 import scrapbook as sb
 import nbformat
 from nbconvert import HTMLExporter
+from urllib.parse import urlencode, urlparse
 
 from . import logstash
 
@@ -355,7 +359,7 @@ class NotebookAdapter:
                     pars = self.extract_parameters_from_cell(cell, G)
                     pars = {**getattr(self, attr), **pars}
                     setattr(self, attr, pars)
-                                            
+
         for n, p in self.input_parameters.items():
             if p['extra_ttl'] is not None:
                 G.parse(data=p['extra_ttl'])
@@ -462,13 +466,15 @@ class NotebookAdapter:
         self.inject_output_gathering()
         exceptions = []
 
+        adapted_parameters = self.download_local_files(parameters, tmpdir)
+
         ntries = 10
         while ntries > 0:
             try:
                 pm.execute_notebook(
                    self.preproc_notebook_fn,
                    self.output_notebook_fn,
-                   parameters = parameters,
+                   parameters = adapted_parameters,
                    progress_bar = False,
                    log_output = True,
                    cwd = tmpdir, 
@@ -539,6 +545,26 @@ class NotebookAdapter:
 
     def extract_output(self):
         return self.extract_pm_output()
+
+    def download_local_files(self, parameters, tmpdir):
+        adapted_parameters = copy.deepcopy(parameters)
+        for input_par_name, input_par_obj in self.input_parameters.items():
+            # download if it's url
+            if input_par_obj['owl_type'] == "http://odahub.io/ontology#POSIXPath":
+                arg_par_value = parameters.get(input_par_name, None)
+                if arg_par_value is None:
+                    arg_par_value = input_par_obj['default_value']
+                if validators.url(arg_par_value):
+                    print(f'download {arg_par_value}')
+                    response = requests.get(arg_par_value)
+                    if response.status_code == 200:
+                        parsed_arg_par_value = urlparse(arg_par_value)
+                        file_name = parsed_arg_par_value.path.split('/')[-1]
+                        with open(os.path.join(tmpdir, file_name), 'wb') as file:
+                            file.write(response.content)
+                        adapted_parameters[input_par_name] = file_name
+
+        return adapted_parameters
 
     def inject_output_gathering(self):
         outputs = self.extract_output_declarations()
