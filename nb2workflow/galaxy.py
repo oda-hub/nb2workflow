@@ -276,9 +276,7 @@ def _nb2script(nba, ontology_path):
     
     # restyling
     script = re.sub(r'^# In\[[\d\s]*\]:$', '', script)
-    
-    if 'get_ipython' in script:
-        script = 'from IPython import get_ipython\n' + script
+    script = re.sub(r'^(.*get_ipython.*)$', '\1 # noqa: F821', script)
     
     BLACK_MODE = black.Mode(target_versions={black.TargetVersion.PY37}, line_length=79)
     try:
