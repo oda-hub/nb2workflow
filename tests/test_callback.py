@@ -65,6 +65,13 @@ def test_progress_callback(client):
     with open(path.join(workdir, status_callback_file)) as json_file:
         progress_params = json.load(json_file)
 
-    test_data = dict(action='progress', stage='simulation', progress=50, substage='spectra', subprogress=30, message='some message')
+    test_data = dict(action='progress', 
+                     stage='simulation', 
+                     progress=50, 
+                     substage='spectra', 
+                     subprogress=30, 
+                     message='some message',
+                     progress_max=100.0, 
+                     subprogress_max=100.0)
     assert progress_params == test_data
 
