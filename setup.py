@@ -70,7 +70,9 @@ setup(name='nb2workflow',
             'ensureconda',
             'bibtexparser >= 2.0.0b3',
             'pypandoc_binary',
-            'black'
+            'black',
+            'isort',
+            'autoflake'
         ]
       },
 

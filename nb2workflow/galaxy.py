@@ -23,6 +23,8 @@ import pypandoc
 
 import tempfile
 import black
+import autoflake
+import isort
 
 logger = logging.getLogger()
         
@@ -178,19 +180,6 @@ def _nb2script(nba, ontology_path):
                 import os
                 import shutil
                 import sys
-                
-                try:
-                    import numpy as np
-                    _numpy_available = True
-                except ImportError:
-                    _numpy_available = False
-                
-                try:
-                    from oda_api.json import CustomJSONEncoder
-                except ImportError:
-                    from json import JSONEncoder as CustomJSONEncoder
-                
-                _galaxy_wd = os.getcwd()
                 """))
     inject_import.metadata['tags'] = ['injected_import']
     mynb.cells.insert(0, inject_import)
@@ -203,6 +192,8 @@ def _nb2script(nba, ontology_path):
     # NOTE: validation of args is external
     inject_read = nbformat.v4.new_code_cell(
         dedent("""
+            _galaxy_wd = os.getcwd()
+
             with open('inputs.json', 'r') as fd:
                 inp_dic = json.load(fd)
             if '_data_product' in inp_dic.keys():
@@ -216,9 +207,33 @@ def _nb2script(nba, ontology_path):
             """))
     inject_read.metadata['tags'] = ['injected-input']
     mynb.cells.insert(inject_pos, inject_read)
+ 
+    exporter = ScriptExporter()
+    script, resources = exporter.from_notebook_node(mynb)
     
-    outp_code = "_simple_outs, _oda_outs = [], []\n"
-    outp_code += "_galaxy_meta_data = {}\n"
+    outp_code = dedent("""
+                # output gathering
+                try:
+                    from oda_api.json import CustomJSONEncoder
+                except ImportError:
+                    from json import JSONEncoder as CustomJSONEncoder
+                """)
+
+    if re.search(r'^import numpy as np', script, flags=re.M):
+        outp_code += "_numpy_available = True\n"
+    else:
+        outp_code += dedent("""
+                try:
+                    import numpy as np
+                    _numpy_available = True
+                except ImportError:
+                    _numpy_available = False
+                """)
+    
+    outp_code += dedent("""
+                _simple_outs, _oda_outs = [], []
+                _galaxy_meta_data = {}
+                """)    
     
     for vn, vv in outputs.items():
         outp = GalaxyOutput.from_inspect(vv, ontology_path=ontology_path, dprod=nba.name)
@@ -266,18 +281,16 @@ def _nb2script(nba, ontology_path):
                             json.dump(_galaxy_meta_data, fd)
                         print("{_success_text}")
                         """)
-
-    inject_write = nbformat.v4.new_code_cell(outp_code)
-    inject_write.metadata['tags'] = ['injected-output']
-    mynb.cells.append(inject_write)
     
-    exporter = ScriptExporter()
-    script, resources = exporter.from_notebook_node(mynb)
+    script += outp_code
     
     # restyling
-    script = re.sub(r'^# In\[[\d\s]*\]:$', '', script)
-    script = re.sub(r'^(.*get_ipython.*)$', '\1 # noqa: F821', script)
+    script = re.sub(r'^# In\[[\d\s]*\]:$', '', script, flags=re.M)
     
+    script = autoflake.fix_code(script, remove_all_unused_imports=True, remove_unused_variables=True)
+    
+    script = isort.api.sort_code_string(script, config=isort.Config(profile="black"))
+        
     BLACK_MODE = black.Mode(target_versions={black.TargetVersion.PY37}, line_length=79)
     try:
         script = black.format_file_contents(script, fast=False, mode=BLACK_MODE)
@@ -286,6 +299,8 @@ def _nb2script(nba, ontology_path):
     finally:
         if script[-1] != "\n":
             script += "\n"
+    
+    script = re.sub(r'^(.*get_ipython.*)$', r'\1 # noqa: F821', script, flags=re.M)
         
     return script
 
