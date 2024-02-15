@@ -20,6 +20,11 @@ def test_posix_download_file_with_arg(client):
     r = client.get('/api/v1.0/get/testposixpath', query_string={'fits_file_url': 'https://fits.gsfc.nasa.gov/samples/testkeys.fits'})
     assert r.json['output']['output_file_download'] == 'file downloaded successfully'
 
+def test_posix_download_file_with_arg_wrong_url(client):
+    r = client.get('/api/v1.0/get/testposixpath', query_string={'fits_file_url': 'https://fits.gsfc.nasa.gov/samples/aaaaaa.fits'})
+    assert r.json['issues'][0] == ('An issue occurred when attempting to download the url '
+                                   'https://fits.gsfc.nasa.gov/samples/aaaaaa.fits')
+
 def test_boolean_default(client):
     r = client.get('/api/v1.0/get/testbool')
     assert r.json['output']['output'] == 'boolean True'

@@ -466,7 +466,10 @@ class NotebookAdapter:
         self.inject_output_gathering()
         exceptions = []
 
-        adapted_parameters = self.download_local_files(parameters, tmpdir)
+        r = self.download_local_files(parameters, tmpdir)
+
+        if len(r['issues']) > 0:
+            raise Exception(r['issues'])
 
         ntries = 10
         while ntries > 0:
@@ -474,7 +477,7 @@ class NotebookAdapter:
                 pm.execute_notebook(
                    self.preproc_notebook_fn,
                    self.output_notebook_fn,
-                   parameters = adapted_parameters,
+                   parameters = r['adapted_parameters'],
                    progress_bar = False,
                    log_output = True,
                    cwd = tmpdir, 
@@ -548,6 +551,7 @@ class NotebookAdapter:
 
     def download_local_files(self, parameters, tmpdir):
         adapted_parameters = copy.deepcopy(parameters)
+        issues = []
         for input_par_name, input_par_obj in self.input_parameters.items():
             # download if it's url
             if input_par_obj['owl_type'] == "http://odahub.io/ontology#POSIXPath":
@@ -563,8 +567,15 @@ class NotebookAdapter:
                         with open(os.path.join(tmpdir, file_name), 'wb') as file:
                             file.write(response.content)
                         adapted_parameters[input_par_name] = file_name
+                    else:
+                        # TODO not sure how much information to put inside the returned error, send a sentry?
+                        issues.append(f"An issue occurred when attempting to download "
+                                      f"the url {arg_par_value}")
 
-        return adapted_parameters
+        return dict(
+            issues=issues,
+            adapted_parameters=adapted_parameters,
+        )
 
     def inject_output_gathering(self):
         outputs = self.extract_output_declarations()
