@@ -174,23 +174,21 @@ def _nb2script(nba, ontology_path):
     mynb = nbformat.read(input_nb, as_version=4)
     outputs = nba.extract_output_declarations()
 
-    has_oda_outs = False
-    has_simple_outs = False
+    oda_outp_code = ''
+    simple_outp_code = ''
     for vn, vv in outputs.items():
         outp = GalaxyOutput.from_inspect(vv, ontology_path=ontology_path, dprod=nba.name)
         if outp.is_oda:
-            has_oda_outs = True
-            outp_code += f"_oda_outs.append(('{outp.dataname}', '{outp.outfile_name}', {vn}))\n"
+            oda_outp_code += f"_oda_outs.append(('{outp.dataname}', '{outp.outfile_name}', {vn}))\n"
         else:
-            outp_code += f"_simple_outs.append(('{outp.dataname}', '{outp.outfile_name}', {vn}))\n"
-            has_simple_outs = True
+            simple_outp_code += f"_simple_outs.append(('{outp.dataname}', '{outp.outfile_name}', {vn}))\n"
     
     import_code = dedent( """
                 import json
                 import os
                 import shutil
                 """)
-    if has_oda_outs:
+    if oda_outp_code:
         import_code += "from oda_api.json import CustomJSONEncoder\n"
             
     inject_import = nbformat.v4.new_code_cell(import_code)
@@ -229,9 +227,10 @@ def _nb2script(nba, ontology_path):
                     _galaxy_meta_data = {}
                     """)
 
-    if has_oda_outs:
+    if oda_outp_code:
+        outp_code += "_oda_outs = []\n"
+        outp_code += oda_outp_code
         outp_code += dedent("""
-                _oda_outs = []                            
                 for _outn, _outfn, _outv in _oda_outs:
                     _galaxy_outfile_name = os.path.join(_galaxy_wd, _outfn)
                     if isinstance(_outv, str) and os.path.isfile(_outv):
@@ -248,8 +247,9 @@ def _nb2script(nba, ontology_path):
                             json.dump(_outv, fd, cls=CustomJSONEncoder)
                         _galaxy_meta_data[_outn] = {'ext': 'json'}
                 """)        
-    if has_simple_outs:
+    if simple_outp_code:
         outp_code += "_simple_outs = []\n"
+        outp_code += simple_outp_code
         
         if re.search(r'^\s*import numpy as np', script, flags=re.M):
             outp_code += "_numpy_available = True\n"
