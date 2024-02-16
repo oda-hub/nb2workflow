@@ -34,11 +34,14 @@ default_ontology_path = 'http://odahub.io/ontology/ontology.ttl'
 global_req = []
 
 _success_text = '*** Job finished successfully ***'
+_ontology_base = 'http://odahub.io/ontology#'
+_dataset_term = _ontology_base + 'POSIXPath'
 
 class GalaxyParameter:
     def __init__(self, 
                  name, 
                  python_type,
+                 ontology_parameter_hierarchy,
                  description=None,
                  default_value=None, 
                  min_value=None, 
@@ -54,6 +57,11 @@ class GalaxyParameter:
         
         if allowed_values is not None:
             partype = 'select'
+        
+        if _dataset_term in ontology_parameter_hierarchy:
+            partype = 'data'
+            default_value = None
+            # TODO: dataset type when in ontology
         
         self.name = name
         self.partype = partype
@@ -72,6 +80,7 @@ class GalaxyParameter:
         
         if par_details.get('extra_ttl') is not None:
             onto.parse_extra_triples(par_details['extra_ttl'])
+        par_hierarchy = onto.get_parameter_hierarchy(owl_uri)
         par_format = onto.get_parameter_format(owl_uri)
         par_unit = onto.get_parameter_unit(owl_uri)
         min_value, max_value = onto.get_limits(owl_uri)
@@ -86,6 +95,7 @@ class GalaxyParameter:
         
         return cls(par_details['name'], 
                    par_details['python_type'], 
+                   par_hierarchy,
                    description=description,
                    default_value=par_details['default_value'], 
                    min_value=min_value,
