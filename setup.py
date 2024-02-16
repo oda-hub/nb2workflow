@@ -6,7 +6,7 @@ if {'pytest', 'test', 'ptr'}.intersection(sys.argv):
     setup_requires.append('pytest-runner')
 
 setup(name='nb2workflow',
-      version = '1.3.53',
+      version = '1.3.61',
       description='convert notebook to workflow',
       author='Volodymyr Savchenko',
       author_email='contact@volodymyrsavchenko.com',
@@ -95,7 +95,8 @@ setup(name='nb2workflow',
         'scrapbook', 
         'werkzeug==2.0.3',
         'sentry_sdk',
-        'rdflib'
+        'rdflib',
+        'GitPython'
       ],
 
 

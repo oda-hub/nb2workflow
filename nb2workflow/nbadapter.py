@@ -31,7 +31,7 @@ from nb2workflow.logging_setup import setup_logging
 from nb2workflow.json import CustomJSONEncoder
 
 from nb2workflow.semantics import understand_comment_references, oda_ontology_prefix
-
+from git import Repo, InvalidGitRepositoryError, GitCommandError
 import logging
 
 logger=logging.getLogger(__name__)
@@ -238,18 +238,23 @@ class InputParameter:
 class NotebookAdapter:
     limit_output_attachment_file = None
 
-    def __init__(self, notebook_fn):
+    def __init__(self, notebook_fn, tempdir_cache=None):
         self.notebook_fn = os.path.abspath(notebook_fn)
         self.name = notebook_short_name(notebook_fn)
+        self.tempdir_cache = tempdir_cache
         logger.debug("notebook adapter for %s", self.notebook_fn)
         logger.debug(self.extract_parameters())
 
-    def new_tmpdir(self):
+    def new_tmpdir(self, cache_key=None):
         logger.debug("tmpdir was "+getattr(self,'_tmpdir','unset'))
         self._tmpdir = None
         logger.debug("tmpdir became %s", self._tmpdir)
 
-        return self.tmpdir
+        newdir = self.tmpdir
+        if ( self.tempdir_cache is not None ) and ( cache_key is not None ):
+            self.tempdir_cache[cache_key] = newdir
+
+        return newdir
 
     @property
     def tmpdir(self):
@@ -407,12 +412,12 @@ class NotebookAdapter:
 
         
 
-    def execute(self, parameters, progress_bar = True, log_output = True, inplace=False):
+    def execute(self, parameters, progress_bar = True, log_output = True, inplace=False, tmpdir_key=None, callback_url=None):
         t0 = time.time()
         logstasher.log(dict(origin="nb2workflow.execute", event="starting", parameters=parameters, workflow_name=notebook_short_name(self.notebook_fn), health=current_health()))
 
         logger.info("starting job")
-        exceptions = self._execute(parameters, progress_bar, log_output, inplace)
+        exceptions = self._execute(parameters, progress_bar, log_output, inplace, callback_url=callback_url, tmpdir_key=tmpdir_key)
             
         tspent = time.time() - t0
         logstasher.log(dict(origin="nb2workflow.execute", 
@@ -425,27 +430,33 @@ class NotebookAdapter:
 
         return exceptions
 
-    def _execute(self, parameters, progress_bar = True, log_output = True, inplace=False):
-
+    def _execute(self, parameters, progress_bar = True, log_output = True, inplace=False, callback_url=None, tmpdir_key=None):
         if not inplace :
-            tmpdir = self.new_tmpdir()
+            tmpdir = self.new_tmpdir(tmpdir_key)
             logger.info("new tmpdir: %s", tmpdir)
-
+            repo_dir = os.path.dirname(os.path.realpath(self.notebook_fn))
             try:
-                output = subprocess.check_output(["git","clone", "--recurse-submodules", os.path.dirname(os.path.realpath(self.notebook_fn)), tmpdir])
-                # output = subprocess.check_output(["git","clone", "--depth", "1", "file://" + os.path.dirname(os.path.realpath(self.notebook_fn)), tmpdir])
-                logger.info("git clone output: %s", output)
-            except Exception as e:
-                logger.warning("git clone failed: %s, will attempt copytree", e)
-
+                repo = Repo(repo_dir)
+                repo.clone(tmpdir, multi_options=["--recurse-submodules"])
+            except InvalidGitRepositoryError:
+                logger.warning(f"repository {repo_dir} is invalid, will attempt copytree")
                 os.rmdir(tmpdir)
-
                 shutil.copytree(os.path.dirname(os.path.realpath(self.notebook_fn)), tmpdir)
+            except GitCommandError as e:
+                logger.warning(f"git command error: {e}")
+                if 'git-lfs' in str(e):
+                    # this error may occur if the repo was originally cloned by the different version of git utility
+                    # e.g. when repo is mounted with docker run -v
+                    raise Exception("We got some problem cloning the repository, the problem seems to be related to git-lfs. You might want to try reinitializing git-lfs with 'git-lfs install; git-lfs pull'")
+                else:
+                    raise e
         else:
             tmpdir =os.path.dirname(os.path.realpath(self.notebook_fn))
             logger.info("executing inplace, no tmpdir is input dir: %s", tmpdir)
 
-        
+        if callback_url:
+            self._pass_callback_url(tmpdir, callback_url)
+
         self.update_summary(state="started", parameters=parameters)
 
         self.inject_output_gathering()
@@ -486,6 +497,17 @@ class NotebookAdapter:
             self.update_summary(state="failed", exceptions=list(map(workflows.serialize_workflow_exception, exceptions)))
 
         return exceptions
+
+    def _pass_callback_url(self, workdir: str, callback_url: str):
+        """
+        save callback_url to file .oda_api_callback in the notebook dir where it can be accessed by ODA API
+        :param workdir: directory to save notebook in
+        """
+        callback_file = ".oda_api_callback"  # perhaps it would be better to define this constant in a common lib
+        callback_file_path = os.path.join(workdir, callback_file)
+        with open(callback_file_path, 'wt') as output:
+            print(callback_url, file=output)
+        logger.info("callback file created: %s", callback_file_path)
 
     def extract_pm_output(self):
         nb = sb.read_notebook(self.output_notebook_fn)

@@ -397,16 +397,27 @@ def deploy_k8s(container_info,
                     ]}}}})
             ]
         )
+        
     except sp.CalledProcessError:
         sp.check_call(
             ["kubectl", "create", "deployment", deployment_name, "-n", namespace, "--image=" + container_info['image']]
         )
+        time.sleep(5) # avoid race condition. time for deployment to be created in k8s
+        
+        # needed to set the proper container name
         sp.check_call(
-            ["kubectl", "expose", "deployment", deployment_name, "--name", deployment_name, 
-            "--port", "8000", "-n", namespace]
+            ["kubectl", "patch", "deployment", deployment_name, "-n", namespace,
+            "--type", "merge",
+            "-p", 
+            json.dumps(
+                {"spec":{"template":{"spec":{
+                    "containers":[
+                        {"name": deployment_name, "image": container_info['image']}
+                    ]}}}})
+            ]
         )
-    
-    finally:                    
+   
+    finally:
         sp.check_call(
             ["kubectl", "patch", "deployment", deployment_name, "-n", namespace,
             "--type", "strategic",
@@ -422,6 +433,14 @@ def deploy_k8s(container_info,
                     ]}}}})
             ]
         )
+        
+        # expose if service doesn't exist
+        try:
+            sp.check_call(["kubectl", "get", "service", deployment_name, "-n", namespace])
+        except sp.CalledProcessError:   
+            sp.check_call(
+                ["kubectl", "expose", "deployment", deployment_name, "--name", deployment_name, 
+                "--port", "8000", "-n", namespace])
     
     if check_live:
         logging.info("will check live")

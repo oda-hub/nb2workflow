@@ -33,6 +33,18 @@ def test_notebook_repo():
 
 
 @pytest.fixture
+def test_notebook_lfs_repo():
+    path = os.environ.get('TEST_NOTEBOOK_LFS_REPO', None)
+
+    if path is None:
+        path = os.path.join(os.getcwd(), 'tests/testlfsrepo/')
+        if os.path.exists(path):
+            shutil.rmtree(path)
+        subprocess.check_call(["git", "clone", "https://gitlab.renkulab.io/astronomy/mmoda/crbeam.git", path])
+
+    return path
+
+@pytest.fixture
 def app(test_notebook):
     app = nb2workflow.service.app
     app.notebook_adapters = nb2workflow.nbadapter.find_notebooks(test_notebook)
