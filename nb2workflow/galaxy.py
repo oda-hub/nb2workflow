@@ -184,6 +184,8 @@ def _nb2script(nba, ontology_path):
             simple_outp_code += f"_simple_outs.append(('{outp.dataname}', '{outp.outfile_name}', {vn}))\n"
     
     import_code = dedent( """
+                # flake8: noqa         
+
                 import json
                 import os
                 import shutil
@@ -256,7 +258,7 @@ def _nb2script(nba, ontology_path):
         else:
             outp_code += dedent("""
                     try:
-                        import numpy as np # noqa: E402
+                        import numpy as np   # noqa: E402
                         _numpy_available = True
                     except ImportError:
                         _numpy_available = False
@@ -302,7 +304,8 @@ def _nb2script(nba, ontology_path):
         if script[-1] != "\n":
             script += "\n"
     
-    script = re.sub(r'^(.*get_ipython.*)$', r'\1 # noqa: F821', script, flags=re.M)
+    script = re.sub(r'^(.*get_ipython\(\).*)$', r'\1   # noqa: F821', script, flags=re.M)
+    script = re.sub(r'^(\s*display\(.*)$', r'\1   # noqa: F821', script, flags=re.M)
     script = re.sub(r'(?<=^\n)\n', '', script, flags=re.M)
         
     return script
@@ -549,7 +552,7 @@ def to_galaxy(input_path,
             test_par_root = default_test
 
         script_str = _nb2script(nba, ontology_path)
-        if 'get_ipython()' in script_str:
+        if 'get_ipython()' in script_str or re.search(r'^\s*display\(', script_str):
             python_binary = 'ipython'
             if 'ipython' not in extra_req:
                 extra_req.append('ipython')
