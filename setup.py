@@ -32,7 +32,7 @@ setup(name='nb2workflow',
       
       extras_require={
         "service":[
-            'flask',
+            'flask==2.0.3',
             'pytest-flask',
             'flask-caching', 
             'flask-cors',
