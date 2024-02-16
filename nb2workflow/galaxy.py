@@ -173,14 +173,27 @@ def _nb2script(nba, ontology_path):
     input_nb = nba.notebook_fn
     mynb = nbformat.read(input_nb, as_version=4)
     outputs = nba.extract_output_declarations()
+
+    has_oda_outs = False
+    has_simple_outs = False
+    for vn, vv in outputs.items():
+        outp = GalaxyOutput.from_inspect(vv, ontology_path=ontology_path, dprod=nba.name)
+        if outp.is_oda:
+            has_oda_outs = True
+            outp_code += f"_oda_outs.append(('{outp.dataname}', '{outp.outfile_name}', {vn}))\n"
+        else:
+            outp_code += f"_simple_outs.append(('{outp.dataname}', '{outp.outfile_name}', {vn}))\n"
+            has_simple_outs = True
     
-    inject_import = nbformat.v4.new_code_cell(
-        dedent( """
+    import_code = dedent( """
                 import json
                 import os
                 import shutil
-                import sys
-                """))
+                """)
+    if has_oda_outs:
+        import_code += "from oda_api.json import CustomJSONEncoder\n"
+            
+    inject_import = nbformat.v4.new_code_cell(import_code)
     inject_import.metadata['tags'] = ['injected_import']
     mynb.cells.insert(0, inject_import)
     
@@ -212,69 +225,58 @@ def _nb2script(nba, ontology_path):
     script, resources = exporter.from_notebook_node(mynb)
     
     outp_code = dedent("""
-                # output gathering
-                try:
-                    from oda_api.json import CustomJSONEncoder
-                except ImportError:
-                    from json import JSONEncoder as CustomJSONEncoder
-                """)
+                    # output gathering
+                    _galaxy_meta_data = {}
+                    """)
 
-    if re.search(r'^import numpy as np', script, flags=re.M):
-        outp_code += "_numpy_available = True\n"
-    else:
+    if has_oda_outs:
         outp_code += dedent("""
-                try:
-                    import numpy as np
-                    _numpy_available = True
-                except ImportError:
-                    _numpy_available = False
-                """)
-    
-    outp_code += dedent("""
-                _simple_outs, _oda_outs = [], []
-                _galaxy_meta_data = {}
-                """)    
-    
-    for vn, vv in outputs.items():
-        outp = GalaxyOutput.from_inspect(vv, ontology_path=ontology_path, dprod=nba.name)
-        if outp.is_oda:
-            outp_code += f"_oda_outs.append(('{outp.dataname}', '{outp.outfile_name}', {vn}))\n"
+                _oda_outs = []                            
+                for _outn, _outfn, _outv in _oda_outs:
+                    _galaxy_outfile_name = os.path.join(_galaxy_wd, _outfn)
+                    if isinstance(_outv, str) and os.path.isfile(_outv):
+                        shutil.move(_outv, _galaxy_outfile_name)
+                        _galaxy_meta_data[_outn] = {'ext': '_sniff_'}
+                    elif getattr(_outv, "write_fits_file", None):
+                        _outv.write_fits_file(_galaxy_outfile_name)
+                        _galaxy_meta_data[_outn] = {'ext': 'fits'}
+                    elif getattr(_outv, "write_file", None):
+                        _outv.write_file(_galaxy_outfile_name)
+                        _galaxy_meta_data[_outn] = {'ext': '_sniff_'}
+                    else:
+                        with open(_galaxy_outfile_name, 'w') as fd:
+                            json.dump(_outv, fd, cls=CustomJSONEncoder)
+                        _galaxy_meta_data[_outn] = {'ext': 'json'}
+                """)        
+    if has_simple_outs:
+        outp_code += "_simple_outs = []\n"
+        
+        if re.search(r'^\s*import numpy as np', script, flags=re.M):
+            outp_code += "_numpy_available = True\n"
         else:
-            outp_code += f"_simple_outs.append(('{outp.dataname}', '{outp.outfile_name}', {vn}))\n"
-    
-    outp_code += dedent("""
-            for _outn, _outfn, _outv in _oda_outs:
-                _galaxy_outfile_name = os.path.join(_galaxy_wd, _outfn)
-                if isinstance(_outv, str) and os.path.isfile(_outv):
-                    shutil.move(_outv, _galaxy_outfile_name)
-                    _galaxy_meta_data[_outn] = {'ext': '_sniff_'}
-                elif getattr(_outv, "write_fits_file", None):
-                    _outv.write_fits_file(_galaxy_outfile_name)
-                    _galaxy_meta_data[_outn] = {'ext': 'fits'}
-                elif getattr(_outv, "write_file", None):
-                    _outv.write_file(_galaxy_outfile_name)
-                    _galaxy_meta_data[_outn] = {'ext': '_sniff_'}
-                else:
-                    with open(_galaxy_outfile_name, 'w') as fd:
-                        json.dump(_outv, fd, cls=CustomJSONEncoder)
-                    _galaxy_meta_data[_outn] = {'ext': 'json'}
-            """)
-    
-    outp_code += dedent("""
-            for _outn, _outfn, _outv in _simple_outs:
-                _galaxy_outfile_name = os.path.join(_galaxy_wd, _outfn)
-                if isinstance(_outv, str) and os.path.isfile(_outv):
-                    shutil.move(_outv, _galaxy_outfile_name)
-                    _galaxy_meta_data[_outn] = {'ext': '_sniff_'}
-                elif _numpy_available and isinstance(_outv, np.ndarray):
-                    with open(_galaxy_outfile_name, 'wb') as fd:
-                        np.savez(fd, _outv)
-                    _galaxy_meta_data[_outn] = {'ext': 'npz'}
-                else:
-                    with open(_galaxy_outfile_name, 'w') as fd:
-                        json.dump(_outv, fd)
-                    _galaxy_meta_data[_outn] = {'ext': 'expression.json'}
-            """)
+            outp_code += dedent("""
+                    try:
+                        import numpy as np # noqa: E402
+                        _numpy_available = True
+                    except ImportError:
+                        _numpy_available = False
+                    """)
+        
+        outp_code += dedent("""
+                for _outn, _outfn, _outv in _simple_outs:
+                    _galaxy_outfile_name = os.path.join(_galaxy_wd, _outfn)
+                    if isinstance(_outv, str) and os.path.isfile(_outv):
+                        shutil.move(_outv, _galaxy_outfile_name)
+                        _galaxy_meta_data[_outn] = {'ext': '_sniff_'}
+                    elif _numpy_available and isinstance(_outv, np.ndarray):
+                        with open(_galaxy_outfile_name, 'wb') as fd:
+                            np.savez(fd, _outv)
+                        _galaxy_meta_data[_outn] = {'ext': 'npz'}
+                    else:
+                        with open(_galaxy_outfile_name, 'w') as fd:
+                            json.dump(_outv, fd)
+                        _galaxy_meta_data[_outn] = {'ext': 'expression.json'}
+                """)
 
     outp_code += dedent(f"""
                         with open(os.path.join(_galaxy_wd, 'galaxy.json'), 'w') as fd:
@@ -301,6 +303,7 @@ def _nb2script(nba, ontology_path):
             script += "\n"
     
     script = re.sub(r'^(.*get_ipython.*)$', r'\1 # noqa: F821', script, flags=re.M)
+    script = re.sub(r'(?<=^\n)\n', '', script, flags=re.M)
         
     return script
 
