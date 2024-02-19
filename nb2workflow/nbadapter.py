@@ -589,8 +589,6 @@ class NotebookAdapter:
                                 issues.append(f"An issue occurred when attempting to download the url {arg_par_value}, "
                                               "this might be related to an invalid url, please check the input provided")
                                 break
-                else:
-                    issues.append(f"The provided url {arg_par_value} is not in a valid format")
 
         return dict(
             issues=issues,
