@@ -46,7 +46,8 @@ class GalaxyParameter:
                  default_value=None, 
                  min_value=None, 
                  max_value=None, 
-                 allowed_values=None):
+                 allowed_values=None,
+                 additional_attrs=None):
         
         #TODO: type is fully defined by owl_type. Use it instead?  
         partype_lookup = {str: 'text', 
@@ -61,6 +62,7 @@ class GalaxyParameter:
         if _dataset_term in ontology_parameter_hierarchy:
             partype = 'data'
             default_value = None
+            additional_attrs = {"data_style": "paths"}
             # TODO: dataset type when in ontology
         
         self.name = name
@@ -70,6 +72,7 @@ class GalaxyParameter:
         self.min_value = min_value
         self.max_value = max_value
         self.allowed_values = allowed_values
+        self.additional_attrs = additional_attrs
                 
     
     @classmethod
@@ -89,9 +92,9 @@ class GalaxyParameter:
         
         description = label if label is not None else par_details['name']
         if par_format is not None:
-            description += f" Format: {par_format}"
+            description += f" (format: {par_format})"
         if par_unit is not None:
-            description += f" Units: {par_unit}"
+            description += f" (unit: {par_unit})"
         
         return cls(par_details['name'], 
                    par_details['python_type'], 
@@ -118,6 +121,9 @@ class GalaxyParameter:
         if self.max_value is not None:
             attrs['max'] = str(self.max_value)
         
+        if self.additional_attrs is not None:
+            attrs.update(self.additional_attrs)            
+        
         element = ET.Element('param',
                              **attrs)
         
@@ -128,7 +134,6 @@ class GalaxyParameter:
                     attrs['selected'] = 'true'
                 option = ET.SubElement(element, 'option', **attrs)
                 option.text = str(val)
-        
         # TODO: do we need additional validation?
         
         return element
