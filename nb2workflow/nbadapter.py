@@ -471,10 +471,10 @@ class NotebookAdapter:
         self.inject_output_gathering()
         exceptions = []
 
-        adapted_parameters, exceptions_download = self.download_local_files(parameters, tmpdir)
+        r = self.download_local_files(parameters, tmpdir)
 
-        if len(exceptions_download) > 0:
-            exceptions.extend(exceptions_download)
+        if len(r['exceptions']) > 0:
+            exceptions.extend(r['exceptions'])
 
         ntries = 10
         while ntries > 0:
@@ -482,7 +482,7 @@ class NotebookAdapter:
                 pm.execute_notebook(
                    self.preproc_notebook_fn,
                    self.output_notebook_fn,
-                   parameters = adapted_parameters,
+                   parameters = r['adapted_parameters'],
                    progress_bar = False,
                    log_output = True,
                    cwd = tmpdir, 
@@ -557,7 +557,7 @@ class NotebookAdapter:
     def download_local_files(self, parameters, tmpdir):
         n_download_tries_left = n_download_max_tries
         adapted_parameters = copy.deepcopy(parameters)
-        issues = []
+        exceptions = []
         for input_par_name, input_par_obj in self.input_parameters.items():
             # TODO use oda_api.ontology_helper
             if input_par_obj['owl_type'] == "http://odahub.io/ontology#POSIXPath":
@@ -567,30 +567,36 @@ class NotebookAdapter:
                 if validators.url(arg_par_value):
                     logger.debug(f'download {arg_par_value}')
                     while True:
-                        response = requests.get(arg_par_value)
-                        if response.status_code == 200:
-                            parsed_arg_par_value = urlparse(arg_par_value)
-                            file_name = parsed_arg_par_value.path.split('/')[-1]
-                            with open(os.path.join(tmpdir, file_name), 'wb') as file:
-                                file.write(response.content)
-                            adapted_parameters[input_par_name] = file_name
-                            break
-                        else:
-                            # TODO not sure how much information to put inside the returned error, send a sentry?
-                            #  and if it should be in an issue
-                            n_download_tries_left -= 1
-                            if n_download_tries_left > 0:
-                                logger.warning(f"An issue occurred when attempting to download the file at the url {arg_par_value}, "
-                                               f"sleeping {download_retry_sleep_s} seconds until retry")
-                                time.sleep(download_retry_sleep_s)
-                            else:
-                                logger.warning(f"An issue occurred when attempting to download the url {arg_par_value}, "
-                                               "this might be related to an invalid url, please check the input provided")
-                                issues.append(f"An issue occurred when attempting to download the url {arg_par_value}, "
-                                              "this might be related to an invalid url, please check the input provided")
+                        try:
+                            response = requests.get(arg_par_value)
+                            if response.status_code == 200:
+                                parsed_arg_par_value = urlparse(arg_par_value)
+                                file_name = parsed_arg_par_value.path.split('/')[-1]
+                                with open(os.path.join(tmpdir, file_name), 'wb') as file:
+                                    file.write(response.content)
+                                adapted_parameters[input_par_name] = file_name
                                 break
+                            else:
+                                # TODO not sure how much information to put inside the returned error, send a sentry?
+                                #  and if it should be in an issue
+                                n_download_tries_left -= 1
+                                if n_download_tries_left > 0:
+                                    logger.warning(f"An issue occurred when attempting to download the file at the url {arg_par_value}, "
+                                                   f"sleeping {download_retry_sleep_s} seconds until retry")
+                                    time.sleep(download_retry_sleep_s)
+                                else:
+                                    logger.warning(f"An issue occurred when attempting to download the url {arg_par_value}, "
+                                                   "this might be related to an invalid url, please check the input provided")
+                                    raise Exception(f"An issue occurred when attempting to download the url {arg_par_value}, "
+                                                  "this might be related to an invalid url, please check the input provided")
+                        except Exception as e:
+                            exceptions.append(e)
+                            break
 
-        return adapted_parameters, issues
+        return dict(
+            adapted_parameters=adapted_parameters,
+            exceptions=exceptions
+        )
 
     def inject_output_gathering(self):
         outputs = self.extract_output_declarations()
