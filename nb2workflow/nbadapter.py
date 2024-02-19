@@ -471,10 +471,10 @@ class NotebookAdapter:
         self.inject_output_gathering()
         exceptions = []
 
-        r = self.download_local_files(parameters, tmpdir)
+        adapted_parameters, exceptions_download = self.download_local_files(parameters, tmpdir)
 
-        if len(r['issues']) > 0:
-            raise Exception(r['issues'])
+        if len(exceptions_download) > 0:
+            exceptions.extend(exceptions_download)
 
         ntries = 10
         while ntries > 0:
@@ -482,7 +482,7 @@ class NotebookAdapter:
                 pm.execute_notebook(
                    self.preproc_notebook_fn,
                    self.output_notebook_fn,
-                   parameters = r['adapted_parameters'],
+                   parameters = adapted_parameters,
                    progress_bar = False,
                    log_output = True,
                    cwd = tmpdir, 
@@ -590,10 +590,7 @@ class NotebookAdapter:
                                               "this might be related to an invalid url, please check the input provided")
                                 break
 
-        return dict(
-            issues=issues,
-            adapted_parameters=adapted_parameters,
-        )
+        return adapted_parameters, issues
 
     def inject_output_gathering(self):
         outputs = self.extract_output_declarations()
