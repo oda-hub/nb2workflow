@@ -45,6 +45,8 @@ logger=logging.getLogger(__name__)
 
 logstasher = logstash.LogStasher()
 
+n_download_max_tries = 10
+download_retry_sleep_s = .5
 
 def run(notebook_fn, params: dict):
     nba = NotebookAdapter(notebook_fn)
@@ -553,6 +555,7 @@ class NotebookAdapter:
         return self.extract_pm_output()
 
     def download_local_files(self, parameters, tmpdir):
+        n_download_tries_left = n_download_max_tries
         adapted_parameters = copy.deepcopy(parameters)
         issues = []
         for input_par_name, input_par_obj in self.input_parameters.items():
@@ -563,17 +566,31 @@ class NotebookAdapter:
                     arg_par_value = input_par_obj['default_value']
                 if validators.url(arg_par_value):
                     logger.debug(f'download {arg_par_value}')
-                    response = requests.get(arg_par_value)
-                    if response.status_code == 200:
-                        parsed_arg_par_value = urlparse(arg_par_value)
-                        file_name = parsed_arg_par_value.path.split('/')[-1]
-                        with open(os.path.join(tmpdir, file_name), 'wb') as file:
-                            file.write(response.content)
-                        adapted_parameters[input_par_name] = file_name
-                    else:
-                        # TODO not sure how much information to put inside the returned error, send a sentry?
-                        #  and if it should be in an issue
-                        issues.append(f"An issue occurred when attempting to download the url {arg_par_value}")
+                    while True:
+                        response = requests.get(arg_par_value)
+                        if response.status_code == 200:
+                            parsed_arg_par_value = urlparse(arg_par_value)
+                            file_name = parsed_arg_par_value.path.split('/')[-1]
+                            with open(os.path.join(tmpdir, file_name), 'wb') as file:
+                                file.write(response.content)
+                            adapted_parameters[input_par_name] = file_name
+                            break
+                        else:
+                            # TODO not sure how much information to put inside the returned error, send a sentry?
+                            #  and if it should be in an issue
+                            n_download_tries_left -= 1
+                            if n_download_tries_left > 0:
+                                logger.warning(f"An issue occurred when attempting to download the file at the url {arg_par_value}, "
+                                               f"sleeping {download_retry_sleep_s} seconds until retry")
+                                time.sleep(download_retry_sleep_s)
+                            else:
+                                logger.warning(f"An issue occurred when attempting to download the url {arg_par_value}, "
+                                               "this might be related to an invalid url, please check the input provided")
+                                issues.append(f"An issue occurred when attempting to download the url {arg_par_value}, "
+                                              "this might be related to an invalid url, please check the input provided")
+                                break
+                else:
+                    issues.append(f"The provided url {arg_par_value} is not in a valid format")
 
         return dict(
             issues=issues,
