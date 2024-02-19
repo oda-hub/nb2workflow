@@ -568,6 +568,7 @@ class NotebookAdapter:
                         adapted_parameters[input_par_name] = file_name
                     else:
                         # TODO not sure how much information to put inside the returned error, send a sentry?
+                        #  and if it should be in an issue
                         issues.append(f"An issue occurred when attempting to download the url {arg_par_value}")
 
         return dict(
