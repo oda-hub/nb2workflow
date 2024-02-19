@@ -36,6 +36,9 @@ from nb2workflow.json import CustomJSONEncoder
 
 from nb2workflow.semantics import understand_comment_references, oda_ontology_prefix
 from git import Repo, InvalidGitRepositoryError, GitCommandError
+
+import oda_api.ontology_helper as ontology_helper
+
 import logging
 
 logger=logging.getLogger(__name__)
@@ -553,6 +556,7 @@ class NotebookAdapter:
         adapted_parameters = copy.deepcopy(parameters)
         issues = []
         for input_par_name, input_par_obj in self.input_parameters.items():
+            # TODO use oda_api.ontology_helper
             if input_par_obj['owl_type'] == "http://odahub.io/ontology#POSIXPath":
                 arg_par_value = parameters.get(input_par_name, None)
                 if arg_par_value is None:
