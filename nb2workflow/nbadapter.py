@@ -553,13 +553,12 @@ class NotebookAdapter:
         adapted_parameters = copy.deepcopy(parameters)
         issues = []
         for input_par_name, input_par_obj in self.input_parameters.items():
-            # download if it's url
             if input_par_obj['owl_type'] == "http://odahub.io/ontology#POSIXPath":
                 arg_par_value = parameters.get(input_par_name, None)
                 if arg_par_value is None:
                     arg_par_value = input_par_obj['default_value']
                 if validators.url(arg_par_value):
-                    print(f'download {arg_par_value}')
+                    logger.debug(f'download {arg_par_value}')
                     response = requests.get(arg_par_value)
                     if response.status_code == 200:
                         parsed_arg_par_value = urlparse(arg_par_value)
@@ -569,8 +568,7 @@ class NotebookAdapter:
                         adapted_parameters[input_par_name] = file_name
                     else:
                         # TODO not sure how much information to put inside the returned error, send a sentry?
-                        issues.append(f"An issue occurred when attempting to download "
-                                      f"the url {arg_par_value}")
+                        issues.append(f"An issue occurred when attempting to download the url {arg_par_value}")
 
         return dict(
             issues=issues,
