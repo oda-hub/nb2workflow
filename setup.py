@@ -6,7 +6,7 @@ if {'pytest', 'test', 'ptr'}.intersection(sys.argv):
     setup_requires.append('pytest-runner')
 
 setup(name='nb2workflow',
-      version = '1.3.61',
+      version = '1.3.62',
       description='convert notebook to workflow',
       author='Volodymyr Savchenko',
       author_email='contact@volodymyrsavchenko.com',
@@ -32,7 +32,7 @@ setup(name='nb2workflow',
       
       extras_require={
         "service":[
-            'flask',
+            'flask==2.0.3',
             'pytest-flask',
             'flask-caching', 
             'flask-cors',
