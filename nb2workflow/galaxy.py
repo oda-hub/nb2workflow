@@ -62,7 +62,6 @@ class GalaxyParameter:
         if _dataset_term in ontology_parameter_hierarchy:
             partype = 'data'
             default_value = None
-            additional_attrs = {"data_style": "paths"}
             # TODO: dataset type when in ontology
         
         self.name = name
@@ -536,7 +535,7 @@ def to_galaxy(input_path,
     # the same to decide python/ipython
     
     conf = ET.SubElement(tool_root, 'configfiles')
-    conf.append(ET.Element('inputs', name='inputs', filename='inputs.json'))
+    conf.append(ET.Element('inputs', name='inputs', filename='inputs.json', data_style='paths'))
     
     inps = ET.SubElement(tool_root, 'inputs')
     outps = ET.SubElement(tool_root, 'outputs')
