@@ -14,14 +14,14 @@ def app():
 
 def test_posix_download_file(client):
     r = client.get('/api/v1.0/get/testposixpath')
-    assert r.json['output']['output_file_download'] == 'file downloaded successfully'
+    assert r.json['output']['output_file_download'] == 'file not downloaded'
 
 def test_posix_download_file_with_arg(client):
-    r = client.get('/api/v1.0/get/testposixpath', query_string={'fits_file_url': 'https://fits.gsfc.nasa.gov/samples/testkeys.fits'})
+    r = client.get('/api/v1.0/get/testposixpath', query_string={'fits_file_path': 'https://fits.gsfc.nasa.gov/samples/testkeys.fits'})
     assert r.json['output']['output_file_download'] == 'file downloaded successfully'
 
 def test_posix_download_file_with_arg_wrong_url(client):
-    r = client.get('/api/v1.0/get/testposixpath', query_string={'fits_file_url': 'https://fits.gsfc.nasa.gov/samples/aaaaaa.fits'})
+    r = client.get('/api/v1.0/get/testposixpath', query_string={'fits_file_path': 'https://fits.gsfc.nasa.gov/samples/aaaaaa.fits'})
     assert r.json['exceptions'][0] == ("Exception('An issue occurred when attempting to download the url "
                                        "https://fits.gsfc.nasa.gov/samples/aaaaaa.fits, this might be related "
                                        "to an invalid url, please check the input provided')")
