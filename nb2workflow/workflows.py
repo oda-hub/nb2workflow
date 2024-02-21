@@ -6,6 +6,7 @@ import datetime
 import logging
 from collections import OrderedDict
 from . import logstash
+from .sentry import sentry
 
 from diskcache import Cache
 
@@ -13,16 +14,6 @@ from nb2workflow import nbadapter
 
 cache = Cache('.nb2workflow/cache')
 enable_cache = False
-
-try:
-    import sentry_sdk
-    sentry_sdk.init(dsn="https://63ae106793010d836c74830fa75b300c@o264756.ingest.sentry.io/4506186624335872")
-except ImportError:
-    sentry_sdk = None
-except Exception as e:
-    import logging
-    logging.debug("big problem with sentry: %s",repr(e))
-    sentry_sdk = None
 
 logstasher = logstash.LogStasher()
 
@@ -156,8 +147,8 @@ def evaluate(router, *args, **kwargs):
                 logstasher.log(dict(event='problem evaluating',exception=repr(e)))
                 
                 if ntries <= 1:
-                    if sentry_sdk:
-                        sentry_sdk.capture_exception()
+                    if sentry.have_sentry:
+                        sentry.capture_exception(e)
                     raise
 
                 time.sleep(5)
