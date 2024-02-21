@@ -20,6 +20,8 @@ import rdflib
 import copy
 import validators
 import requests
+import random
+import string
 
 import papermill as pm
 import scrapbook as sb
@@ -242,8 +244,11 @@ class InputParameter:
                 )
 
 
+
+
 class NotebookAdapter:
     limit_output_attachment_file = None
+
 
     def __init__(self, notebook_fn, tempdir_cache=None, n_download_max_tries=10, download_retry_sleep=.5):
         self.notebook_fn = os.path.abspath(notebook_fn)
@@ -253,6 +258,13 @@ class NotebookAdapter:
         logger.debug(self.extract_parameters())
         self.n_download_max_tries = n_download_max_tries
         self.download_retry_sleep_s = download_retry_sleep
+
+    @staticmethod
+    def get_unique_filename_from_url(file_url):
+        parsed_arg_par_value = urlparse(file_url)
+        file_name_prefix = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
+        file_name = f"{file_name_prefix}_{parsed_arg_par_value.path.split('/')[-1]}"
+        return file_name
 
     def new_tmpdir(self, cache_key=None):
         logger.debug("tmpdir was "+getattr(self,'_tmpdir','unset'))
@@ -570,8 +582,7 @@ class NotebookAdapter:
                         try:
                             response = requests.get(arg_par_value)
                             if response.status_code == 200:
-                                parsed_arg_par_value = urlparse(arg_par_value)
-                                file_name = parsed_arg_par_value.path.split('/')[-1]
+                                file_name = NotebookAdapter.get_unique_filename_from_url(arg_par_value)
                                 with open(os.path.join(tmpdir, file_name), 'wb') as file:
                                     file.write(response.content)
                                 adapted_parameters[input_par_name] = file_name
