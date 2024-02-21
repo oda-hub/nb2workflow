@@ -45,8 +45,6 @@ logger=logging.getLogger(__name__)
 
 logstasher = logstash.LogStasher()
 
-n_download_max_tries = 10
-download_retry_sleep_s = .5
 
 def run(notebook_fn, params: dict):
     nba = NotebookAdapter(notebook_fn)
@@ -247,12 +245,14 @@ class InputParameter:
 class NotebookAdapter:
     limit_output_attachment_file = None
 
-    def __init__(self, notebook_fn, tempdir_cache=None):
+    def __init__(self, notebook_fn, tempdir_cache=None, n_download_max_tries=10, download_retry_sleep=.5):
         self.notebook_fn = os.path.abspath(notebook_fn)
         self.name = notebook_short_name(notebook_fn)
         self.tempdir_cache = tempdir_cache
         logger.debug("notebook adapter for %s", self.notebook_fn)
         logger.debug(self.extract_parameters())
+        self.n_download_max_tries = n_download_max_tries
+        self.download_retry_sleep_s = download_retry_sleep
 
     def new_tmpdir(self, cache_key=None):
         logger.debug("tmpdir was "+getattr(self,'_tmpdir','unset'))
@@ -555,7 +555,7 @@ class NotebookAdapter:
         return self.extract_pm_output()
 
     def download_local_files(self, parameters, tmpdir):
-        n_download_tries_left = n_download_max_tries
+        n_download_tries_left = self.n_download_max_tries
         adapted_parameters = copy.deepcopy(parameters)
         exceptions = []
         for input_par_name, input_par_obj in self.input_parameters.items():
@@ -582,8 +582,8 @@ class NotebookAdapter:
                                 n_download_tries_left -= 1
                                 if n_download_tries_left > 0:
                                     logger.warning(f"An issue occurred when attempting to download the file at the url {arg_par_value}, "
-                                                   f"sleeping {download_retry_sleep_s} seconds until retry")
-                                    time.sleep(download_retry_sleep_s)
+                                                   f"sleeping {self.download_retry_sleep_s} seconds until retry")
+                                    time.sleep(self.download_retry_sleep_s)
                                 else:
                                     logger.warning(f"An issue occurred when attempting to download the url {arg_par_value}, "
                                                    "this might be related to an invalid url, please check the input provided")
