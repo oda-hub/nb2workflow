@@ -39,8 +39,6 @@ from nb2workflow.json import CustomJSONEncoder
 from nb2workflow.semantics import understand_comment_references, oda_ontology_prefix
 from git import Repo, InvalidGitRepositoryError, GitCommandError
 
-import oda_api.ontology_helper as ontology_helper
-
 import logging
 
 logger=logging.getLogger(__name__)
@@ -483,7 +481,7 @@ class NotebookAdapter:
         self.inject_output_gathering()
         exceptions = []
 
-        r = self.download_local_files(parameters, tmpdir)
+        r = self.extract_files_locally(parameters, tmpdir)
 
         if len(r['exceptions']) > 0:
             exceptions.extend(r['exceptions'])
@@ -566,8 +564,36 @@ class NotebookAdapter:
     def extract_output(self):
         return self.extract_pm_output()
 
-    def download_local_files(self, parameters, tmpdir):
+    def download_file(self, file_url, tmpdir):
         n_download_tries_left = self.n_download_max_tries
+        file_name = NotebookAdapter.get_unique_filename_from_url(file_url)
+        while True:
+            try:
+                response = requests.get(file_url)
+                if response.status_code == 200:
+                    with open(os.path.join(tmpdir, file_name), 'wb') as file:
+                        file.write(response.content)
+                    break
+                else:
+                    # TODO not sure how much information to put inside the returned error, send a sentry?
+                    #  and if it should be in an issue
+                    n_download_tries_left -= 1
+                    if n_download_tries_left > 0:
+                        logger.warning(
+                            f"An issue occurred when attempting to download the file at the url {file_url}, "
+                            f"sleeping {self.download_retry_sleep_s} seconds until retry")
+                        time.sleep(self.download_retry_sleep_s)
+                    else:
+                        logger.warning(f"An issue occurred when attempting to download the url {file_url}, "
+                                       "this might be related to an invalid url, please check the input provided")
+                        raise Exception(f"An issue occurred when attempting to download the url {file_url}, "
+                                        "this might be related to an invalid url, please check the input provided")
+            except Exception as e:
+                raise e
+
+        return file_name
+
+    def extract_files_locally(self, parameters, tmpdir):
         adapted_parameters = copy.deepcopy(parameters)
         exceptions = []
         for input_par_name, input_par_obj in self.input_parameters.items():
@@ -578,31 +604,11 @@ class NotebookAdapter:
                     arg_par_value = input_par_obj['default_value']
                 if validators.url(arg_par_value):
                     logger.debug(f'download {arg_par_value}')
-                    while True:
-                        try:
-                            response = requests.get(arg_par_value)
-                            if response.status_code == 200:
-                                file_name = NotebookAdapter.get_unique_filename_from_url(arg_par_value)
-                                with open(os.path.join(tmpdir, file_name), 'wb') as file:
-                                    file.write(response.content)
-                                adapted_parameters[input_par_name] = file_name
-                                break
-                            else:
-                                # TODO not sure how much information to put inside the returned error, send a sentry?
-                                #  and if it should be in an issue
-                                n_download_tries_left -= 1
-                                if n_download_tries_left > 0:
-                                    logger.warning(f"An issue occurred when attempting to download the file at the url {arg_par_value}, "
-                                                   f"sleeping {self.download_retry_sleep_s} seconds until retry")
-                                    time.sleep(self.download_retry_sleep_s)
-                                else:
-                                    logger.warning(f"An issue occurred when attempting to download the url {arg_par_value}, "
-                                                   "this might be related to an invalid url, please check the input provided")
-                                    raise Exception(f"An issue occurred when attempting to download the url {arg_par_value}, "
-                                                  "this might be related to an invalid url, please check the input provided")
-                        except Exception as e:
-                            exceptions.append(e)
-                            break
+                    try:
+                        file_name = self.download_file(arg_par_value, tmpdir)
+                        adapted_parameters[input_par_name] = file_name
+                    except Exception as e:
+                        exceptions.append(e)
 
         return dict(
             adapted_parameters=adapted_parameters,
