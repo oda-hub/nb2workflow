@@ -16,7 +16,8 @@ class Sentry:
 
     @property
     def sentry_url(self):
-        self._sentry_url = os.environ.get('SENTRY_URL', None)
+        if not hasattr(self, '_sentry_url'):
+            self._sentry_url = os.environ.get('SENTRY_URL', None)
         return self._sentry_url
 
     @property
