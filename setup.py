@@ -84,7 +84,7 @@ setup(name='nb2workflow',
         'pyyaml',
         'scrapbook', 
         'werkzeug==2.0.3',
-        'validators==0.20.0',
+        'validators',
         'sentry_sdk',
         'rdflib',
         'GitPython'
