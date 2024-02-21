@@ -147,8 +147,7 @@ def evaluate(router, *args, **kwargs):
                 logstasher.log(dict(event='problem evaluating',exception=repr(e)))
                 
                 if ntries <= 1:
-                    if sentry.have_sentry:
-                        sentry.capture_exception(e)
+                    sentry.capture_exception(e)
                     raise
 
                 time.sleep(5)
