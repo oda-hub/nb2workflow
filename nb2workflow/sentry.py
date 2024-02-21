@@ -22,7 +22,7 @@ class Sentry:
 
     @property
     def have_sentry(self):
-        if self.sentry_url is None or sentry_sdk is None:
+        if self.sentry_url is None or self.sentry_url == '' or sentry_sdk is None:
             return False
         else:
             try:
