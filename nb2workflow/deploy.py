@@ -15,6 +15,10 @@ from datetime import datetime, timezone
 from textwrap import dedent
 import uuid
 from kubernetes import client, config
+import glob
+import rdflib
+from rdflib.namespace import RDF
+from collections import defaultdict
 
 logger = logging.getLogger(__name__)
 
@@ -298,6 +302,28 @@ def _build_with_kaniko(git_origin,
         return container_metadata
 
 
+def _extract_S3_requirements(local_repo_path):
+    from nb2workflow.nbadapter import NotebookAdapter
+    s3type = rdflib.term.URIRef('http://odahub.io/ontology#S3')
+    binding_env = rdflib.term.URIRef('http://odahub.io/ontology#resourceBindingEnvVarName')
+    s3meta = defaultdict(set)
+    local_repo_path = str(local_repo_path)
+    for nb_file in glob.glob(local_repo_path + '/**/*.ipynb', recursive=True):
+        nba = NotebookAdapter(nb_file)
+        g = rdflib.Graph()
+        g.parse(data=nba.extra_ttl)
+
+        for s, p, o in g.triples((None, RDF.type, s3type)):
+            for _, _, v in g.triples((s, binding_env, None)):
+                short_name = str(s).split('#')[-1].lower()  # k8s secret names must be lowercase
+                env_var_name = str(v)
+                s3meta[short_name].add(
+                    env_var_name)  # if there are several notebooks they might use different env vars
+            if short_name not in s3meta:
+                s3meta[short_name].add(short_name.upper() + '_S3_CREDENTIALS')
+
+    return s3meta
+
 def _build_with_docker(git_origin, 
                     local=False, 
                     run_tests=True, 
@@ -332,6 +358,8 @@ def _build_with_docker(git_origin,
                                     ["git", "log", "-1", "--pretty=format:'%ai'"], # could use all authors too, but it's inside anyway
                                     cwd=local_repo_path ).decode().strip()
 
+        meta['S3'] = _extract_S3_requirements(local_repo_path)
+
         dockerfile_content = _nb2w_dockerfile_gen(tmpdir, git_origin, source_from, meta, nb2wversion)
 
         ts = '-' + time.strftime(r'%y%m%d%H%M%S') if build_timestamp else ''
@@ -365,47 +393,85 @@ def _build_with_docker(git_origin,
         else:
             workflow_dispatcher_signature = None
             workflow_nb_signature = None
-        
-    if not local and not dry_run: 
+
+    if not local and not dry_run:
         sp.check_call( # cli is more stable than python API
             ["docker", "push", image])
-    
+
     return {"descr": meta['descr'],
             "image": image,
             "author": meta['author'],
             "last_change_time": meta['last_change_time'],
             "workflow_dispatcher_signature": workflow_dispatcher_signature,
             "workflow_nb_signature": workflow_nb_signature,
-            "dockerfile_content": dockerfile_content}
+            "dockerfile_content": dockerfile_content,
+            "S3": meta["S3"]}
 
-def deploy_k8s(container_info, 
+def append_k8s_secrets(s3_envs, container, namespace):
+    secrets = []
+    for key, envs in s3_envs.items():
+        verify_s3_secret(key, namespace=namespace)
+        for env in envs:
+            secrets.append(
+                {
+                    "name": env,
+                    "valueFrom": {
+                        "secretKeyRef": {"name": key, "key": "credentials"}
+                    }
+                }
+            )
+    if len(secrets) > 0:
+        container["env"] = secrets
+
+
+def get_k8s_secrets(namespace="oda-staging"):
+    json_data = sp.check_output(["kubectl", "get", "secrets", "-n", namespace, "-o", "json"])
+    items = json.loads(json_data)['items']
+    for secret in items:
+        yield secret['metadata']['name'], secret['data']
+
+
+def verify_s3_secret(name, namespace="oda-staging"):
+    # credentials
+    for secret_name, secret in get_k8s_secrets(namespace=namespace):
+        if secret_name == name:
+            if 'credentials' not in secret:
+                raise NameError(f"No credentials defined for secret {name}")
+            return True
+    raise FileNotFoundError(f"No secrets defined for {name}")
+
+
+def deploy_k8s(container_info,
            deployment_base_name, 
            namespace="oda-staging", 
            check_live=True, 
            check_live_through="oda-dispatcher"):
     
     deployment_name = deployment_base_name + "-backend"
-    try:
-        sp.check_call(
-            ["kubectl", "patch", "deployment", deployment_name, "-n", namespace,
+    container = {"name": deployment_name, "image": container_info['image']}
+    append_k8s_secrets(container_info['S3'], container, namespace)
+    patch_command = ["kubectl", "patch", "deployment", deployment_name, "-n", namespace,
             "--type", "merge",
-            "-p", 
+            "-p",
             json.dumps(
                 {"spec":{"template":{"spec":{
                     "containers":[
-                        {"name": deployment_name, "image": container_info['image']}
+                        container
                     ]}}}})
             ]
-        )
+    try:
+        sp.check_call(patch_command)
     except sp.CalledProcessError:
         sp.check_call(
             ["kubectl", "create", "deployment", deployment_name, "-n", namespace, "--image=" + container_info['image']]
         )
+        if "env" in container:
+            sp.check_call(patch_command)  # set environment variables
         sp.check_call(
             ["kubectl", "expose", "deployment", deployment_name, "--name", deployment_name, 
             "--port", "8000", "-n", namespace]
         )
-    
+
     finally:
         time.sleep(5) # avoid race condition. time for deployment to be created in k8s
         sp.check_call(
@@ -490,7 +556,7 @@ def deploy(git_origin,
            cleanup=False,
            nb2wversion=version()):
     
-    container = build_container(git_origin, 
+    container = build_container(git_origin,
                                 local=local, 
                                 run_tests=run_tests, 
                                 registry=registry, 
@@ -501,8 +567,15 @@ def deploy(git_origin,
                                 nb2wversion=nb2wversion)
     
     if local:
+        env_params = []
+        for key, envs in container['S3'].items():
+            for env in envs:
+                env_val = os.getenv(env)
+                if env_val:
+                    env_params += ["-e", f"{env}={env_val}"]
+
         sp.check_call( # cli is more stable than python API
-            ["docker", "run", '-p', '8000:8000', container['image']])
+            ["docker", "run", '-p', '8000:8000'] + env_params + [container['image']])
     else:
         deployment_info = deploy_k8s(container, 
                                      deployment_base_name, 
