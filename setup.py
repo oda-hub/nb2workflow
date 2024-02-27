@@ -27,6 +27,7 @@ setup(name='nb2workflow',
             'nbrun=nb2workflow.nbadapter:main',
             'nbinspect=nb2workflow.nbadapter:main_inspect',
             'nbreduce=nb2workflow.nbadapter:main_reduce',
+            'nb2galaxy=nb2workflow.galaxy:main',
             ]
       },
       
@@ -63,6 +64,15 @@ setup(name='nb2workflow',
         ],
         "k8s":[
             'kubernetes'
+        ],
+        'galaxy':[
+            'oda_api',
+            'ensureconda',
+            'bibtexparser >= 2.0.0b3',
+            'pypandoc_binary',
+            'black',
+            'isort',
+            'autoflake'
         ]
       },
 
