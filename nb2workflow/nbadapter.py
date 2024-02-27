@@ -31,6 +31,7 @@ from urllib.parse import urlencode, urlparse
 
 from . import logstash
 
+from nb2workflow.sentry import sentry
 from nb2workflow.health import current_health
 from nb2workflow import workflows
 from nb2workflow.logging_setup import setup_logging
@@ -584,10 +585,11 @@ class NotebookAdapter:
                             f"sleeping {self.download_retry_sleep_s} seconds until retry")
                         time.sleep(self.download_retry_sleep_s)
                     else:
-                        logger.warning(f"An issue occurred when attempting to download the url {file_url}, "
-                                       "this might be related to an invalid url, please check the input provided")
-                        raise Exception(f"An issue occurred when attempting to download the url {file_url}, "
-                                        "this might be related to an invalid url, please check the input provided")
+                        msg = (f"An issue occurred when attempting to download the url {file_url}, "
+                               "this might be related to an invalid url, please check the input provided")
+                        logger.warning(msg)
+                        sentry.capture_message(msg)
+                        raise Exception(msg)
             except Exception as e:
                 raise e
 
