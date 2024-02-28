@@ -569,29 +569,24 @@ class NotebookAdapter:
         n_download_tries_left = self.n_download_max_tries
         file_name = NotebookAdapter.get_unique_filename_from_url(file_url)
         while True:
-            try:
-                response = requests.get(file_url)
-                if response.status_code == 200:
-                    with open(os.path.join(tmpdir, file_name), 'wb') as file:
-                        file.write(response.content)
-                    break
+            response = requests.get(file_url)
+            if response.status_code == 200:
+                with open(os.path.join(tmpdir, file_name), 'wb') as file:
+                    file.write(response.content)
+                break
+            else:
+                n_download_tries_left -= 1
+                if n_download_tries_left > 0:
+                    logger.warning(
+                        f"An issue occurred when attempting to download the file at the url {file_url}, "
+                        f"sleeping {self.download_retry_sleep_s} seconds until retry")
+                    time.sleep(self.download_retry_sleep_s)
                 else:
-                    # TODO not sure how much information to put inside the returned error, send a sentry?
-                    #  and if it should be in an issue
-                    n_download_tries_left -= 1
-                    if n_download_tries_left > 0:
-                        logger.warning(
-                            f"An issue occurred when attempting to download the file at the url {file_url}, "
-                            f"sleeping {self.download_retry_sleep_s} seconds until retry")
-                        time.sleep(self.download_retry_sleep_s)
-                    else:
-                        msg = (f"An issue occurred when attempting to download the url {file_url}, "
-                               "this might be related to an invalid url, please check the input provided")
-                        logger.warning(msg)
-                        sentry.capture_message(msg)
-                        raise Exception(msg)
-            except Exception as e:
-                raise e
+                    msg = (f"An issue occurred when attempting to download the url {file_url}, "
+                           "this might be related to an invalid url, please check the input provided")
+                    logger.warning(msg)
+                    sentry.capture_message(msg)
+                    raise Exception(msg)
 
         return file_name
 
