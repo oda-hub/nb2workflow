@@ -832,7 +832,7 @@ def trace_get_func(job, func):
     if func == "custom.css":
         return ""
 
-    no_output_arg = request.args.get('no_output', False) == 'True'
+    include_glued_output = request.args.get('include_glued_output', True) == 'True'
 
     from nbconvert.exporters import HTMLExporter
     exporter = HTMLExporter()
@@ -841,7 +841,7 @@ def trace_get_func(job, func):
 
     output, resources = exporter.from_filename(fn)
 
-    if no_output_arg:
+    if not include_glued_output:
         soup = BeautifulSoup(output, 'html.parser')
         soup.find('div', {'class': 'celltag_injected-gather-outputs'}).decompose()
         output = str(soup)
