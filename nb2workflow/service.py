@@ -9,6 +9,7 @@ try:
 except ImportError:
     from werkzeug.routing import MethodNotAllowed, NotFound
 
+
 import queue
 from nb2workflow import ontology, publish, schedule
 from nb2workflow.nbadapter import NotebookAdapter, find_notebooks, PapermillWorkflowIncomplete
@@ -28,6 +29,7 @@ import nbformat
 import yaml
 
 from io import BytesIO
+from bs4 import BeautifulSoup
 
 
 from flask import Flask, make_response, jsonify, request, url_for, send_file, Response
@@ -837,13 +839,12 @@ def trace_get_func(job, func):
 
     fn = os.path.join(tempfile.gettempdir(), job, func+"_output.ipynb")
 
-    if no_output_arg:
-        nba = NotebookAdapter(fn)
-        nb = nba.read()
-        for cell in nb.cells:
-            print(cell)
-
     output, resources = exporter.from_filename(fn)
+
+    if no_output_arg:
+        soup = BeautifulSoup(output, 'html.parser')
+        soup.find('div', {'class': 'celltag_injected-gather-outputs'}).decompose()
+        output = str(soup)
 
     return output
 
