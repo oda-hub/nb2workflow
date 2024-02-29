@@ -65,6 +65,17 @@ def test_service(client):
 
 #    open("output.png","wb").write(base64.b64decode(r.json['output']['spectrum_png_content']))
 
+    r = client.get(os.path.join('trace', job, service_name),
+                   query_string=dict(no_output=False))
+
+    html_output = r.data.decode()
+    assert "celltag_injected-gather-outputs" in html_output
+
+    r = client.get(os.path.join('trace', job, service_name),
+                   query_string=dict(no_output=True))
+
+    html_output = r.data.decode()
+    assert "celltag_injected-gather-outputs" not in html_output
 
 
 def test_service_repo(client):
