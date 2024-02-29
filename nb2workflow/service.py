@@ -830,10 +830,18 @@ def trace_get_func(job, func):
     if func == "custom.css":
         return ""
 
+    no_output_arg = request.args.get('no_output', False) == 'True'
+
     from nbconvert.exporters import HTMLExporter
     exporter = HTMLExporter()
 
     fn = os.path.join(tempfile.gettempdir(), job, func+"_output.ipynb")
+
+    if no_output_arg:
+        nba = NotebookAdapter(fn)
+        nb = nba.read()
+        for cell in nb.cells:
+            print(cell)
 
     output, resources = exporter.from_filename(fn)
 
