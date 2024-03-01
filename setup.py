@@ -40,6 +40,7 @@ setup(name='nb2workflow',
             'flasgger',
             'python-consul',
             'apscheduler',
+            'beautifulsoup4'
         ],
         "rdf":[
             'rdflib',
