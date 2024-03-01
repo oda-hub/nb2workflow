@@ -842,9 +842,13 @@ def trace_get_func(job, func):
     output, resources = exporter.from_filename(fn)
 
     if not include_glued_output:
+        logger.info("include_glued_output arg passed")
         soup = BeautifulSoup(output, 'html.parser')
-        soup.find('div', {'class': 'celltag_injected-gather-outputs'}).decompose()
+        soup.find('div', {'class': 'celltag_injected-gather-outputs'}
+        if soup is not None:
+            soup.decompose()
         output = str(soup)
+        logger.info("div element removed form html")
 
     return output
 
