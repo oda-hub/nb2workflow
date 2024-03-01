@@ -383,11 +383,14 @@ class Requirements:
                 else:
                     logger.warning(f'Dependency {req[0]} not found in conda channels.')
                     self._direct_dependencies.append((req[0], req[1], 2, req[3]))
-            
-        with open(self.fullenv_file_path, 'w') as fd:
-            yaml.dump(self.env_dict, fd)
-            
-        resolved_env = self._resolve_environment_yml()
+        
+        if self.env_dict["dependencies"]:
+            with open(self.fullenv_file_path, 'w') as fd:
+                yaml.dump(self.env_dict, fd)
+                
+            resolved_env = self._resolve_environment_yml()
+        else:
+            resolved_env = {}
         
         self.final_dependencies = {}
         for dep in self._direct_dependencies:
