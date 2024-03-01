@@ -73,9 +73,9 @@ def test_nbadapter(test_notebook, morph_notebook, caplog):
 
 def test_find_notebooks(caplog):
     from nb2workflow.nbadapter import find_notebooks, NotebookAdapter
-    
-    nb_dir = 'tests/testfiles'
-    single_nb = 'tests/testfiles/lightcurve.ipynb'
+    testfiles_path = os.path.join(os.path.dirname(__file__), 'testfiles')
+    nb_dir = testfiles_path
+    single_nb = os.path.join(testfiles_path, 'lightcurve.ipynb')
     
     nbas = find_notebooks(single_nb)
     assert len(nbas) == 1
@@ -85,7 +85,7 @@ def test_find_notebooks(caplog):
     assert 'Ignoring pattern.' in caplog.text
     
     nbas = find_notebooks(nb_dir)
-    assert len(nbas) == 4
+    assert len(nbas) == 5
     
     nbas = find_notebooks(nb_dir, pattern=r'.*bool')
     assert len(nbas) == 1
