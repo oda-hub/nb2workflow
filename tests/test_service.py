@@ -58,7 +58,8 @@ def test_service(client):
         logger.info(l)
 
     job = r.json[-1]['fn'].split("/")[-1]
-    
+    logger.info("job %s", job)
+
     r=client.get('/trace/'+job)
 
     logger.info("job %s", r.json)
