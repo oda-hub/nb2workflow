@@ -62,10 +62,11 @@ def test_service(client):
 
     r=client.get('/trace/'+job)
 
-    logger.info("job %s", r.json)
+    logger.info("r.json %s", r.json)
+    print("r.json ", r.json)
 
 #    open("output.png","wb").write(base64.b64decode(r.json['output']['spectrum_png_content']))
-
+    service_name = r.json[0].split("/")[-1].replace('_output.ipynb', '')
     r = client.get(os.path.join('trace', job, service_name),
                    query_string=dict(include_glued_output=True))
 
