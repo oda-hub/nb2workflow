@@ -17,14 +17,21 @@ import argparse
 import json
 import base64
 import rdflib
+import copy
+import validators
+import requests
+import random
+import string
 
 import papermill as pm
 import scrapbook as sb
 import nbformat
 from nbconvert import HTMLExporter
+from urllib.parse import urlencode, urlparse
 
 from . import logstash
 
+from nb2workflow.sentry import sentry
 from nb2workflow.health import current_health
 from nb2workflow import workflows
 from nb2workflow.logging_setup import setup_logging
@@ -32,6 +39,7 @@ from nb2workflow.json import CustomJSONEncoder
 
 from nb2workflow.semantics import understand_comment_references, oda_ontology_prefix
 from git import Repo, InvalidGitRepositoryError, GitCommandError
+
 import logging
 
 logger=logging.getLogger(__name__)
@@ -235,15 +243,27 @@ class InputParameter:
                 )
 
 
+
+
 class NotebookAdapter:
     limit_output_attachment_file = None
 
-    def __init__(self, notebook_fn, tempdir_cache=None):
+
+    def __init__(self, notebook_fn, tempdir_cache=None, n_download_max_tries=10, download_retry_sleep=.5):
         self.notebook_fn = os.path.abspath(notebook_fn)
         self.name = notebook_short_name(notebook_fn)
         self.tempdir_cache = tempdir_cache
         logger.debug("notebook adapter for %s", self.notebook_fn)
         logger.debug(self.extract_parameters())
+        self.n_download_max_tries = n_download_max_tries
+        self.download_retry_sleep_s = download_retry_sleep
+
+    @staticmethod
+    def get_unique_filename_from_url(file_url):
+        parsed_arg_par_value = urlparse(file_url)
+        file_name_prefix = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
+        file_name = f"{file_name_prefix}_{parsed_arg_par_value.path.split('/')[-1]}"
+        return file_name
 
     def new_tmpdir(self, cache_key=None):
         logger.debug("tmpdir was "+getattr(self,'_tmpdir','unset'))
@@ -355,7 +375,7 @@ class NotebookAdapter:
                     pars = self.extract_parameters_from_cell(cell, G)
                     pars = {**getattr(self, attr), **pars}
                     setattr(self, attr, pars)
-                                            
+
         for n, p in self.input_parameters.items():
             if p['extra_ttl'] is not None:
                 G.parse(data=p['extra_ttl'])
@@ -462,13 +482,18 @@ class NotebookAdapter:
         self.inject_output_gathering()
         exceptions = []
 
+        r = self.extract_files_locally(parameters, tmpdir)
+
+        if len(r['exceptions']) > 0:
+            exceptions.extend(r['exceptions'])
+
         ntries = 10
         while ntries > 0:
             try:
                 pm.execute_notebook(
                    self.preproc_notebook_fn,
                    self.output_notebook_fn,
-                   parameters = parameters,
+                   parameters = r['adapted_parameters'],
                    progress_bar = False,
                    log_output = True,
                    cwd = tmpdir, 
@@ -539,6 +564,53 @@ class NotebookAdapter:
 
     def extract_output(self):
         return self.extract_pm_output()
+
+    def download_file(self, file_url, tmpdir):
+        n_download_tries_left = self.n_download_max_tries
+        file_name = NotebookAdapter.get_unique_filename_from_url(file_url)
+        while True:
+            response = requests.get(file_url)
+            if response.status_code == 200:
+                with open(os.path.join(tmpdir, file_name), 'wb') as file:
+                    file.write(response.content)
+                break
+            else:
+                n_download_tries_left -= 1
+                if n_download_tries_left > 0:
+                    logger.warning(
+                        f"An issue occurred when attempting to download the file at the url {file_url}, "
+                        f"sleeping {self.download_retry_sleep_s} seconds until retry")
+                    time.sleep(self.download_retry_sleep_s)
+                else:
+                    msg = (f"An issue occurred when attempting to download the url {file_url}, "
+                           "this might be related to an invalid url, please check the input provided")
+                    logger.warning(msg)
+                    sentry.capture_message(msg)
+                    raise Exception(msg)
+
+        return file_name
+
+    def extract_files_locally(self, parameters, tmpdir):
+        adapted_parameters = copy.deepcopy(parameters)
+        exceptions = []
+        for input_par_name, input_par_obj in self.input_parameters.items():
+            # TODO use oda_api.ontology_helper
+            if input_par_obj['owl_type'] == "http://odahub.io/ontology#POSIXPath":
+                arg_par_value = parameters.get(input_par_name, None)
+                if arg_par_value is None:
+                    arg_par_value = input_par_obj['default_value']
+                if validators.url(arg_par_value):
+                    logger.debug(f'download {arg_par_value}')
+                    try:
+                        file_name = self.download_file(arg_par_value, tmpdir)
+                        adapted_parameters[input_par_name] = file_name
+                    except Exception as e:
+                        exceptions.append(e)
+
+        return dict(
+            adapted_parameters=adapted_parameters,
+            exceptions=exceptions
+        )
 
     def inject_output_gathering(self):
         outputs = self.extract_output_declarations()

@@ -6,7 +6,7 @@ if {'pytest', 'test', 'ptr'}.intersection(sys.argv):
     setup_requires.append('pytest-runner')
 
 setup(name='nb2workflow',
-      version = '1.3.60',
+      version = '1.3.65',
       description='convert notebook to workflow',
       author='Volodymyr Savchenko',
       author_email='contact@volodymyrsavchenko.com',
@@ -27,12 +27,13 @@ setup(name='nb2workflow',
             'nbrun=nb2workflow.nbadapter:main',
             'nbinspect=nb2workflow.nbadapter:main_inspect',
             'nbreduce=nb2workflow.nbadapter:main_reduce',
+            'nb2galaxy=nb2workflow.galaxy:main',
             ]
       },
       
       extras_require={
         "service":[
-            'flask',
+            'flask==2.0.3',
             'pytest-flask',
             'flask-caching', 
             'flask-cors',
@@ -63,6 +64,15 @@ setup(name='nb2workflow',
         ],
         "k8s":[
             'kubernetes'
+        ],
+        'galaxy':[
+            'oda_api',
+            'ensureconda',
+            'bibtexparser >= 2.0.0b3',
+            'pypandoc_binary',
+            'black',
+            'isort',
+            'autoflake'
         ]
       },
 
@@ -84,6 +94,7 @@ setup(name='nb2workflow',
         'pyyaml',
         'scrapbook', 
         'werkzeug==2.0.3',
+        'validators',
         'sentry_sdk',
         'rdflib',
         'GitPython'

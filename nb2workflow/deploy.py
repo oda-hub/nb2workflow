@@ -335,12 +335,12 @@ def _extract_resource_requirements(local_repo_path):
 
     return resources
 
-def _build_with_docker(git_origin, 
+def _build_with_docker(git_origin,
                     local=False, 
                     run_tests=True, 
                     registry="odahub", 
                     build_timestamp=False,
-                    dry_run=True, # TODO set to False before commit
+                    dry_run=False,
                     source_from='localdir',
                     cleanup=False,
                     nb2wversion=version()):
@@ -404,11 +404,11 @@ def _build_with_docker(git_origin,
         else:
             workflow_dispatcher_signature = None
             workflow_nb_signature = None
-
-    if not local and not dry_run:
+        
+    if not local and not dry_run: 
         sp.check_call( # cli is more stable than python API
             ["docker", "push", image])
-
+    
     return {"descr": meta['descr'],
             "image": image,
             "author": meta['author'],
@@ -457,12 +457,11 @@ def verify_resource_secret(name, required, namespace="oda-staging"):
         logger.warning(message)
 
 
-def deploy_k8s(container_info,
+def deploy_k8s(container_info, 
            deployment_base_name, 
            namespace="oda-staging", 
            check_live=True, 
-           check_live_through="oda-dispatcher"
-           ):
+           check_live_through="oda-dispatcher"):
     
     deployment_name = deployment_base_name + "-backend"
     container = {"name": deployment_name, "image": container_info['image']}
@@ -482,14 +481,9 @@ def deploy_k8s(container_info,
         sp.check_call(
             ["kubectl", "create", "deployment", deployment_name, "-n", namespace, "--image=" + container_info['image']]
         )
-        if "env" in container:
-            sp.check_call(patch_command)  # set environment variables
-        sp.check_call(
-            ["kubectl", "expose", "deployment", deployment_name, "--name", deployment_name, 
-            "--port", "8000", "-n", namespace]
-        )
+        time.sleep(5)  # avoid race condition. time for deployment to be created in k8s
+        sp.check_call(patch_command) # needed to set the proper container name and env vars
     finally:
-        time.sleep(5) # avoid race condition. time for deployment to be created in k8s
         sp.check_call(
             ["kubectl", "patch", "deployment", deployment_name, "-n", namespace,
             "--type", "strategic",
@@ -505,7 +499,15 @@ def deploy_k8s(container_info,
                     ]}}}})
             ]
         )
-    
+
+        # expose if service doesn't exist
+        try:
+            sp.check_call(["kubectl", "get", "service", deployment_name, "-n", namespace])
+        except sp.CalledProcessError:
+            sp.check_call(
+                ["kubectl", "expose", "deployment", deployment_name, "--name", deployment_name,
+                "--port", "8000", "-n", namespace])
+
     if check_live:
         logging.info("will check live")
 
@@ -602,7 +604,7 @@ def deploy(git_origin,
                                      check_live_through=check_live_through)
         return deployment_info
 
-
+se
 def main():
     parser = argparse.ArgumentParser(description='')
     parser.add_argument('repository', metavar='repository', type=str)
