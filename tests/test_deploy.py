@@ -1,11 +1,11 @@
 import pytest
 import subprocess as sp
 
-# @pytest.mark.deploy
-# def test_deploy():
-#     from nb2workflow.deploy import deploy
-#
-#     deploy("https://renkulab.io/gitlab/vladimir.savchenko/oda-sdss", "legacysurvey")
+@pytest.mark.deploy
+def test_deploy():
+    from nb2workflow.deploy import deploy
+
+    deploy("https://renkulab.io/gitlab/vladimir.savchenko/oda-sdss", "legacysurvey")
 
 @pytest.mark.deploy
 def test_deploy_secret():
@@ -19,31 +19,44 @@ def test_deploy_secret():
         secret_key="zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG")
     test_repo = "https://github.com/okolo/s3test.git"
     deploy_name = "s3test"
-
+    docker_registry = "odahub"  # "okolo0"
 
     secret=json.dumps(credentials)
     with open('tmp_secret', 'w') as tmp_file:
         print(secret, file=tmp_file, end='')
 
-    try:
-        sp.check_call(
-            ["kubectl", "create", "secret", "generic", secret_name, "--from-file=credentials=tmp_secret",
+    command = ["kubectl", "create", "secret", "generic", secret_name, "--from-file=credentials=tmp_secret",
              "-n", namespace]
-        )
-
-        verify_resource_secret(secret_name, required=True, namespace=namespace)
-
-        result = deploy(test_repo,
-               deploy_name,
-               namespace="oda-staging",
-               local=False,
-               run_tests=False,  # TODO: enable output check
-               check_live=False,
-               registry="odahub")
-        service_output = result['service_output']  # TODO: enable output check
-    finally:
+    try:
+        sp.check_call(command)
+    except Exception:
         # cleanup
-        sp.check_call(
-            ["kubectl", "delete", "secret", secret_name, "-n", namespace]
-        )
+        sp.check_call(["kubectl", "delete", "secret", secret_name, "-n", namespace])
+        sp.check_call(command)
 
+    verify_resource_secret(secret_name, required=True, namespace=namespace)
+
+    deploy(test_repo,
+           deploy_name,
+           namespace="oda-staging",
+           local=False,
+           run_tests=False,
+           check_live=False,
+           registry=docker_registry)
+
+    def subprocess_cmd(command):
+        process = sp.Popen(command, stdout=sp.PIPE, shell=True)
+        proc_stdout = process.communicate()[0].strip()
+        return proc_stdout.decode().split('\n')
+
+    # Check if pod is running, find running pod name
+    running_pods = subprocess_cmd(
+        f"kubectl get pods -n {namespace} | grep {deploy_name}-backend" + " |  awk '$3==\"Running\" {print $1}'"
+    )
+    assert len(running_pods) > 0, 'No running pods found'
+
+    # Check that environment variables are initialised inside the pod
+    variables = subprocess_cmd(
+        f"kubectl exec {running_pods[0]} -n {namespace} -- env  |  grep CRBEAM_S3_CREDENTIALS | grep {credentials['secret_key']}"
+    )
+    assert len(variables) == 2  #  s3test repo defines 2 environment variables: CRBEAM_S3_CREDENTIALS and CRBEAM_S3_CREDENTIALS2

@@ -9,16 +9,14 @@ import subprocess as sp
 import tempfile
 import time
 import yaml
-from nb2workflow.logging_setup import setup_logging
-from nb2workflow import version
+from .logging_setup import setup_logging
+from . import version
 from datetime import datetime, timezone
 from textwrap import dedent
 import uuid
 from kubernetes import client, config
 import glob
 import rdflib
-from rdflib.namespace import RDF
-from collections import defaultdict
 
 logger = logging.getLogger(__name__)
 
@@ -307,13 +305,10 @@ def _extract_resource_requirements(local_repo_path):
     from nb2workflow.nbadapter import NotebookAdapter
     # TODO: replace with master version when PR is approved
     ontology_URL = "https://raw.githubusercontent.com/oda-hub/ontology/storage_resource_annotations/ontology.ttl"
+    # ontology = Ontology(ontology_URL)
     sp.check_call([
         "wget",
         ontology_URL
-    ])
-    sp.check_call([
-        "ls",
-        "ontology.ttl"
     ])
     ontology = Ontology("ontology.ttl")
 
