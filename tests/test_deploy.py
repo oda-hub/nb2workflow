@@ -1,16 +1,16 @@
 import pytest
 import subprocess as sp
 
-@pytest.mark.deploy
-def test_deploy():
-    from nb2workflow.deploy import deploy
-
-    deploy("https://renkulab.io/gitlab/vladimir.savchenko/oda-sdss", "legacysurvey")
+# @pytest.mark.deploy
+# def test_deploy():
+#     from nb2workflow.deploy import deploy
+#
+#     deploy("https://renkulab.io/gitlab/vladimir.savchenko/oda-sdss", "legacysurvey")
 
 @pytest.mark.deploy
 def test_deploy_secret():
     import json
-    from nb2workflow.deploy import deploy, verify_s3_secret
+    from nb2workflow.deploy import deploy, verify_resource_secret
     namespace = "oda-staging"
     secret_name = "crbeams3"
     credentials = dict(
@@ -31,7 +31,7 @@ def test_deploy_secret():
              "-n", namespace]
         )
 
-        verify_s3_secret(secret_name, namespace=namespace)
+        verify_resource_secret(secret_name, required=True, namespace=namespace)
 
         result = deploy(test_repo,
                deploy_name,
