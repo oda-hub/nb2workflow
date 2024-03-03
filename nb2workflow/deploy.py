@@ -604,7 +604,7 @@ def deploy(git_origin,
                                      check_live_through=check_live_through)
         return deployment_info
 
-se
+
 def main():
     parser = argparse.ArgumentParser(description='')
     parser.add_argument('repository', metavar='repository', type=str)
