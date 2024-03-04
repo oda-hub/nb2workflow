@@ -78,7 +78,7 @@ def test_service(client):
 
     html_output = r.data.decode()
     assert "celltag_injected-gather-outputs" not in html_output
-    assert "Internal server error" not in html_output
+    assert "<title>500 Internal Server Error</title>" not in html_output
 
 
 def test_service_repo(client):
