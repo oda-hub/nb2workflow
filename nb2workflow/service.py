@@ -9,6 +9,7 @@ try:
 except ImportError:
     from werkzeug.routing import MethodNotAllowed, NotFound
 
+
 import queue
 from nb2workflow import ontology, publish, schedule
 from nb2workflow.nbadapter import NotebookAdapter, find_notebooks, PapermillWorkflowIncomplete
@@ -28,6 +29,7 @@ import nbformat
 import yaml
 
 from io import BytesIO
+from bs4 import BeautifulSoup
 
 
 from flask import Flask, make_response, jsonify, request, url_for, send_file, Response
@@ -830,12 +832,23 @@ def trace_get_func(job, func):
     if func == "custom.css":
         return ""
 
+    include_glued_output = request.args.get('include_glued_output', True) == 'True'
+
     from nbconvert.exporters import HTMLExporter
     exporter = HTMLExporter()
 
     fn = os.path.join(tempfile.gettempdir(), job, func+"_output.ipynb")
 
     output, resources = exporter.from_filename(fn)
+
+    if not include_glued_output:
+        logger.info("include_glued_output arg passed")
+        soup = BeautifulSoup(output, 'html.parser')
+        soup.find('div', {'class': 'celltag_injected-gather-outputs'})
+        if soup is not None:
+            soup.decompose()
+        output = str(soup)
+        logger.info("div element removed form html")
 
     return output
 
