@@ -17,6 +17,8 @@ import uuid
 from kubernetes import client, config
 import glob
 import rdflib
+from oda_api.ontology_helper import Ontology
+from nb2workflow.nbadapter import NotebookAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -301,14 +303,11 @@ def _build_with_kaniko(git_origin,
 
 
 def _extract_resource_requirements(local_repo_path):
-    from oda_api.ontology_helper import Ontology
-    from nb2workflow.nbadapter import NotebookAdapter
     # TODO: replace with master version when PR is approved
     ontology_URL = "https://raw.githubusercontent.com/oda-hub/ontology/storage_resource_annotations/ontology.ttl"
     # ontology = Ontology(ontology_URL)
     sp.check_call([
-        "wget",
-        ontology_URL
+        "wget", ontology_URL, "-O", "ontology.ttl"
     ])
     ontology = Ontology("ontology.ttl")
 
@@ -447,7 +446,7 @@ def verify_resource_secret(name, required, namespace="oda-staging"):
             return True
     message = f"No secrets defined for {name}"
     if required:
-        raise FileNotFoundError(message)
+        raise RuntimeError(message)
     else:
         logger.warning(message)
 
@@ -585,7 +584,7 @@ def deploy(git_origin,
             for env in resource['env_vars']:
                 env_val = os.getenv(env)
                 if env_val:
-                    env_params += ["-e", f"{env}={env_val}"]
+                    env_params += ["-e", env]
                 elif resource['required']:
                     raise RuntimeError(f'Required environment variable {env} is missing')
 
