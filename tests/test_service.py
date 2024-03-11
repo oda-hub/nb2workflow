@@ -58,13 +58,27 @@ def test_service(client):
         logger.info(l)
 
     job = r.json[-1]['fn'].split("/")[-1]
-    
+    logger.info("job %s", job)
+
     r=client.get('/trace/'+job)
 
-    logger.info("job %s", r.json)
+    logger.info("r.json %s", r.json)
+    print("r.json ", r.json)
 
 #    open("output.png","wb").write(base64.b64decode(r.json['output']['spectrum_png_content']))
+    service_name = r.json[0].split("/")[-1].replace('_output.ipynb', '')
+    r = client.get(os.path.join('trace', job, service_name),
+                   query_string=dict(include_glued_output=True))
 
+    html_output = r.data.decode()
+    assert "celltag_injected-gather-outputs" in html_output
+
+    r = client.get(os.path.join('trace', job, service_name),
+                   query_string=dict(include_glued_output=False))
+
+    html_output = r.data.decode()
+    assert "celltag_injected-gather-outputs" not in html_output
+    assert "<title>500 Internal Server Error</title>" not in html_output
 
 
 def test_service_repo(client):

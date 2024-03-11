@@ -6,7 +6,7 @@ if {'pytest', 'test', 'ptr'}.intersection(sys.argv):
     setup_requires.append('pytest-runner')
 
 setup(name='nb2workflow',
-      version = '1.3.65',
+      version = '1.3.67',
       description='convert notebook to workflow',
       author='Volodymyr Savchenko',
       author_email='contact@volodymyrsavchenko.com',
@@ -40,6 +40,7 @@ setup(name='nb2workflow',
             'flasgger',
             'python-consul',
             'apscheduler',
+            'beautifulsoup4'
         ],
         "rdf":[
             'rdflib',
