@@ -611,7 +611,10 @@ def to_galaxy(input_path,
                     test_par_root.append(ET.Element('param', name=galaxy_par.name, value=value))
                 else:
                     test_par_root.append(ET.Element('param', name=galaxy_par.name, location=location))
-
+                # TODO: following discussion with Bjorn, probably good to adopt the logic: 
+                #       if test data is small <1MB we can always put it in the tool-data dir
+                #       as long as remote test data have some drawbacks (maybe not really?)
+                
         for outv in outputs.values():
             outp = GalaxyOutput.from_inspect(outv, ontology_path=ontology_path, dprod=nb_name)
             outp_tree = outp.to_xml_tree()
@@ -666,6 +669,7 @@ def main():
     parser.add_argument('--citations_bibfile', required=False)
     parser.add_argument('--help_file', required=False)
     parser.add_argument('--test_data_baseurl', required=False)
+    parser.add_argument('--conda_channels', required=False, default='default,conda-forge')
     args = parser.parse_args()
     
     input_nb = args.notebook
@@ -680,6 +684,8 @@ def main():
     bibfile = args.citations_bibfile
     help_file = args.help_file
     test_data_baseurl = args.test_data_baseurl
+    available_channels = args.conda_channels.split(',')
+    
     
     os.makedirs(output_dir, exist_ok=True)
     to_galaxy(input_nb, 
@@ -691,7 +697,8 @@ def main():
               citations_bibfile=bibfile,
               help_file=help_file,
               ontology_path=ontology_path,
-              test_data_baseurl=test_data_baseurl)
+              test_data_baseurl=test_data_baseurl,
+              available_channels=available_channels)
 
 if __name__ == '__main__':
     main()
