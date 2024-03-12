@@ -42,7 +42,10 @@ def test_deploy_secret():
            local=False,
            run_tests=False,
            check_live=False,
-           registry=docker_registry)
+           registry=docker_registry,
+           # TODO: remove the line below when ontology PR is approved
+           ontology_URL="https://raw.githubusercontent.com/oda-hub/ontology/storage_resource_annotations/ontology.ttl"
+           )
 
     def subprocess_cmd(command):
         process = sp.Popen(command, stdout=sp.PIPE, shell=True)
