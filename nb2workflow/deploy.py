@@ -310,11 +310,10 @@ def _build_with_kaniko(git_origin,
 
 def _extract_resource_requirements(local_repo_path, ontology_path=default_ontology_path):
     ontology = Ontology(ontology_path)
-
-    local_repo_path = str(local_repo_path)
     resources = {}
 
-    for nb_file in glob.glob(local_repo_path + '/**/*.ipynb', recursive=True):
+    search_pattern = os.path.join(local_repo_path,'**/*.ipynb')
+    for nb_file in glob.glob(search_pattern, recursive=True):
         nba = NotebookAdapter(nb_file)
         g = rdflib.Graph()
         g.parse(data=nba.extra_ttl)
