@@ -1,5 +1,6 @@
 import pytest
 import subprocess as sp
+import os
 
 @pytest.mark.deploy
 def test_deploy():
@@ -7,10 +8,29 @@ def test_deploy():
 
     deploy("https://renkulab.io/gitlab/vladimir.savchenko/oda-sdss", "legacysurvey")
 
+
+def test_extract_resource_requirements(temp_dir, ontology_path):
+    from nb2workflow.deploy import _extract_resource_requirements
+    test_repo = "https://github.com/okolo/s3test.git"
+    sp.check_call(
+            ["git", "clone", test_repo, "nb-repo"],
+            cwd=temp_dir)
+    local_repo_path = os.path.join(temp_dir, "nb-repo")
+    resources = _extract_resource_requirements(local_repo_path, ontology_path=ontology_path)
+    expected_resources = {
+        'crbeams3': {
+            'resource': 'CRBeamS3',
+            'required': True,
+            'env_vars': {'CRBEAM_S3_CREDENTIALS2', 'CRBEAM_S3_CREDENTIALS'}
+        }
+    }
+    assert expected_resources == resources
+
+
 @pytest.mark.deploy
-def test_deploy_secret():
+def test_deploy_secret(ontology_path):
     import json
-    from nb2workflow.deploy import deploy, verify_resource_secret
+    from nb2workflow.deploy import deploy, verify_resource_secret, _extract_resource_requirements
     namespace = "oda-staging"
     secret_name = "crbeams3"
     credentials = dict(
@@ -43,8 +63,7 @@ def test_deploy_secret():
            run_tests=False,
            check_live=False,
            registry=docker_registry,
-           # TODO: remove the line below when ontology PR is approved
-           ontology_URL="https://raw.githubusercontent.com/oda-hub/ontology/storage_resource_annotations/ontology.ttl"
+           ontology_path=ontology_path
            )
 
     def subprocess_cmd(command):

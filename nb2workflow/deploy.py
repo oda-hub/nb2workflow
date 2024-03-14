@@ -30,7 +30,7 @@ default_config = {
     "filename_pattern": '.*', 
 }
 
-default_ontology_URL = "https://odahub.io/ontology/ontology.ttl"
+default_ontology_path = "https://odahub.io/ontology/ontology.ttl"
 
 #TODO: probably want an option to really use the dir
 def determine_origin(repo):
@@ -67,7 +67,7 @@ def build_container(git_origin,
                     engine="docker",
                     cleanup=False,
                     nb2wversion=version(),
-                    ontology_URL=default_ontology_URL,
+                    ontology_path=default_ontology_path,
                     **kwargs):
     if engine == "docker":
         return _build_with_docker(git_origin=git_origin,
@@ -76,7 +76,7 @@ def build_container(git_origin,
                                  registry=registry,
                                  build_timestamp=build_timestamp,
                                  nb2wversion=nb2wversion,
-                                 ontology_URL=ontology_URL)
+                                 ontology_path=ontology_path)
     elif engine == 'kaniko':
         if run_tests == True:
             logger.warning("KANIKO builder doesn't support run_tests . Will switch off")
@@ -86,7 +86,7 @@ def build_container(git_origin,
                                  build_timestamp=build_timestamp,
                                  namespace=kwargs['namespace'],
                                  nb2wversion=nb2wversion,
-                                 ontology_URL=ontology_URL
+                                 ontology_path=ontology_path
                                  )
     else:
         return NotImplementedError('Unknown container build engine: %s', engine)
@@ -192,7 +192,7 @@ def _build_with_kaniko(git_origin,
                       namespace="oda-staging",
                       cleanup=True,
                       nb2wversion=version(),
-                      ontology_URL=default_ontology_URL):
+                      ontology_path=default_ontology_path):
     
     #secret should be created beforehand https://github.com/GoogleContainerTools/kaniko#pushing-to-docker-hub
        
@@ -202,7 +202,7 @@ def _build_with_kaniko(git_origin,
                                             dry_run=True,
                                             source_from='git',
                                             nb2wversion=nb2wversion,
-                                            ontology_URL=ontology_URL)
+                                            ontology_path=ontology_path)
     
     dockerfile_content = container_metadata['dockerfile_content']
     
@@ -308,11 +308,8 @@ def _build_with_kaniko(git_origin,
         return container_metadata
 
 
-def _extract_resource_requirements(local_repo_path, ontology_URL=default_ontology_URL):
-    sp.check_call([
-        "wget", ontology_URL, "-O", "ontology.ttl"
-    ])
-    ontology = Ontology("ontology.ttl")
+def _extract_resource_requirements(local_repo_path, ontology_path=default_ontology_path):
+    ontology = Ontology(ontology_path)
 
     local_repo_path = str(local_repo_path)
     resources = {}
@@ -341,7 +338,7 @@ def _build_with_docker(git_origin,
                     source_from='localdir',
                     cleanup=False,
                     nb2wversion=version(),
-                    ontology_URL=default_ontology_URL):
+                    ontology_path=default_ontology_path):
     if cleanup:
         logger.warning('Post-build cleanup is not implemented for docker builds')
     
@@ -367,7 +364,7 @@ def _build_with_docker(git_origin,
                                     ["git", "log", "-1", "--pretty=format:'%ai'"], # could use all authors too, but it's inside anyway
                                     cwd=local_repo_path ).decode().strip()
 
-        meta['resources'] = _extract_resource_requirements(local_repo_path, ontology_URL)
+        meta['resources'] = _extract_resource_requirements(local_repo_path, ontology_path)
 
         dockerfile_content = _nb2w_dockerfile_gen(tmpdir, git_origin, source_from, meta, nb2wversion)
 
@@ -571,7 +568,7 @@ def deploy(git_origin,
            build_timestamp=False,
            cleanup=False,
            nb2wversion=version(),
-           ontology_URL=default_ontology_URL):
+           ontology_path=default_ontology_path):
     
     container = build_container(git_origin,
                                 local=local, 
@@ -582,7 +579,7 @@ def deploy(git_origin,
                                 build_timestamp=build_timestamp,
                                 cleanup=cleanup,
                                 nb2wversion=nb2wversion,
-                                ontology_URL=ontology_URL)
+                                ontology_path=ontology_path)
     
     if local:
         env_params = []
@@ -613,7 +610,7 @@ def main():
     parser.add_argument('--local', action="store_true", default=False)
     parser.add_argument('--build-engine', metavar="build_engine", default="docker")
     parser.add_argument('--nb2wversion', metavar="nb2wversion", default=version())
-    parser.add_argument('--ontology_URL', metavar="ontology_URL", default=default_ontology_URL)
+    parser.add_argument('--ontology_path', metavar="ontology_path", default=default_ontology_path)
     
     args = parser.parse_args()
 
@@ -625,7 +622,7 @@ def main():
            local=args.local, 
            build_engine=args.build_engine, 
            nb2wversion=args.nb2wversion,
-           ontology_URL=args.ontology_URL)
+           ontology_path=args.ontology_path)
 
 
 if __name__ == "__main__":

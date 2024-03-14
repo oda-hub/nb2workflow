@@ -5,6 +5,7 @@ import pytest
 import signal
 import psutil
 import subprocess
+import tempfile
 
 import nb2workflow.service
 
@@ -62,6 +63,19 @@ def kill_child_processes(parent_pid, sig=signal.SIGTERM):
     except psutil.NoSuchProcess:
         return
 
+
+@pytest.fixture(scope="module")
+def temp_dir(request):
+    with tempfile.TemporaryDirectory() as tmpdir:
+        yield tmpdir
+
+
+@pytest.fixture(scope="module")
+def ontology_path(temp_dir):
+    ontology_url = "https://raw.githubusercontent.com/oda-hub/ontology/main/ontology.ttl"
+    ontology_path = os.path.join(temp_dir, "ontology.ttl")
+    subprocess.check_call(["wget", ontology_url, "-O", ontology_path])
+    yield ontology_path
 
 @pytest.fixture
 def service_fixture(pytestconfig, test_notebook_repo):
