@@ -610,7 +610,7 @@ def main():
     parser.add_argument('--local', action="store_true", default=False)
     parser.add_argument('--build-engine', metavar="build_engine", default="docker")
     parser.add_argument('--nb2wversion', metavar="nb2wversion", default=version())
-    parser.add_argument('--ontology_path', metavar="ontology_path", default=default_ontology_path)
+    parser.add_argument('--ontology-path', metavar="ontology_path", default=default_ontology_path)
     
     args = parser.parse_args()
 
