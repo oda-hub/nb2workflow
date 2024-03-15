@@ -406,6 +406,9 @@ class Requirements:
                 
     def _resolve_environment_yml(self):
         
+        with open(self.fullenv_file_path) as fd:
+            logger.info(f'Will resolve environment:\n\n{fd.read()}')
+        
         run_command = [str(self.micromamba),
                     'env', 'create',
                     '-n', '__temp_env_name',
