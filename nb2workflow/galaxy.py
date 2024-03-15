@@ -63,8 +63,9 @@ class GalaxyParameter:
         if _dataset_term in ontology_parameter_hierarchy:
             partype = 'data'
             self.test_data_path = default_value
+            # TODO: actual formats after implementing in ontology
+            self.data_format = 'data'
             default_value = None
-            # TODO: dataset type when in ontology
         
         self.name = name
         self.partype = partype
@@ -123,7 +124,10 @@ class GalaxyParameter:
             attrs['max'] = str(self.max_value)
         
         if self.additional_attrs is not None:
-            attrs.update(self.additional_attrs)            
+            attrs.update(self.additional_attrs)
+            
+        if getattr(self, 'data_format', None) is not None:
+            attrs.update(self.data_format)
         
         element = ET.Element('param',
                              **attrs)
