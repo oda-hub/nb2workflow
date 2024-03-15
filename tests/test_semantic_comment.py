@@ -15,7 +15,13 @@ def normalize(x):
 
 def test_semantic_comments():
 
-    nb_uri = rdflib.URIRef("http://mynb")    
+    nb_uri = rdflib.URIRef("http://mynb")
+
+    r = understand_comment_references("oda:CRBeamS3 a oda:S3 .", base_uri=nb_uri)
+    assert r['owl_type'] == str(nb_uri)
+
+    r = understand_comment_references('oda:CRBeamS3 oda:resourceBindingEnvVarName "CRBEAM_S3_CREDENTIALS" .', base_uri=nb_uri)
+    assert r['owl_type'] == str(nb_uri)
 
     r = understand_comment_references("http://odahub.io/ontology#StartTimeISOT")
     assert r['owl_type'] == "http://odahub.io/ontology#StartTimeISOT"
