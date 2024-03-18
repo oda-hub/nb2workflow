@@ -122,13 +122,13 @@ class GalaxyParameter:
             attrs['min'] = str(self.min_value)
         if self.max_value is not None:
             attrs['max'] = str(self.max_value)
-        
+
+        if getattr(self, 'data_format', None) is not None:
+            attrs['data-format'] = self.data_format
+            
         if self.additional_attrs is not None:
             attrs.update(self.additional_attrs)
-            
-        if getattr(self, 'data_format', None) is not None:
-            attrs.update(self.data_format)
-        
+                    
         element = ET.Element('param',
                              **attrs)
         
