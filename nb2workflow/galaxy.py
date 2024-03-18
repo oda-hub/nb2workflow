@@ -124,7 +124,7 @@ class GalaxyParameter:
             attrs['max'] = str(self.max_value)
 
         if getattr(self, 'data_format', None) is not None:
-            attrs['data-format'] = self.data_format
+            attrs['format'] = self.data_format
             
         if self.additional_attrs is not None:
             attrs.update(self.additional_attrs)
