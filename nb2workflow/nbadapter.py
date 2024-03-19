@@ -333,27 +333,89 @@ class NotebookAdapter:
     def nb_uri(self):
         return rdflib.URIRef(f"http://odahub.io/ontology#{self.unique_name}")
 
+    @staticmethod
+    def reconcile_python_type(value, type_annotation=None):
+        # TODO: optionally use ontology to reconcile type with owl_uri
+        if type_annotation is not None:
+            try:
+                python_type = getattr(builtins, type_annotation)
+            except AttributeError:
+                raise NotImplementedError(f"Type annotation '{type_annotation}' is not supported. Skipping")
+                python_type = type(value)
+        else:
+            python_type = type(value)
 
+        if python_type(value) != value:
+            raise ValueError(f"The value '{value}' doesn't match type annotation {type_annotation}")
+        
+        return python_type    
+    
+    @staticmethod
+    def pop_comment_by_line(comments, l):
+        res = None
+        for i, x in enumerate(comments):
+            if x.start[0]==l:
+                res = comments.pop(i)
+                break
+        return res.string[1:]
+    
     def extract_parameters_from_cell(self, cell, G):
         parameters = {}
-
         
-        
-        for line in cell['source'].split("\n"):
-            par = InputParameter.from_nbline(line)
-            if par is not None:
-                parameters[par.name] = par.as_dict()
-                parameters[par.name]['value'] = par.as_dict()['default_value']
+        tokens = generate_tokens(io.StringIO(cell['source']).readline)
+        comments = []
+        for token in tokens:
+            if token.type == COMMENT:
+                comments.append(token)
+           
+        parsed = ast.parse(cell['source'])        
+        for node in parsed.body:
+            node_code = "\n".join(cell['source'].split('\n')[node.lineno:node.end_lineno + 1])
+            if isinstance(node, ast.Assign):
+                if len(node.targets) != 1:
+                    raise NotImplementedError(f'Only simple assignment is supported:\n{node_code}')
+                varname = node.targets[0].id
+                type_annotation = None
+            elif isinstance(node, ast.AnnAssign):
+                varname = node.target.id
+                type_annotation = node.annotation.id
             else:
-                p = parse_nbline(line, nb_uri=self.nb_uri)
-                if p is not None:
-                    try:
-                        G.parse(data=p['extra_ttl'])
-                    except Exception as e:
-                        logger.warning("not a turtle: %s", p['extra_ttl'])
+                logger.info(f"Skipping {node}")
+                return
+            
+            value_node = node.value
+            value = ast.literal_eval(value_node)
+            python_type = self.reconcile_python_type(value, type_annotation=type_annotation)
+                        
+            fallback_type = odahub_type_for_python_type(python_type)
+            for line in range(node.lineno, node.end_lineno+1):
+                if line != node.end_lineno:
+                    self.pop_comment_by_line(comments, line)
+                    continue
+                parsed_comment = understand_comment_references(self.pop_comment_by_line(comments, line),
+                                                               fallback_type=fallback_type)
+            
+            par = InputParameter(raw_line = node_code,
+                                 name = varname,
+                                 default_value = value,
+                                 python_type = python_type,
+                                 comment = token.string.strip('#'),
+                                 owl_type = parsed_comment['owl_type'],
+                                 extra_ttl = parsed_comment['extra_ttl'])
+            parameters[par.name] = par.as_dict()
+            parameters[par.name]['value'] = par.as_dict()['default_value']
+        
+        # now parse fullline comments
+        for comment in comments:
+            cstring = comment.string[1:]
+            p = understand_comment_references(cstring, base_uri=self.nb_uri)
+            if p is not None:
+                try:
+                    G.parse(data=p['extra_ttl'])
+                except Exception as e:
+                    logger.warning("not a turtle: %s", p['extra_ttl'])                
 
         return parameters
-
 
     def extract_parameters(self):
         nb = self.read()
