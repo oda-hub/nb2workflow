@@ -351,13 +351,12 @@ class NotebookAdapter:
         return python_type    
     
     @staticmethod
-    def pop_comment_by_line(comments, l):
-        res = None
-        for i, x in enumerate(comments):
+    def _pop_comment_by_line(comment_tokens, l):
+        for i, x in enumerate(comment_tokens):
             if x.start[0]==l:
-                res = comments.pop(i)
-                break
-        return res.string[1:]
+                res = comment_tokens.pop(i)
+                return res.string[1:]
+        return ''
     
     def extract_parameters_from_cell(self, cell, G):
         parameters = {}
@@ -389,10 +388,11 @@ class NotebookAdapter:
                         
             fallback_type = odahub_type_for_python_type(python_type)
             for line in range(node.lineno, node.end_lineno+1):
+                comment = self._pop_comment_by_line(comments, line)
+                # annotation must be after definition
                 if line != node.end_lineno:
-                    self.pop_comment_by_line(comments, line)
                     continue
-                parsed_comment = understand_comment_references(self.pop_comment_by_line(comments, line),
+                parsed_comment = understand_comment_references(comment,
                                                                fallback_type=fallback_type)
             
             par = InputParameter(raw_line = node_code,
