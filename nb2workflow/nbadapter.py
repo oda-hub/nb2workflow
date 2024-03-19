@@ -1,4 +1,5 @@
-from ast import literal_eval
+import ast
+from dataclasses import dataclass
 import hashlib
 import os
 import sys
@@ -22,6 +23,7 @@ import validators
 import requests
 import random
 import string
+from typing import Any
 
 import papermill as pm
 import scrapbook as sb
@@ -122,7 +124,7 @@ def parse_nbline(line: str, nb_uri=None) -> Optional[dict]:
             value_str = None
 
         try:
-            value = literal_eval(value_str)
+            value = ast.literal_eval(value_str)
             python_type = type(value)
         except Exception:
             value = value_str
@@ -194,14 +196,15 @@ def owl_type_for_python_type(python_type: type):
 
     return output_url
 
+@dataclass
 class InputParameter:
-    raw_line=None 
-    name=None
-    default_value=None
-    python_type=None
-    comment=None
-    owl_type=None
-    extra_ttl=None
+    raw_line: str
+    name: str
+    default_value: Any
+    python_type: type
+    comment: str
+    owl_type: str
+    extra_ttl: str
 
     @classmethod
     def from_nbline(cls,line):
