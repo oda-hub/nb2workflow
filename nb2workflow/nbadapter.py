@@ -1,9 +1,13 @@
-from ast import literal_eval
+import ast
+import builtins
+
+from dataclasses import dataclass, asdict
 import hashlib
 import os
 import sys
 import glob
 import shutil
+from tokenize import generate_tokens, COMMENT, STRING
 from typing import Optional, Dict
 import uuid
 import yaml 
@@ -22,6 +26,8 @@ import validators
 import requests
 import random
 import string
+from typing import Any, Optional
+import io
 
 import papermill as pm
 import scrapbook as sb
@@ -122,7 +128,7 @@ def parse_nbline(line: str, nb_uri=None) -> Optional[dict]:
             value_str = None
 
         try:
-            value = literal_eval(value_str)
+            value = ast.literal_eval(value_str)
             python_type = type(value)
         except Exception:
             value = value_str
@@ -194,14 +200,15 @@ def owl_type_for_python_type(python_type: type):
 
     return output_url
 
+@dataclass
 class InputParameter:
-    raw_line=None 
-    name=None
-    default_value=None
-    python_type=None
-    comment=None
-    owl_type=None
-    extra_ttl=None
+    raw_line: str
+    name: str
+    default_value: Any
+    python_type: type
+    comment: str
+    owl_type: Optional[str] = None
+    extra_ttl: Optional[str] = None
 
     @classmethod
     def from_nbline(cls,line):
@@ -210,15 +217,15 @@ class InputParameter:
             return None
 
         else:
-            obj = cls()
-
-            obj.raw_line = line            
-            obj.name = parsed_nbline['name']
-            obj.default_value = parsed_nbline['value']
-            obj.python_type = parsed_nbline['python_type']
-            obj.comment = parsed_nbline['comment']
-            obj.owl_type = parsed_nbline['owl_type']
-            obj.extra_ttl = parsed_nbline['extra_ttl']
+            obj = cls(
+                raw_line = line,            
+                name = parsed_nbline['name'],
+                default_value = parsed_nbline['value'],
+                python_type = parsed_nbline['python_type'],
+                comment = parsed_nbline['comment'],
+                owl_type = parsed_nbline['owl_type'],
+                extra_ttl = parsed_nbline['extra_ttl']
+            )
             
             logger.info("interpreted %s %s %s comment: %s",
                     obj.name,
@@ -229,21 +236,10 @@ class InputParameter:
                 obj.owl_type = "http://www.w3.org/2001/XMLSchema#" + obj.python_type.__name__ # also use this if already defined
 
             return obj
-    
-        
 
     def as_dict(self):
-        return dict(
-                    default_value=self.default_value,
-                    python_type=self.python_type,
-                    name=self.name,
-                    comment=self.comment,
-                    owl_type=self.owl_type,
-                    extra_ttl=self.extra_ttl
-                )
-
-
-
+        return asdict(self)
+        
 
 class NotebookAdapter:
     limit_output_attachment_file = None
@@ -337,25 +333,89 @@ class NotebookAdapter:
     def nb_uri(self):
         return rdflib.URIRef(f"http://odahub.io/ontology#{self.unique_name}")
 
+    @staticmethod
+    def reconcile_python_type(value, type_annotation=None):
+        # TODO: optionally use ontology to reconcile type with owl_uri
+        if type_annotation is not None:
+            try:
+                python_type = getattr(builtins, type_annotation)
+            except AttributeError:
+                raise NotImplementedError(f"Type annotation '{type_annotation}' is not supported. Skipping")
+                python_type = type(value)
+        else:
+            python_type = type(value)
 
+        if python_type(value) != value:
+            raise ValueError(f"The value '{value}' doesn't match type annotation {type_annotation}")
+        
+        return python_type    
+    
+    @staticmethod
+    def _pop_comment_by_line(comment_tokens, l):
+        for i, x in enumerate(comment_tokens):
+            if x.start[0]==l:
+                res = comment_tokens.pop(i)
+                return res.string[1:]
+        return ''
+    
     def extract_parameters_from_cell(self, cell, G):
         parameters = {}
-
-        for line in cell['source'].split("\n"):
-            par = InputParameter.from_nbline(line)
-            if par is not None:
-                parameters[par.name] = par.as_dict()
-                parameters[par.name]['value'] = par.as_dict()['default_value']
+        
+        tokens = generate_tokens(io.StringIO(cell['source']).readline)
+        comments = []
+        for token in tokens:
+            if token.type == COMMENT:
+                comments.append(token)
+           
+        parsed = ast.parse(cell['source'])        
+        for node in parsed.body:
+            node_code = "\n".join(cell['source'].split('\n')[node.lineno:node.end_lineno + 1])
+            if isinstance(node, ast.Assign):
+                if len(node.targets) != 1:
+                    raise NotImplementedError(f'Only simple assignment is supported:\n{node_code}')
+                varname = node.targets[0].id
+                type_annotation = None
+            elif isinstance(node, ast.AnnAssign):
+                varname = node.target.id
+                type_annotation = node.annotation.id
             else:
-                p = parse_nbline(line, nb_uri=self.nb_uri)
-                if p is not None:
-                    try:
-                        G.parse(data=p['extra_ttl'])
-                    except Exception as e:
-                        logger.warning("not a turtle: %s", p['extra_ttl'])
+                logger.info(f"Skipping {node}")
+                return
+            
+            value_node = node.value
+            value = ast.literal_eval(value_node)
+            python_type = self.reconcile_python_type(value, type_annotation=type_annotation)
+                        
+            fallback_type = odahub_type_for_python_type(python_type)
+            for line in range(node.lineno, node.end_lineno+1):
+                comment = self._pop_comment_by_line(comments, line)
+                # annotation must be after definition
+                if line != node.end_lineno:
+                    continue
+                parsed_comment = understand_comment_references(comment,
+                                                               fallback_type=fallback_type)
+            
+            par = InputParameter(raw_line = node_code,
+                                 name = varname,
+                                 default_value = value,
+                                 python_type = python_type,
+                                 comment = token.string.strip('#'),
+                                 owl_type = parsed_comment['owl_type'],
+                                 extra_ttl = parsed_comment['extra_ttl'])
+            parameters[par.name] = par.as_dict()
+            parameters[par.name]['value'] = par.as_dict()['default_value']
+        
+        # now parse fullline comments
+        for comment in comments:
+            cstring = comment.string[1:]
+            p = understand_comment_references(cstring, base_uri=self.nb_uri)
+            if p is not None:
+                try:
+                    G.parse(data=p['extra_ttl'])
+                except Exception as e:
+                    logger.warning("not a turtle: %s", p['extra_ttl'])                
 
         return parameters
-
 
     def extract_parameters(self):
         nb = self.read()
