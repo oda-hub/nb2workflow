@@ -1,7 +1,7 @@
 import ast
 import builtins
 
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 import hashlib
 import os
 import sys
@@ -237,6 +237,9 @@ class InputParameter:
 
             return obj
 
+    def as_dict(self):
+        return asdict(self)
+        
 
 class NotebookAdapter:
     limit_output_attachment_file = None
@@ -339,8 +342,8 @@ class NotebookAdapter:
         for line in cell['source'].split("\n"):
             par = InputParameter.from_nbline(line)
             if par is not None:
-                parameters[par.name] = par.asdict()
-                parameters[par.name]['value'] = par.asdict()['default_value']
+                parameters[par.name] = par.as_dict()
+                parameters[par.name]['value'] = par.as_dict()['default_value']
             else:
                 p = parse_nbline(line, nb_uri=self.nb_uri)
                 if p is not None:
