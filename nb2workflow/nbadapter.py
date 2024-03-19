@@ -1,10 +1,13 @@
 import ast
+import builtins
+
 from dataclasses import dataclass
 import hashlib
 import os
 import sys
 import glob
 import shutil
+from tokenize import generate_tokens, COMMENT, STRING
 from typing import Optional, Dict
 import uuid
 import yaml 
@@ -23,7 +26,8 @@ import validators
 import requests
 import random
 import string
-from typing import Any
+from typing import Any, Optional
+import io
 
 import papermill as pm
 import scrapbook as sb
@@ -203,8 +207,8 @@ class InputParameter:
     default_value: Any
     python_type: type
     comment: str
-    owl_type: str | None = None
-    extra_ttl: str | None = None
+    owl_type: Optional[str] = None
+    extra_ttl: Optional[str] = None
 
     @classmethod
     def from_nbline(cls,line):
@@ -330,6 +334,8 @@ class NotebookAdapter:
     def extract_parameters_from_cell(self, cell, G):
         parameters = {}
 
+        
+        
         for line in cell['source'].split("\n"):
             par = InputParameter.from_nbline(line)
             if par is not None:
