@@ -203,8 +203,8 @@ class InputParameter:
     default_value: Any
     python_type: type
     comment: str
-    owl_type: str
-    extra_ttl: str
+    owl_type: str | None = None
+    extra_ttl: str | None = None
 
     @classmethod
     def from_nbline(cls,line):
@@ -213,15 +213,15 @@ class InputParameter:
             return None
 
         else:
-            obj = cls()
-
-            obj.raw_line = line            
-            obj.name = parsed_nbline['name']
-            obj.default_value = parsed_nbline['value']
-            obj.python_type = parsed_nbline['python_type']
-            obj.comment = parsed_nbline['comment']
-            obj.owl_type = parsed_nbline['owl_type']
-            obj.extra_ttl = parsed_nbline['extra_ttl']
+            obj = cls(
+                raw_line = line,            
+                name = parsed_nbline['name'],
+                default_value = parsed_nbline['value'],
+                python_type = parsed_nbline['python_type'],
+                comment = parsed_nbline['comment'],
+                owl_type = parsed_nbline['owl_type'],
+                extra_ttl = parsed_nbline['extra_ttl']
+            )
             
             logger.info("interpreted %s %s %s comment: %s",
                     obj.name,
@@ -232,20 +232,6 @@ class InputParameter:
                 obj.owl_type = "http://www.w3.org/2001/XMLSchema#" + obj.python_type.__name__ # also use this if already defined
 
             return obj
-    
-        
-
-    def as_dict(self):
-        return dict(
-                    default_value=self.default_value,
-                    python_type=self.python_type,
-                    name=self.name,
-                    comment=self.comment,
-                    owl_type=self.owl_type,
-                    extra_ttl=self.extra_ttl
-                )
-
-
 
 
 class NotebookAdapter:
@@ -347,8 +333,8 @@ class NotebookAdapter:
         for line in cell['source'].split("\n"):
             par = InputParameter.from_nbline(line)
             if par is not None:
-                parameters[par.name] = par.as_dict()
-                parameters[par.name]['value'] = par.as_dict()['default_value']
+                parameters[par.name] = par.asdict()
+                parameters[par.name]['value'] = par.asdict()['default_value']
             else:
                 p = parse_nbline(line, nb_uri=self.nb_uri)
                 if p is not None:
