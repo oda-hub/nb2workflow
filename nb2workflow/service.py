@@ -691,6 +691,7 @@ def main():
     parser.add_argument('--debug', action="store_true")
     parser.add_argument('--one-shot', metavar='workflow', type=str)
     parser.add_argument('--pattern', type=str, default=r'.*')
+    parser.add_argument('-conf_file', type=str, default=None)
 
     args = parser.parse_args()
 
@@ -735,6 +736,9 @@ def main():
     for worker_i in range(args.async_workers):
         async_worker = AsyncWorker('default-%i' % worker_i)
         async_worker.start()
+
+    conf_file = args.conf_file
+    conf = ConfigEnv.from_conf_file(conf_file, set_by=f'command line {__file__}:{__name__}')
 
     app.run(host=args.host, port=args.port)
 
