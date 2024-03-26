@@ -47,6 +47,7 @@ def understand_comment_references(comment, base_uri=None, fallback_type=None) ->
     parse_failures = []
 
     variations = [
+        f"{comment}",
         f"{base_uri.n3()} a {comment} .",
         f"{base_uri.n3()} {comment} .",
         f"{base_uri.n3()} a {comment}",

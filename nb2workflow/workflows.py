@@ -27,7 +27,7 @@ def serialize_workflow_exception(e):
                     evalue = e[0].evalue,
                     edump = e[1][0],
                 )
-    except TypeError:
+    except (TypeError, AttributeError):
         return dict(
                     ename = repr(e),
                     evalue = "",

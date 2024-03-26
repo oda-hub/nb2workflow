@@ -5,6 +5,8 @@ import pytest
 import signal
 import psutil
 import subprocess
+import tempfile
+import requests
 
 import nb2workflow.service
 
@@ -62,6 +64,35 @@ def kill_child_processes(parent_pid, sig=signal.SIGTERM):
     except psutil.NoSuchProcess:
         return
 
+
+def download_file(url, local_filename=None):
+    if local_filename is None:
+        local_filename = url.split('/')[-1]
+    # NOTE the stream=True parameter below
+    with requests.get(url, stream=True) as r:
+        r.raise_for_status()
+        with open(local_filename, 'wb') as f:
+            for chunk in r.iter_content(chunk_size=8192):
+                # If you have chunk encoded response uncomment if
+                # and set chunk_size parameter to None.
+                #if chunk:
+                f.write(chunk)
+    return local_filename
+
+
+@pytest.fixture(scope="module")
+def temp_dir(request):
+    with tempfile.TemporaryDirectory() as tmpdir:
+        yield tmpdir
+
+
+@pytest.fixture(scope="module")
+def ontology_path(temp_dir):
+    ontology_url = "https://raw.githubusercontent.com/oda-hub/ontology/main/ontology.ttl"
+    ontology_path = os.path.join(temp_dir, "ontology.ttl")
+    download_file(ontology_url, ontology_path)
+    # subprocess.check_call(["wget", ontology_url, "-O", ontology_path])
+    yield ontology_path
 
 @pytest.fixture
 def service_fixture(pytestconfig, test_notebook_repo):
