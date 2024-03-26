@@ -2,6 +2,7 @@
 import xml.etree.ElementTree as ET
 import os
 import re
+import shutil
 from textwrap import dedent
 import argparse
 import logging
@@ -61,8 +62,10 @@ class GalaxyParameter:
         
         if _dataset_term in ontology_parameter_hierarchy:
             partype = 'data'
+            self.test_data_path = default_value
+            # TODO: actual formats after implementing in ontology
+            self.data_format = 'data'
             default_value = None
-            # TODO: dataset type when in ontology
         
         self.name = name
         self.partype = partype
@@ -119,10 +122,13 @@ class GalaxyParameter:
             attrs['min'] = str(self.min_value)
         if self.max_value is not None:
             attrs['max'] = str(self.max_value)
-        
+
+        if getattr(self, 'data_format', None) is not None:
+            attrs['format'] = self.data_format
+            
         if self.additional_attrs is not None:
-            attrs.update(self.additional_attrs)            
-        
+            attrs.update(self.additional_attrs)
+                    
         element = ET.Element('param',
                              **attrs)
         
@@ -383,11 +389,14 @@ class Requirements:
                 else:
                     logger.warning(f'Dependency {req[0]} not found in conda channels.')
                     self._direct_dependencies.append((req[0], req[1], 2, req[3]))
-            
-        with open(self.fullenv_file_path, 'w') as fd:
-            yaml.dump(self.env_dict, fd)
-            
-        resolved_env = self._resolve_environment_yml()
+        
+        if self.env_dict["dependencies"]:
+            with open(self.fullenv_file_path, 'w') as fd:
+                yaml.dump(self.env_dict, fd)
+                
+            resolved_env = self._resolve_environment_yml()
+        else:
+            resolved_env = {}
         
         self.final_dependencies = {}
         for dep in self._direct_dependencies:
@@ -400,6 +409,9 @@ class Requirements:
                 
                 
     def _resolve_environment_yml(self):
+        
+        with open(self.fullenv_file_path) as fd:
+            logger.info(f'Will resolve environment:\n\n{fd.read()}')
         
         run_command = [str(self.micromamba),
                     'env', 'create',
@@ -498,6 +510,22 @@ def _read_help_file(filepath):
         NotImplementedError('Unknown help file extension.')
     return help_text
 
+def _test_data_location(repo_dir, tool_dir, default_value, base_url=None):
+    # assume default_value is always a relative path (the case in MMODA)
+    location = None
+    value = None
+    if base_url is None:
+        testdata = os.path.join(tool_dir, 'test-data')
+        os.makedirs(testdata, exist_ok=True)
+        filename = os.path.basename(default_value)
+        abspath = os.path.join(repo_dir, default_value)
+        shutil.copy(abspath, os.path.join(testdata, filename))
+        value = filename
+    else:
+        # TODO: support the case of nb not in repo root
+        location = os.path.join(base_url, default_value)
+    return value, location
+    
 def to_galaxy(input_path, 
               toolname, 
               out_dir, 
@@ -509,6 +537,7 @@ def to_galaxy(input_path,
               help_file = None,
               available_channels = ['default', 'conda-forge'],
               ontology_path = default_ontology_path,
+              test_data_baseurl = None
               ):
     
     os.makedirs(out_dir, exist_ok=True)
@@ -577,8 +606,22 @@ def to_galaxy(input_path,
         for pv in inputs.values():
             galaxy_par = GalaxyParameter.from_inspect(pv, ontology_path=ontology_path)
             when.append(galaxy_par.to_xml_tree())
-            test_par_root.append(ET.Element('param', name=galaxy_par.name, value=str(galaxy_par.default_value)))
-
+            if galaxy_par.partype != 'data':
+                test_par_root.append(ET.Element('param', name=galaxy_par.name, value=str(galaxy_par.default_value)))
+            else:
+                repo_dir = input_path if os.path.isdir(input_path) else os.path.dirname(os.path.realpath(input_path))
+                value, location = _test_data_location(repo_dir, 
+                                                      out_dir, 
+                                                      galaxy_par.test_data_path,
+                                                      test_data_baseurl)
+                if value:
+                    test_par_root.append(ET.Element('param', name=galaxy_par.name, value=value))
+                else:
+                    test_par_root.append(ET.Element('param', name=galaxy_par.name, location=location))
+                # TODO: following discussion with Bjorn, probably good to adopt the logic: 
+                #       if test data is small <1MB we can always put it in the tool-data dir
+                #       as long as remote test data have some drawbacks (maybe not really?)
+                
         for outv in outputs.values():
             outp = GalaxyOutput.from_inspect(outv, ontology_path=ontology_path, dprod=nb_name)
             outp_tree = outp.to_xml_tree()
@@ -632,6 +675,8 @@ def main():
     parser.add_argument('--ontology_path', required=False)
     parser.add_argument('--citations_bibfile', required=False)
     parser.add_argument('--help_file', required=False)
+    parser.add_argument('--test_data_baseurl', required=False)
+    parser.add_argument('--conda_channels', required=False, default='default,conda-forge')
     args = parser.parse_args()
     
     input_nb = args.notebook
@@ -645,6 +690,9 @@ def main():
         ontology_path = default_ontology_path
     bibfile = args.citations_bibfile
     help_file = args.help_file
+    test_data_baseurl = args.test_data_baseurl
+    available_channels = args.conda_channels.split(',')
+    
     
     os.makedirs(output_dir, exist_ok=True)
     to_galaxy(input_nb, 
@@ -655,7 +703,9 @@ def main():
               conda_environment_file=environment_yml,
               citations_bibfile=bibfile,
               help_file=help_file,
-              ontology_path=ontology_path)
+              ontology_path=ontology_path,
+              test_data_baseurl=test_data_baseurl,
+              available_channels=available_channels)
 
 if __name__ == '__main__':
     main()
