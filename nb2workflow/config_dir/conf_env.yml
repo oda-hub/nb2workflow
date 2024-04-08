@@ -1,0 +1,2 @@
+service:
+    max_download_size: 1000000000
