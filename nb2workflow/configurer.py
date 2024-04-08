@@ -20,13 +20,8 @@ class ConfigEnv(object):
         self.set_service_conf(max_download_size=max_download_size)
 
     @classmethod
-    def from_conf_file(cls, conf_file_path, set_by=None):
-
-        if conf_file_path is None:
-            conf_file_path = os.path.join(conf_dir, 'service_conf.yml')
-            logger.info(f"using conf file from default dir {conf_file_path}")
-        else:
-            logger.info(f"loading config from the file: {conf_file_path}")
+    def from_conf_file(cls, conf_file_path):
+        logger.info(f"loading config from the file: {conf_file_path}")
 
         with open(conf_file_path, 'r') as conf_file:
             cfg_dict = yaml.load(conf_file, Loader=yaml.SafeLoader)

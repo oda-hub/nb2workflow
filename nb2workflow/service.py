@@ -716,8 +716,12 @@ def main():
         handler.setLevel(logging.INFO)
 
     conf_file = args.conf_file
-    logger.info(f"loading config from {conf_file}")
-    conf = ConfigEnv.from_conf_file(conf_file, set_by=f'command line {__file__}:{__name__}')
+    if conf_file is None:
+        logger.info(f"using default conf file from default")
+        conf = ConfigEnv()
+    else:
+        conf = ConfigEnv.from_conf_file(conf_file)
+
     app.config['conf'] = conf
 
     app.notebook_adapters = find_notebooks(args.notebook, pattern=args.pattern)
