@@ -4,6 +4,7 @@ import re
 
 from werkzeug.routing import RequestRedirect
 
+
 try:
     from werkzeug.exceptions import MethodNotAllowed, NotFound
 except ImportError:
@@ -13,6 +14,7 @@ except ImportError:
 import queue
 from nb2workflow import ontology, publish, schedule
 from nb2workflow.nbadapter import NotebookAdapter, find_notebooks, PapermillWorkflowIncomplete
+from nb2workflow.configurer import ConfigEnv
 
 import os
 import json
@@ -713,6 +715,11 @@ def main():
         root.setLevel(logging.INFO)
         handler.setLevel(logging.INFO)
 
+    conf_file = args.conf_file
+    logger.info(f"loading config from {conf_file}")
+    conf = ConfigEnv.from_conf_file(conf_file, set_by=f'command line {__file__}:{__name__}')
+    app.config['conf'] = conf
+
     app.notebook_adapters = find_notebooks(args.notebook, pattern=args.pattern)
     setup_routes(app)
     app.service_semantic_signature = ontology.service_semantic_signature(
@@ -736,9 +743,6 @@ def main():
     for worker_i in range(args.async_workers):
         async_worker = AsyncWorker('default-%i' % worker_i)
         async_worker.start()
-
-    conf_file = args.conf_file
-    conf = ConfigEnv.from_conf_file(conf_file, set_by=f'command line {__file__}:{__name__}')
 
     app.run(host=args.host, port=args.port)
 
