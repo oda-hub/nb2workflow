@@ -717,7 +717,7 @@ def main():
 
     conf_file = args.conf_file
     if conf_file is None:
-        logger.info(f"using default conf file from default")
+        logger.info("using default conf file from default")
         conf = ConfigEnv()
     else:
         conf = ConfigEnv.from_conf_file(conf_file)
