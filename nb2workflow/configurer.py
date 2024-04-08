@@ -9,13 +9,15 @@ logger = logging.getLogger("conf")
 
 class ConfigEnv(object):
 
-    def __init__(self, cfg_dict):
-        self.cfg_dict = cfg_dict
-
-        if 'service' in self.cfg_dict.keys():
-            service_dict = cfg_dict['service']
-
-            self.set_service_conf(service_dict.get('max_download_size', 1000000000))
+    def __init__(self, cfg_dict=None):
+        if cfg_dict is None:
+            cfg_dict = {}
+        service_cfg_dict = cfg_dict.get('service', {})
+        if not service_cfg_dict:
+            max_download_size = 1000000000
+        else:
+            max_download_size = service_cfg_dict.get('max_download_size', 1000000000)
+        self.set_service_conf(max_download_size=max_download_size)
 
     @classmethod
     def from_conf_file(cls, conf_file_path, set_by=None):
