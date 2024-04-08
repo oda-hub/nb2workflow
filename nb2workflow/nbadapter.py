@@ -249,7 +249,7 @@ class NotebookAdapter:
     limit_output_attachment_file = None
 
 
-    def __init__(self, notebook_fn, tempdir_cache=None, n_download_max_tries=10, download_retry_sleep=.5):
+    def __init__(self, notebook_fn, tempdir_cache=None, n_download_max_tries=10, download_retry_sleep=.5, max_download_size=1e6):
         self.notebook_fn = os.path.abspath(notebook_fn)
         self.name = notebook_short_name(notebook_fn)
         self.tempdir_cache = tempdir_cache
@@ -257,6 +257,7 @@ class NotebookAdapter:
         logger.debug(self.extract_parameters())
         self.n_download_max_tries = n_download_max_tries
         self.download_retry_sleep_s = download_retry_sleep
+        self.max_download_size = max_download_size
 
     @staticmethod
     def get_unique_filename_from_url(file_url):
