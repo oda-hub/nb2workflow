@@ -723,15 +723,6 @@ def main():
         root.setLevel(logging.INFO)
         handler.setLevel(logging.INFO)
 
-    # conf_file = args.conf_file
-    # if conf_file is None:
-    #     logger.info("using default conf file from default")
-    #     conf = ConfigEnv()
-    # else:
-    #     conf = ConfigEnv.from_conf_file(conf_file)
-
-    # app.config['conf'] = conf
-
     app.notebook_adapters = find_notebooks(args.notebook, pattern=args.pattern)
     setup_routes(app)
     app.service_semantic_signature = ontology.service_semantic_signature(

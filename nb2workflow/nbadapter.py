@@ -249,15 +249,15 @@ class NotebookAdapter:
     limit_output_attachment_file = None
 
 
-    def __init__(self, notebook_fn, tempdir_cache=None, n_download_max_tries=10, download_retry_sleep=.5, max_download_size=1e6):
+    def __init__(self, notebook_fn, tempdir_cache=None, n_download_max_tries=None, download_retry_sleep=None, max_download_size=None):
         self.notebook_fn = os.path.abspath(notebook_fn)
         self.name = notebook_short_name(notebook_fn)
         self.tempdir_cache = tempdir_cache
         logger.debug("notebook adapter for %s", self.notebook_fn)
         logger.debug(self.extract_parameters())
-        self.n_download_max_tries = n_download_max_tries
-        self.download_retry_sleep_s = download_retry_sleep
-        self.max_download_size = max_download_size
+        self.n_download_max_tries = n_download_max_tries if n_download_max_tries is not None else 10
+        self.download_retry_sleep_s = download_retry_sleep if download_retry_sleep is not None else .5
+        self.max_download_size = max_download_size if max_download_size is not None else 1e6
 
     @staticmethod
     def get_unique_filename_from_url(file_url):
@@ -713,13 +713,15 @@ if isinstance({output},str) and os.path.exists({output}):
 def notebook_short_name(ipynb_fn):
     return os.path.basename(ipynb_fn).replace(".ipynb","")
 
-def find_notebooks(source, tests=False, pattern = r'.*') -> Dict[str, NotebookAdapter]:
+def find_notebooks(source, tests=False, pattern = r'.*', config=None) -> Dict[str, NotebookAdapter]:
 
     def base_filter(fn): 
         good = "output" not in fn and "preproc" not in fn
         good = good and re.match(pattern, os.path.basename(fn)) 
         return good
-        
+
+    if config is None:
+        config = dict()
 
     if tests:
         filt = lambda fn: base_filter(fn) and "/test_" in fn
@@ -735,7 +737,13 @@ def find_notebooks(source, tests=False, pattern = r'.*') -> Dict[str, NotebookAd
             raise Exception("no notebooks found in the directory:",source)
 
         notebook_adapters=dict([
-                (notebook_short_name(notebook),NotebookAdapter(notebook)) for notebook in notebooks
+                (
+                    notebook_short_name(notebook),
+                    NotebookAdapter(notebook,
+                                    n_download_max_tries=config.get('SERVICE.N_DOWNLOAD_MAX_TRIES', None),
+                                    download_retry_sleep=config.get('SERVICE.DOWNLOAD_RETRY_SLEEP', None),
+                                    max_download_size=config.get('SERVICE.MAX_DOWNLOAD_SIZE', None))
+                 ) for notebook in notebooks
             ])
         logger.debug("notebook adapters: %s",notebook_adapters)
 
