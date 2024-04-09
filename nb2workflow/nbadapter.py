@@ -28,6 +28,7 @@ import scrapbook as sb
 import nbformat
 from nbconvert import HTMLExporter
 from urllib.parse import urlencode, urlparse
+from urllib import request
 
 from . import logstash
 
@@ -566,9 +567,20 @@ class NotebookAdapter:
     def extract_output(self):
         return self.extract_pm_output()
 
-    def download_file(self, file_url, tmpdir):
+    def download_file(self, file_url, tmpdir, download_limit):
         n_download_tries_left = self.n_download_max_tries
         file_name = NotebookAdapter.get_unique_filename_from_url(file_url)
+        req = request.Request('https://sra-download.ncbi.nlm.nih.gov/traces/sra46/SRR/005150/SRR5273887',
+                                     method='HEAD')
+        f = request.urlopen(req)
+        file_size = int(f.headers['Content-Length'])
+        if file_size > download_limit:
+            msg = (f"An issue occurred when attempting to download the url {file_url}, "
+                   "the file appears to be too large to download, "
+                   f"and the download limit is set to {download_limit} bytes.")
+            logger.warning(msg)
+            sentry.capture_message(msg)
+            raise Exception(msg)
         while True:
             response = requests.get(file_url)
             if response.status_code == 200:
