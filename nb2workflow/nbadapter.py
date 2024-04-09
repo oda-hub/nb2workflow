@@ -615,7 +615,7 @@ class NotebookAdapter:
                 if validators.url(arg_par_value):
                     logger.debug(f'download {arg_par_value}')
                     try:
-                        file_name = self.download_file(arg_par_value, tmpdir)
+                        file_name = self.download_file(arg_par_value, tmpdir, self.max_download_size)
                         adapted_parameters[input_par_name] = file_name
                     except Exception as e:
                         exceptions.append(e)
