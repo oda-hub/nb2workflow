@@ -722,6 +722,9 @@ def find_notebooks(source, tests=False, pattern = r'.*', config=None) -> Dict[st
 
     if config is None:
         config = dict()
+    n_download_max_tries = config.get('SERVICE.N_DOWNLOAD_MAX_TRIES', None),
+    download_retry_sleep = config.get('SERVICE.DOWNLOAD_RETRY_SLEEP', None),
+    max_download_size = config.get('SERVICE.MAX_DOWNLOAD_SIZE', None)
 
     if tests:
         filt = lambda fn: base_filter(fn) and "/test_" in fn
@@ -740,9 +743,9 @@ def find_notebooks(source, tests=False, pattern = r'.*', config=None) -> Dict[st
                 (
                     notebook_short_name(notebook),
                     NotebookAdapter(notebook,
-                                    n_download_max_tries=config.get('SERVICE.N_DOWNLOAD_MAX_TRIES', None),
-                                    download_retry_sleep=config.get('SERVICE.DOWNLOAD_RETRY_SLEEP', None),
-                                    max_download_size=config.get('SERVICE.MAX_DOWNLOAD_SIZE', None))
+                                    n_download_max_tries=n_download_max_tries,
+                                    download_retry_sleep=download_retry_sleep,
+                                    max_download_size=max_download_size)
                  ) for notebook in notebooks
             ])
         logger.debug("notebook adapters: %s",notebook_adapters)
@@ -751,7 +754,10 @@ def find_notebooks(source, tests=False, pattern = r'.*', config=None) -> Dict[st
     elif os.path.isfile(source):
         if pattern != r'.*':
             logger.warning('Filename pattern is set but source %s is a single file. Ignoring pattern.')
-        notebook_adapters={notebook_short_name(source): NotebookAdapter(source)}
+        notebook_adapters={notebook_short_name(source): NotebookAdapter(source,
+                                                                        n_download_max_tries=n_download_max_tries,
+                                                                        download_retry_sleep=download_retry_sleep,
+                                                                        max_download_size=max_download_size)}
 
     else:
         raise Exception("requested notebook not found:",source)
