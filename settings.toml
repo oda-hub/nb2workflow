@@ -1,0 +1,4 @@
+[default.service]
+max_download_size = 1000000000
+n_download_max_tries = 10
+download_retry_sleep = 0.5

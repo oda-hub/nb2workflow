@@ -14,7 +14,6 @@ except ImportError:
 import queue
 from nb2workflow import ontology, publish, schedule
 from nb2workflow.nbadapter import NotebookAdapter, find_notebooks, PapermillWorkflowIncomplete
-from nb2workflow.configurer import ConfigEnv
 
 import os
 import json
@@ -37,6 +36,8 @@ from bs4 import BeautifulSoup
 from flask import Flask, make_response, jsonify, request, url_for, send_file, Response
 from flask_caching import Cache
 from flask_cors import CORS
+
+from dynaconf import FlaskDynaconf
 
 from flasgger import LazyString, Swagger, swag_from
 
@@ -94,6 +95,8 @@ def create_app():
             "version": "0.0.1"
         }
     }
+
+    FlaskDynaconf(app, settings_files=["settings.toml"])
     swagger = Swagger(app, template=template)
     app.wsgi_app = ReverseProxied(app.wsgi_app)
     app.json_encoder = CustomJSONEncoder
@@ -693,9 +696,14 @@ def main():
     parser.add_argument('--debug', action="store_true")
     parser.add_argument('--one-shot', metavar='workflow', type=str)
     parser.add_argument('--pattern', type=str, default=r'.*')
-    parser.add_argument('-conf_file', type=str, default=None)
+    parser.add_argument('-s', '--settings', action="append", default=None)
 
     args = parser.parse_args()
+
+    if args.settings is not None:
+        for item in args.settings:
+            key, value = item.split('=')
+            app.config['SERVICE'][key] = value
 
     handler = logging.StreamHandler()
     handler.setLevel(logging.INFO)
@@ -715,14 +723,14 @@ def main():
         root.setLevel(logging.INFO)
         handler.setLevel(logging.INFO)
 
-    conf_file = args.conf_file
-    if conf_file is None:
-        logger.info("using default conf file from default")
-        conf = ConfigEnv()
-    else:
-        conf = ConfigEnv.from_conf_file(conf_file)
+    # conf_file = args.conf_file
+    # if conf_file is None:
+    #     logger.info("using default conf file from default")
+    #     conf = ConfigEnv()
+    # else:
+    #     conf = ConfigEnv.from_conf_file(conf_file)
 
-    app.config['conf'] = conf
+    # app.config['conf'] = conf
 
     app.notebook_adapters = find_notebooks(args.notebook, pattern=args.pattern)
     setup_routes(app)

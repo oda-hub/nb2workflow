@@ -98,7 +98,8 @@ setup(name='nb2workflow',
         'validators',
         'sentry_sdk',
         'rdflib',
-        'GitPython'
+        'GitPython',
+        'dynaconf'
       ],
 
 
