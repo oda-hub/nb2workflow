@@ -748,8 +748,8 @@ def find_notebooks(source, tests=False, pattern = r'.*', config=None) -> Dict[st
 
     if config is None:
         config = dict()
-    n_download_max_tries = config.get('SERVICE.N_DOWNLOAD_MAX_TRIES', None),
-    download_retry_sleep = config.get('SERVICE.DOWNLOAD_RETRY_SLEEP', None),
+    n_download_max_tries = config.get('SERVICE.N_DOWNLOAD_MAX_TRIES', None)
+    download_retry_sleep = config.get('SERVICE.DOWNLOAD_RETRY_SLEEP', None)
     max_download_size = config.get('SERVICE.MAX_DOWNLOAD_SIZE', None)
 
     if tests:

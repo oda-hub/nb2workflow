@@ -177,7 +177,15 @@ class AsyncWorkflow:
             return
        
         template_nba = app.notebook_adapters.get(self.target)
-        nba = NotebookAdapter(template_nba.notebook_fn, tempdir_cache=app.async_workflow_jobdirs)
+
+        n_download_max_tries = app.config.get('SERVICE.N_DOWNLOAD_MAX_TRIES', None)
+        download_retry_sleep = app.config.get('SERVICE.DOWNLOAD_RETRY_SLEEP', None)
+        max_download_size = app.config.get('SERVICE.MAX_DOWNLOAD_SIZE', None)
+
+        nba = NotebookAdapter(template_nba.notebook_fn, tempdir_cache=app.async_workflow_jobdirs,
+                              n_download_max_tries=n_download_max_tries,
+                              download_retry_sleep=download_retry_sleep,
+                              max_download_size=max_download_size)
         
         app.async_workflows[self.key] = 'started'
         self.perform_callback(action='progress')
@@ -269,7 +277,15 @@ def workflow(target, background=False, async_request=False):
         logger.debug("raw parameters %s", request.args)
 
     template_nba = app.notebook_adapters.get(target)
-    nba = NotebookAdapter(template_nba.notebook_fn)
+
+    n_download_max_tries = app.config.get('SERVICE.N_DOWNLOAD_MAX_TRIES', None)
+    download_retry_sleep = app.config.get('SERVICE.DOWNLOAD_RETRY_SLEEP', None)
+    max_download_size = app.config.get('SERVICE.MAX_DOWNLOAD_SIZE', None)
+
+    nba = NotebookAdapter(template_nba.notebook_fn,
+                          n_download_max_tries=n_download_max_tries,
+                          download_retry_sleep=download_retry_sleep,
+                          max_download_size=max_download_size)
 
     if nba is None:
         interpreted_parameters = None
@@ -723,7 +739,7 @@ def main():
         root.setLevel(logging.INFO)
         handler.setLevel(logging.INFO)
 
-    app.notebook_adapters = find_notebooks(args.notebook, pattern=args.pattern)
+    app.notebook_adapters = find_notebooks(args.notebook, pattern=args.pattern, config=app.config)
     setup_routes(app)
     app.service_semantic_signature = ontology.service_semantic_signature(
         app.notebook_adapters)
