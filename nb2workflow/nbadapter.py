@@ -570,50 +570,50 @@ class NotebookAdapter:
     def download_file(self, file_url, tmpdir, download_limit):
         n_download_tries_left = self.n_download_max_tries
         size_ok = False
-        size_too_large = False
+        file_downloaded = False
         file_name = NotebookAdapter.get_unique_filename_from_url(file_url)
         file_path = os.path.join(tmpdir, file_name)
-        while True:
-            try:
-                step = 'getting file size'
-                if not size_ok:
-                    response = requests.head(file_url)
-                    if response.status_code == 200:
-                        file_size = int(response.headers.get('Content-Length', 0))
-                        if file_size > download_limit:
-                            size_too_large = True
-                            msg = ("The file appears to be too large to download, "
-                                   f"and the download limit is set to {download_limit} bytes.")
-                            logger.warning(msg)
-                            sentry.capture_message(msg)
-                            raise Exception(msg)
-                    else:
-                        raise
-                size_ok = True
-                step = 'downloading file'
-                response = requests.get(file_url)
+        for _ in range(n_download_tries_left):
+            step = 'getting the file size'
+            if not size_ok:
+                response = requests.head(file_url)
                 if response.status_code == 200:
-                    with open(file_path, 'wb') as file:
-                        file.write(response.content)
-                    break
+                    file_size = int(response.headers.get('Content-Length', 0))
+                    if file_size > download_limit:
+                        msg = ("The file appears to be too large to download, "
+                               f"and the download limit is set to {download_limit} bytes.")
+                        logger.warning(msg)
+                        sentry.capture_message(msg)
+                        raise Exception(msg)
                 else:
-                    raise
-            except Exception as e:
-                if size_too_large:
-                    raise e
-                n_download_tries_left -= 1
-                if n_download_tries_left > 0:
                     logger.warning(
-                        (f"An issue occurred when attempting to {step} the file at the url {file_url}. "
+                        (f"An issue occurred when attempting to {step} of the file at the url {file_url}. "
                          f"Sleeping {self.download_retry_sleep_s} seconds until retry")
                     )
                     time.sleep(self.download_retry_sleep_s)
-                else:
-                    msg = (f"An issue occurred when attempting to {step} the url {file_url}."
-                           "this might be related to an invalid url, please check the input provided")
-                    logger.warning(msg)
-                    sentry.capture_message(msg)
-                    raise Exception(msg)
+                    continue
+            size_ok = True
+            step = 'downloading file'
+            response = requests.get(file_url)
+            if response.status_code == 200:
+                with open(file_path, 'wb') as file:
+                    file.write(response.content)
+                file_downloaded = True
+                break
+            else:
+                logger.warning(
+                    (f"An issue occurred when attempting to {step} the file at the url {file_url}. "
+                     f"Sleeping {self.download_retry_sleep_s} seconds until retry")
+                )
+                time.sleep(self.download_retry_sleep_s)
+                continue
+
+        if not (file_downloaded and size_ok):
+            msg = (f"An issue occurred when attempting to {step} at the url {file_url}. "
+                   "This might be related to an invalid url, please check the input provided")
+            logger.warning(msg)
+            sentry.capture_message(msg)
+            raise Exception(msg)
 
         return file_name
 
