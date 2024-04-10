@@ -604,11 +604,12 @@ class NotebookAdapter:
                 n_download_tries_left -= 1
                 if n_download_tries_left > 0:
                     logger.warning(
-                        f"An issue occurred when attempting to {step} the file at the url {file_url}:\n{str(e)}\n"
-                        f"Sleeping {self.download_retry_sleep_s} seconds until retry")
+                        (f"An issue occurred when attempting to {step} the file at the url {file_url}. "
+                         f"Sleeping {self.download_retry_sleep_s} seconds until retry")
+                    )
                     time.sleep(self.download_retry_sleep_s)
                 else:
-                    msg = (f"An issue occurred when attempting to {step} the url {file_url}:\n{str(e)}\n"
+                    msg = (f"An issue occurred when attempting to {step} the url {file_url}."
                            "this might be related to an invalid url, please check the input provided")
                     logger.warning(msg)
                     sentry.capture_message(msg)
