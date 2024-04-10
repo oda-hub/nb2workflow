@@ -570,10 +570,10 @@ class NotebookAdapter:
     def download_file(self, file_url, tmpdir, download_limit):
         n_download_tries_left = self.n_download_max_tries
         file_name = NotebookAdapter.get_unique_filename_from_url(file_url)
-        req = request.Request('https://sra-download.ncbi.nlm.nih.gov/traces/sra46/SRR/005150/SRR5273887',
-                                     method='HEAD')
-        f = request.urlopen(req)
-        file_size = int(f.headers['Content-Length'])
+
+        response = requests.head(file_url)
+        file_size = int(response.headers.get('Content-Length', 0))
+
         if file_size > download_limit:
             msg = (f"An issue occurred when attempting to download the url {file_url}, "
                    "the file appears to be too large to download, "
