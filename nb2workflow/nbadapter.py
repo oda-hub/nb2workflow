@@ -569,18 +569,33 @@ class NotebookAdapter:
 
     def download_file(self, file_url, tmpdir, download_limit):
         n_download_tries_left = self.n_download_max_tries
+        n_attempts_request_info = self.n_download_max_tries
         file_name = NotebookAdapter.get_unique_filename_from_url(file_url)
-
-        response = requests.head(file_url)
-        file_size = int(response.headers.get('Content-Length', 0))
-
-        if file_size > download_limit:
-            msg = (f"An issue occurred when attempting to download the url {file_url}, "
-                   "the file appears to be too large to download, "
-                   f"and the download limit is set to {download_limit} bytes.")
-            logger.warning(msg)
-            sentry.capture_message(msg)
-            raise Exception(msg)
+        while True:
+            response = requests.head(file_url)
+            file_size = int(response.headers.get('Content-Length', 0))
+            if response.status_code == 200:
+                if file_size > download_limit:
+                    msg = (f"An issue occurred when attempting to download the url {file_url}, "
+                           "the file appears to be too large to download, "
+                           f"and the download limit is set to {download_limit} bytes.")
+                    logger.warning(msg)
+                    sentry.capture_message(msg)
+                    raise Exception(msg)
+                break
+            else:
+                n_attempts_request_info -= 1
+                if n_attempts_request_info > 0:
+                    logger.warning(
+                        f"An issue occurred when attempting to request information about the file at the url {file_url}, "
+                        f"sleeping {self.download_retry_sleep_s} seconds until retry")
+                    time.sleep(self.download_retry_sleep_s)
+                else:
+                    msg = (f"An issue occurred when attempting to request information about file at the url {file_url}, "
+                           "this might be related to an invalid url, please check the input provided")
+                    logger.warning(msg)
+                    sentry.capture_message(msg)
+                    raise Exception(msg)
         while True:
             response = requests.get(file_url)
             if response.status_code == 200:
