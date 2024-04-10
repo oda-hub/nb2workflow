@@ -570,51 +570,53 @@ class NotebookAdapter:
     def download_file(self, file_url, tmpdir, download_limit):
         n_download_tries_left = self.n_download_max_tries
         n_attempts_request_info = self.n_download_max_tries
+        size_ok = False
         file_name = NotebookAdapter.get_unique_filename_from_url(file_url)
         while True:
-            response = requests.head(file_url)
-            file_size = int(response.headers.get('Content-Length', 0))
-            if response.status_code == 200:
-                if file_size > download_limit:
-                    msg = (f"An issue occurred when attempting to download the url {file_url}, "
-                           "the file appears to be too large to download, "
-                           f"and the download limit is set to {download_limit} bytes.")
-                    logger.warning(msg)
-                    sentry.capture_message(msg)
-                    raise Exception(msg)
-                break
-            else:
-                n_attempts_request_info -= 1
-                if n_attempts_request_info > 0:
-                    logger.warning(
-                        f"An issue occurred when attempting to request information about the file at the url {file_url}, "
-                        f"sleeping {self.download_retry_sleep_s} seconds until retry")
-                    time.sleep(self.download_retry_sleep_s)
+            if not size_ok:
+                response = requests.head(file_url)
+                if response.status_code == 200:
+                    file_size = int(response.headers.get('Content-Length', 0))
+                    if file_size > download_limit:
+                        msg = (f"An issue occurred when attempting to download the url {file_url}, "
+                               "the file appears to be too large to download, "
+                               f"and the download limit is set to {download_limit} bytes.")
+                        logger.warning(msg)
+                        sentry.capture_message(msg)
+                        raise Exception(msg)
+                    size_ok = True
                 else:
-                    msg = (f"An issue occurred when attempting to request information about file at the url {file_url}, "
-                           "this might be related to an invalid url, please check the input provided")
-                    logger.warning(msg)
-                    sentry.capture_message(msg)
-                    raise Exception(msg)
-        while True:
-            response = requests.get(file_url)
-            if response.status_code == 200:
-                with open(os.path.join(tmpdir, file_name), 'wb') as file:
-                    file.write(response.content)
-                break
-            else:
-                n_download_tries_left -= 1
-                if n_download_tries_left > 0:
-                    logger.warning(
-                        f"An issue occurred when attempting to download the file at the url {file_url}, "
-                        f"sleeping {self.download_retry_sleep_s} seconds until retry")
-                    time.sleep(self.download_retry_sleep_s)
+                    n_attempts_request_info -= 1
+                    if n_attempts_request_info > 0:
+                        logger.warning(
+                            f"An issue occurred when attempting to request information about the file at the url {file_url}, "
+                            f"sleeping {self.download_retry_sleep_s} seconds until retry")
+                        time.sleep(self.download_retry_sleep_s)
+                    else:
+                        msg = (f"An issue occurred when attempting to request information about file at the url {file_url}, "
+                               "this might be related to an invalid url, please check the input provided")
+                        logger.warning(msg)
+                        sentry.capture_message(msg)
+                        raise Exception(msg)
+            if size_ok:
+                response = requests.get(file_url)
+                if response.status_code == 200:
+                    with open(os.path.join(tmpdir, file_name), 'wb') as file:
+                        file.write(response.content)
+                    break
                 else:
-                    msg = (f"An issue occurred when attempting to download the url {file_url}, "
-                           "this might be related to an invalid url, please check the input provided")
-                    logger.warning(msg)
-                    sentry.capture_message(msg)
-                    raise Exception(msg)
+                    n_download_tries_left -= 1
+                    if n_download_tries_left > 0:
+                        logger.warning(
+                            f"An issue occurred when attempting to download the file at the url {file_url}, "
+                            f"sleeping {self.download_retry_sleep_s} seconds until retry")
+                        time.sleep(self.download_retry_sleep_s)
+                    else:
+                        msg = (f"An issue occurred when attempting to download the url {file_url}, "
+                               "this might be related to an invalid url, please check the input provided")
+                        logger.warning(msg)
+                        sentry.capture_message(msg)
+                        raise Exception(msg)
 
         return file_name
 
