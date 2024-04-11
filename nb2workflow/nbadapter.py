@@ -95,8 +95,8 @@ def cast_parameter(x,par):
 def parse_nbline(line: str, nb_uri=None) -> Optional[dict]:
     """
     this function is used in 3 cases:
-    * input parameters
-    * outputs
+    * input parameters - No more
+    * outputs - No more
     * full-line comments - to annotate notebook itself
     """
 
@@ -348,7 +348,7 @@ class NotebookAdapter:
         if python_type(value) != value:
             raise ValueError(f"The value '{value}' doesn't match type annotation {type_annotation}")
         
-        return python_type    
+        return python_type
     
     @staticmethod
     def _pop_comment_by_line(comment_tokens, l):
