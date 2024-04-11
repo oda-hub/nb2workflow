@@ -155,7 +155,7 @@ class GalaxyOutput:
         else:
             self.dprod = dprod
             dprod += '_'
-        self.dataname = f"out_{dprod}{self.name}"
+        self.dataname = f"out_{dprod.replace('-', '_').replace(' ', '_')}{self.name}"
         self.is_oda = is_oda
         self.outfile_name = f"{name}_galaxy.output"
     
