@@ -432,12 +432,12 @@ class NotebookAdapter:
 
         
 
-    def execute(self, parameters, progress_bar = True, log_output = True, inplace=False, tmpdir_key=None, callback_url=None):
+    def execute(self, parameters, progress_bar = True, log_output = True, inplace=False, tmpdir_key=None, context={}):
         t0 = time.time()
         logstasher.log(dict(origin="nb2workflow.execute", event="starting", parameters=parameters, workflow_name=notebook_short_name(self.notebook_fn), health=current_health()))
 
         logger.info("starting job")
-        exceptions = self._execute(parameters, progress_bar, log_output, inplace, callback_url=callback_url, tmpdir_key=tmpdir_key)
+        exceptions = self._execute(parameters, progress_bar, log_output, inplace, context=context, tmpdir_key=tmpdir_key)
             
         tspent = time.time() - t0
         logstasher.log(dict(origin="nb2workflow.execute", 
@@ -450,7 +450,7 @@ class NotebookAdapter:
 
         return exceptions
 
-    def _execute(self, parameters, progress_bar = True, log_output = True, inplace=False, callback_url=None, tmpdir_key=None):
+    def _execute(self, parameters, progress_bar = True, log_output = True, inplace=False, context={}, tmpdir_key=None):
         if not inplace :
             tmpdir = self.new_tmpdir(tmpdir_key)
             logger.info("new tmpdir: %s", tmpdir)
@@ -474,6 +474,7 @@ class NotebookAdapter:
             tmpdir =os.path.dirname(os.path.realpath(self.notebook_fn))
             logger.info("executing inplace, no tmpdir is input dir: %s", tmpdir)
 
+        callback_url = context.get('callback', None)
         if callback_url:
             self._pass_callback_url(tmpdir, callback_url)
 
@@ -486,6 +487,11 @@ class NotebookAdapter:
 
         if len(r['exceptions']) > 0:
             exceptions.extend(r['exceptions'])
+
+        token = context.get('token', None)
+        if token:
+            prev_token = os.getenv('TOKEN', '')
+            os.environ['TOKEN'] = token
 
         ntries = 10
         while ntries > 0:
@@ -515,7 +521,9 @@ class NotebookAdapter:
                 continue   
 
             break
-
+        if token:
+            # cleanup
+            os.environ['TOKEN'] = prev_token
         if len(exceptions) == 0:
             self.update_summary(state="done")
         else:
