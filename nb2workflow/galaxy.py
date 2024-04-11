@@ -113,14 +113,11 @@ class GalaxyParameter:
         
         attrs = {'name': self.name,
                  'type': self.partype}
-        if self.default_value is not None and self.partype not in ['select', 'boolean']:
+        if self.default_value is not None and self.partype != 'select':
             attrs['value'] = str(self.default_value)
-        if self.partype == 'boolean' and self.default_value:
-            attrs['checked'] = 'true'
-
         if self.description is not None:
             attrs['label'] = self.description
-
+            
         if self.min_value is not None:
             attrs['min'] = str(self.min_value)
         if self.max_value is not None:
@@ -155,7 +152,7 @@ class GalaxyOutput:
         else:
             self.dprod = dprod
             dprod += '_'
-        self.dataname = f"out_{dprod.replace('-', '_').replace(' ', '_')}{self.name}"
+        self.dataname = f"out_{dprod}{self.name}"
         self.is_oda = is_oda
         self.outfile_name = f"{name}_galaxy.output"
     
