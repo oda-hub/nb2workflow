@@ -362,6 +362,7 @@ class NotebookAdapter:
     def parse_cell_multiline(self, cell):
         result = {'assign': [], 
                   'standalone': []}
+        nt = namedtuple('nt', ['varname', 'type_annotation', 'value', 'comment', 'raw_line'])
         
         tokens = generate_tokens(io.StringIO(cell['source']).readline)
         comments = []
@@ -396,11 +397,11 @@ class NotebookAdapter:
                 if line != node.end_lineno:
                     continue
             
-            result['assign'].append(namedtuple(varname = varname, 
-                                               type_annotation = type_annotation, 
-                                               value = value, 
-                                               comment = comment,
-                                               raw_line = node_code))
+            result['assign'].append(nt(varname = varname, 
+                                       type_annotation = type_annotation, 
+                                       value = value, 
+                                       comment = comment,
+                                       raw_line = node_code))
             
         # now parse full-line comments
         for comment in comments:
@@ -643,7 +644,7 @@ class NotebookAdapter:
                 # TODO: may use annotations (type/ontology) to get python type
                 for outp_detail in parsed_cell['assign']:
                     parsed_comment = understand_comment_references(outp_detail.comment)
-                    outputs[outp_detail['name']] = {
+                    outputs[outp_detail.varname] = {
                         'name': outp_detail.varname,
                         'value': outp_detail.value,
                         'python_type': 'undefined',
