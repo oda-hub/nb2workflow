@@ -85,7 +85,7 @@ def test_find_notebooks(caplog):
     assert 'Ignoring pattern.' in caplog.text
     
     nbas = find_notebooks(nb_dir)
-    assert len(nbas) == 5
+    assert len(nbas) == 6
     
     nbas = find_notebooks(nb_dir, pattern=r'.*bool')
     assert len(nbas) == 1
