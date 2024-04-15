@@ -1,5 +1,6 @@
 import ast
 import builtins
+from collections import namedtuple
 
 from dataclasses import dataclass, asdict
 import hashlib
@@ -91,7 +92,7 @@ def cast_parameter(x,par):
     return par['python_type'](x)
 
 
-
+# TODO: to remove when unneded
 def parse_nbline(line: str, nb_uri=None) -> Optional[dict]:
     """
     this function is used in 3 cases:
@@ -358,8 +359,9 @@ class NotebookAdapter:
                 return res.string[1:]
         return ''
     
-    def extract_parameters_from_cell(self, cell, G):
-        parameters = {}
+    def parse_cell_multiline(self, cell):
+        result = {'assign': [], 
+                  'standalone': []}
         
         tokens = generate_tokens(io.StringIO(cell['source']).readline)
         comments = []
@@ -372,48 +374,71 @@ class NotebookAdapter:
             node_code = "\n".join(cell['source'].split('\n')[node.lineno:node.end_lineno + 1])
             if isinstance(node, ast.Assign):
                 if len(node.targets) != 1:
-                    raise NotImplementedError(f'Only simple assignment is supported:\n{node_code}')
+                    raise NotImplementedError(f'Multiple assignment is not supported:\n{node_code}')
                 varname = node.targets[0].id
                 type_annotation = None
             elif isinstance(node, ast.AnnAssign):
                 varname = node.target.id
-                type_annotation = node.annotation.id
+                type_annotation = ast.unparse(node.annotation)
             else:
                 logger.info(f"Skipping {node}")
-                return
+                continue
             
             value_node = node.value
-            value = ast.literal_eval(value_node)
-            python_type = self.reconcile_python_type(value, type_annotation=type_annotation)
-                        
-            fallback_type = odahub_type_for_python_type(python_type)
+            try:
+                value = ast.literal_eval(value_node)
+            except ValueError:
+                value = ast.unparse(value_node)
+            
             for line in range(node.lineno, node.end_lineno+1):
                 comment = self._pop_comment_by_line(comments, line)
-                # annotation must be after definition
+                # annotation must appear right after definition
                 if line != node.end_lineno:
                     continue
-                parsed_comment = understand_comment_references(comment,
-                                                               fallback_type=fallback_type)
             
-            par = InputParameter(raw_line = node_code,
-                                 name = varname,
-                                 default_value = value,
+            result['assign'].append(namedtuple(varname = varname, 
+                                               type_annotation = type_annotation, 
+                                               value = value, 
+                                               comment = comment,
+                                               raw_line = node_code))
+            
+        # now parse full-line comments
+        for comment in comments:
+            cstring = comment.string[1:]
+            result['standalone'].append(cstring)        
+        
+        return result
+    
+    def extract_parameters_from_cell(self, cell, G):
+        parameters = {}
+        
+        parsed_cell = self.parse_cell_multiline(cell)
+        for par_detail in parsed_cell['assign']:
+            python_type = self.reconcile_python_type(par_detail.value, type_annotation=par_detail.type_annotation)
+                        
+            fallback_type = odahub_type_for_python_type(python_type)
+
+            parsed_comment = understand_comment_references(par_detail.comment,
+                                                           fallback_type=fallback_type)
+            
+            par = InputParameter(raw_line = par_detail.raw_line,
+                                 name = par_detail.varname,
+                                 default_value = par_detail.value,
                                  python_type = python_type,
-                                 comment = token.string.strip('#'),
-                                 owl_type = parsed_comment['owl_type'],
-                                 extra_ttl = parsed_comment['extra_ttl'])
+                                 comment = par_detail.comment,
+                                 owl_type = parsed_comment.get('owl_type', None),
+                                 extra_ttl = parsed_comment.get('extra_ttl', None))
             parameters[par.name] = par.as_dict()
             parameters[par.name]['value'] = par.as_dict()['default_value']
         
-        # now parse fullline comments
-        for comment in comments:
-            cstring = comment.string[1:]
-            p = understand_comment_references(cstring, base_uri=self.nb_uri)
-            if p is not None:
-                try:
-                    G.parse(data=p['extra_ttl'])
-                except Exception as e:
-                    logger.warning("not a turtle: %s", p['extra_ttl'])                
+
+            for cstring in parsed_cell['standalone']:
+                p = understand_comment_references(cstring, base_uri=self.nb_uri)
+                if p is not None:
+                    try:
+                        G.parse(data=p['extra_ttl'])
+                    except Exception as e:
+                        logger.warning("not a turtle: %s", p['extra_ttl'])                
 
         return parameters
 
@@ -613,12 +638,19 @@ class NotebookAdapter:
 
         for cell in nb.cells:
             if 'outputs' in cell.metadata.get('tags',[]):
-                for line in cell['source'].split("\n"):
-                    p = parse_nbline(line)
-                    if p is None:
-                        continue
-                    outputs[p['name']] = p
-
+                parsed_cell = self.parse_cell_multiline(cell)
+                
+                # TODO: may use annotations (type/ontology) to get python type
+                for outp_detail in parsed_cell['assign']:
+                    parsed_comment = understand_comment_references(outp_detail.comment)
+                    outputs[outp_detail['name']] = {
+                        'name': outp_detail.varname,
+                        'value': outp_detail.value,
+                        'python_type': 'undefined',
+                        'comment': outp_detail.comment,
+                        'owl_type': parsed_comment.get('owl_type', None),
+                        'extra_ttl': parsed_comment.get('extra_ttl', None),
+                    }
 
         return outputs 
 
