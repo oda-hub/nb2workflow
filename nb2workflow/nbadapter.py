@@ -372,24 +372,33 @@ class NotebookAdapter:
            
         parsed = ast.parse(cell['source'])        
         for node in parsed.body:
-            node_code = "\n".join(cell['source'].split('\n')[node.lineno:node.end_lineno + 1])
+            node_code = "\n".join(cell['source'].split('\n')[node.lineno-1:node.end_lineno])
             if isinstance(node, ast.Assign):
                 if len(node.targets) != 1:
                     raise NotImplementedError(f'Multiple assignment is not supported:\n{node_code}')
                 varname = node.targets[0].id
                 type_annotation = None
+                value_node = node.value
             elif isinstance(node, ast.AnnAssign):
                 varname = node.target.id
                 type_annotation = ast.unparse(node.annotation)
+                value_node = node.value
+            elif isinstance(node, ast.Expr) and isinstance(node.value, ast.Name):
+                # "hanging" output declaration
+                value_node = None
+                type_annotation = None
+                varname = node.value.id
             else:
                 logger.info(f"Skipping {node}")
                 continue
             
-            value_node = node.value
-            try:
-                value = ast.literal_eval(value_node)
-            except ValueError:
-                value = ast.unparse(value_node)
+            if value_node is not None:
+                try:
+                    value = ast.literal_eval(value_node)
+                except ValueError:
+                    value = ast.unparse(value_node)
+            else:
+                value = None
             
             for line in range(node.lineno, node.end_lineno+1):
                 comment = self._pop_comment_by_line(comments, line)
