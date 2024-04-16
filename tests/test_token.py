@@ -16,7 +16,7 @@ def app():
     print("creating app")
     return app
 
-def test_token(client):
+def test_token_async(client):
     status_callback_file = "status.json"
     callback_url = 'file://' + status_callback_file
     token = 'abc123'
@@ -62,3 +62,22 @@ def test_token(client):
     assert 'token' in r.json['data']['output']
     assert r.json['data']['output']['token'] == token
 
+
+def test_token_sync(client):
+    status_callback_file = "status.json"
+    callback_url = 'file://' + status_callback_file
+    token = 'abc123'
+    query_string = dict(
+        a=20,
+        _async_request='no',
+        _async_request_callback=callback_url,
+                   _token=token)
+
+    r = client.get('/api/v1.0/get/token',
+                   query_string=query_string)
+
+    assert r.status_code == 200
+    assert 'data' in r.json
+    assert 'output' in r.json['data']
+    assert 'token' in r.json['data']['output']
+    assert r.json['data']['output']['token'] == token
