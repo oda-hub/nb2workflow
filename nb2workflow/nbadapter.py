@@ -213,6 +213,7 @@ class InputParameter:
 
     @classmethod
     def from_nbline(cls,line):
+        # TODO: remove when unneded
         parsed_nbline = parse_nbline(line)
         if parsed_nbline is None or parsed_nbline.get('name', None) is None:
             return None
@@ -656,7 +657,7 @@ class NotebookAdapter:
                     outputs[outp_detail.varname] = {
                         'name': outp_detail.varname,
                         'value': outp_detail.value,
-                        'python_type': 'undefined',
+                        'python_type': str, # TODO: backwards compatible. May need None/Undefined
                         'comment': outp_detail.comment,
                         'owl_type': parsed_comment.get('owl_type', None),
                         'extra_ttl': parsed_comment.get('extra_ttl', None),

@@ -54,7 +54,10 @@ def to_odahub_type(p):
 
     logger.debug("owl type cast from %s to %s", p, repr(out_type))
 
-    return p.get('owl_type', "http://odahub.io/ontology#" + out_type)
+    r = p.get('owl_type')
+    if r is None:
+        r = "http://odahub.io/ontology#" + out_type
+    return r
 
 
 def to_xsd_type(p):
