@@ -257,6 +257,7 @@ class NotebookAdapter:
         logger.debug(self.extract_parameters())
         self.n_download_max_tries = n_download_max_tries
         self.download_retry_sleep_s = download_retry_sleep
+        self.token_env_variable = 'ODA_TOKEN'
 
     @staticmethod
     def get_unique_filename_from_url(file_url):
@@ -451,6 +452,7 @@ class NotebookAdapter:
         return exceptions
 
     def _execute(self, parameters, progress_bar = True, log_output = True, inplace=False, context={}, tmpdir_key=None):
+
         if not inplace :
             tmpdir = self.new_tmpdir(tmpdir_key)
             logger.info("new tmpdir: %s", tmpdir)
@@ -489,13 +491,12 @@ class NotebookAdapter:
             exceptions.extend(r['exceptions'])
 
         token = context.get('token', None)
-        if token:
-            prev_token = os.getenv('TOKEN', '')
-            os.environ['TOKEN'] = token
-
+        prev_token = os.getenv(self.token_env_variable, '')
         ntries = 10
         while ntries > 0:
             try:
+                if token:
+                    os.environ[self.token_env_variable] = token
                 pm.execute_notebook(
                    self.preproc_notebook_fn,
                    self.output_notebook_fn,
@@ -518,12 +519,15 @@ class NotebookAdapter:
                 ntries -= 1
                 logger.info("retrying... %s", ntries)
                 time.sleep(2)
-                continue   
+                continue
+
+            finally:
+                if token:
+                    # cleanup
+                    os.environ[self.token_env_variable] = prev_token
 
             break
-        if token:
-            # cleanup
-            os.environ['TOKEN'] = prev_token
+
         if len(exceptions) == 0:
             self.update_summary(state="done")
         else:
