@@ -684,9 +684,8 @@ def main():
 
     parser = argparse.ArgumentParser(description='Process some integers.')
     parser.add_argument('notebook', metavar='notebook', type=str)
-    parser.add_argument('--host', metavar='host',
-                        type=str, default="127.0.0.1")
-    parser.add_argument('--port', metavar='port', type=int, default=9191)
+    parser.add_argument('--host', metavar='host', type=str)
+    parser.add_argument('--port', metavar='port', type=int)
     parser.add_argument('--async-workers', metavar='N', type=int, default=3)
     #parser.add_argument('--tmpdir', metavar='tmpdir', type=str, default=None)
     parser.add_argument('--publish', metavar='upstream-url',
@@ -706,6 +705,14 @@ def main():
         for item in args.settings:
             key, value = item.split('=')
             app.config['SERVICE'][key] = value
+
+    service_port = app.config.get('default.service.port', 9191)
+    if args.port is not None:
+        service_port = args.port
+
+    service_host = app.config.get('default.service.host', "127.0.0.1")
+    if args.host is not None:
+        service_host = args.host
 
     handler = logging.StreamHandler()
     handler.setLevel(logging.INFO)
@@ -737,13 +744,13 @@ def main():
             s = args.publish_as.split(":")
             publish_host, publish_port = ":".join(s[:-1]), int(s[-1])
         else:
-            publish_host, publish_port = args.host, args.port
+            publish_host, publish_port = service_host, service_port
 
         for nba_name, nba in app.notebook_adapters.items():
             publish.publish(args.publish, nba_name, publish_host, publish_port)
 
-  #  for rule in app.url_map.iter_rules():
- #       logger.debug("==>> %s %s %s %s",rule,rule.endpoint,rule.__class__,rule.__dict__)
+    #  for rule in app.url_map.iter_rules():
+    #       logger.debug("==>> %s %s %s %s",rule,rule.endpoint,rule.__class__,rule.__dict__)
 
     for worker_i in range(args.async_workers):
         async_worker = AsyncWorker('default-%i' % worker_i)
