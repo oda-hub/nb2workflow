@@ -256,6 +256,10 @@ class NotebookAdapter:
         self.tempdir_cache = tempdir_cache
         logger.debug("notebook adapter for %s", self.notebook_fn)
         logger.debug(self.extract_parameters())
+
+        if config is None:
+            config = dict()
+
         self.n_download_max_tries = config.get('SERVICE.N_DOWNLOAD_MAX_TRIES', 10)
         self.download_retry_sleep_s = config.get('SERVICE.DOWNLOAD_RETRY_SLEEP', .5)
         self.max_download_size = config.get('SERVICE.MAX_DOWNLOAD_SIZE', 1e6)
@@ -746,9 +750,6 @@ def find_notebooks(source, tests=False, pattern = r'.*', config=None) -> Dict[st
         good = "output" not in fn and "preproc" not in fn
         good = good and re.match(pattern, os.path.basename(fn)) 
         return good
-
-    if config is None:
-        config = dict()
 
     if tests:
         filt = lambda fn: base_filter(fn) and "/test_" in fn
