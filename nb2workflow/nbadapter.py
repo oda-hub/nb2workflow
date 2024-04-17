@@ -259,6 +259,7 @@ class NotebookAdapter:
         self.n_download_max_tries = config.get('SERVICE.N_DOWNLOAD_MAX_TRIES', 10)
         self.download_retry_sleep_s = config.get('SERVICE.DOWNLOAD_RETRY_SLEEP', .5)
         self.max_download_size = config.get('SERVICE.MAX_DOWNLOAD_SIZE', 1e6)
+        sentry.sentry_url = config.get('SERVICE.SENTRY_URL', None)
 
     @staticmethod
     def get_unique_filename_from_url(file_url):
