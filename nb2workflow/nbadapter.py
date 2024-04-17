@@ -29,9 +29,9 @@ import nbformat
 from nbconvert import HTMLExporter
 from urllib.parse import urlencode, urlparse
 from urllib import request
+from dynaconf import Dynaconf
 
 from . import logstash
-
 from nb2workflow.sentry import sentry
 from nb2workflow.health import current_health
 from nb2workflow import workflows
@@ -790,8 +790,8 @@ def find_notebooks(source, tests=False, pattern = r'.*', config=None) -> Dict[st
 
     return notebook_adapters
 
-def nbinspect(nb_source, out=True, machine_readable=False):
-    nbas = find_notebooks(nb_source)
+def nbinspect(nb_source, out=True, machine_readable=False, config=None):
+    nbas = find_notebooks(nb_source, config=config)
 
     # class CustomEncoder(json.JSONEncoder):
     #     def default(self, obj):
@@ -926,9 +926,9 @@ def validate_oda_dispatcher(nba: NotebookAdapter, optional=True, machine_readabl
         
     
 
-def nbrun(nb_source, inp, inplace=False, optional_dispather=True, machine_readable=False):
+def nbrun(nb_source, inp, inplace=False, optional_dispather=True, machine_readable=False, config=None):
 
-    nbas = find_notebooks(nb_source)
+    nbas = find_notebooks(nb_source, config=config)
 
     if len(nbas) > 1:
         nba = nbas[inp.pop('notebook')]
@@ -1052,7 +1052,9 @@ def main_inspect():
 
     setup_logging(args.debug)
 
-    nbinspect(args.notebook, machine_readable=args.machine_readable)
+    config = Dynaconf(settings_files=['settings.toml'])
+
+    nbinspect(args.notebook, machine_readable=args.machine_readable, config=config)
 
 
 def main():
@@ -1075,7 +1077,13 @@ def main():
         
     setup_logging(args.debug)
 
-    nbrun(args.notebook, inputs, inplace=args.inplace, optional_dispather=not args.mmoda_validation, machine_readable=args.machine_readable)
+    config = Dynaconf(settings_files=['settings.toml'])
+
+    nbrun(args.notebook, inputs,
+          inplace=args.inplace,
+          optional_dispather=not args.mmoda_validation,
+          machine_readable=args.machine_readable,
+          config=config)
 
 
 if __name__ == "__main__":
