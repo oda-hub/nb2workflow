@@ -19,6 +19,7 @@ import glob
 import rdflib
 from oda_api.ontology_helper import Ontology
 from nb2workflow.nbadapter import NotebookAdapter
+from dynaconf import Dynaconf
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,8 @@ default_config = {
 }
 
 default_ontology_path = "https://odahub.io/ontology/ontology.ttl"
+local_config = Dynaconf(settings_files=['settings.toml'])
+
 
 #TODO: probably want an option to really use the dir
 def determine_origin(repo):
@@ -609,9 +612,14 @@ def main():
     parser.add_argument('--local', action="store_true", default=False)
     parser.add_argument('--build-engine', metavar="build_engine", default="docker")
     parser.add_argument('--nb2wversion', metavar="nb2wversion", default=version())
-    parser.add_argument('--ontology-path', metavar="ontology_path", default=default_ontology_path)
-    
+    parser.add_argument('--ontology-path', metavar="ontology_path")
+
     args = parser.parse_args()
+
+    ontology_path = local_config.get('default.service.ontology_path', default_ontology_path)
+
+    if args.ontology_path is not None:
+        ontology_path = args.ontology_path
 
     setup_logging()
     
@@ -621,7 +629,7 @@ def main():
            local=args.local, 
            build_engine=args.build_engine, 
            nb2wversion=args.nb2wversion,
-           ontology_path=args.ontology_path)
+           ontology_path=ontology_path)
 
 
 if __name__ == "__main__":
