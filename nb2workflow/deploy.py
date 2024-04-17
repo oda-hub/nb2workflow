@@ -70,8 +70,12 @@ def build_container(git_origin,
                     engine="docker",
                     cleanup=False,
                     nb2wversion=version(),
-                    ontology_path=default_ontology_path,
+                    ontology_path=None,
                     **kwargs):
+
+    if ontology_path is None:
+        ontology_path = local_config.get('default.service.ontology_path', default_ontology_path)
+
     if engine == "docker":
         return _build_with_docker(git_origin=git_origin,
                                  local=local,
@@ -570,7 +574,10 @@ def deploy(git_origin,
            build_timestamp=False,
            cleanup=False,
            nb2wversion=version(),
-           ontology_path=default_ontology_path):
+           ontology_path=None):
+
+    if ontology_path is None:
+        ontology_path = local_config.get('default.service.ontology_path', default_ontology_path)
     
     container = build_container(git_origin,
                                 local=local, 
