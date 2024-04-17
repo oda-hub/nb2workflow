@@ -199,7 +199,10 @@ def _build_with_kaniko(git_origin,
                       namespace="oda-staging",
                       cleanup=True,
                       nb2wversion=version(),
-                      ontology_path=default_ontology_path):
+                      ontology_path=None):
+
+    if ontology_path is None:
+        ontology_path = local_config.get('default.service.ontology_path', default_ontology_path)
     
     #secret should be created beforehand https://github.com/GoogleContainerTools/kaniko#pushing-to-docker-hub
        
@@ -315,7 +318,11 @@ def _build_with_kaniko(git_origin,
         return container_metadata
 
 
-def _extract_resource_requirements(local_repo_path, ontology_path=default_ontology_path):
+def _extract_resource_requirements(local_repo_path, ontology_path=None):
+
+    if ontology_path is None:
+        ontology_path = local_config.get('default.service.ontology_path', default_ontology_path)
+
     ontology = Ontology(ontology_path)
     resources = {}
 
@@ -344,7 +351,11 @@ def _build_with_docker(git_origin,
                     source_from='localdir',
                     cleanup=False,
                     nb2wversion=version(),
-                    ontology_path=default_ontology_path):
+                    ontology_path=None):
+
+    if ontology_path is None:
+        ontology_path = local_config.get('default.service.ontology_path', default_ontology_path)
+
     if cleanup:
         logger.warning('Post-build cleanup is not implemented for docker builds')
     
