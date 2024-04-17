@@ -257,7 +257,7 @@ class NotebookAdapter:
         logger.debug("notebook adapter for %s", self.notebook_fn)
         logger.debug(self.extract_parameters())
         self.n_download_max_tries = config.get('SERVICE.N_DOWNLOAD_MAX_TRIES', 10)
-        self.download_retry_sleep = config.get('SERVICE.DOWNLOAD_RETRY_SLEEP', .5)
+        self.download_retry_sleep_s = config.get('SERVICE.DOWNLOAD_RETRY_SLEEP', .5)
         self.max_download_size = config.get('SERVICE.MAX_DOWNLOAD_SIZE', 1e6)
 
     @staticmethod
@@ -567,7 +567,7 @@ class NotebookAdapter:
     def extract_output(self):
         return self.extract_pm_output()
 
-    def download_file(self, file_url, tmpdir, download_limit):
+    def download_file(self, file_url, tmpdir):
         n_download_tries_left = self.n_download_max_tries
         size_ok = False
         file_downloaded = False
@@ -579,9 +579,9 @@ class NotebookAdapter:
                 response = requests.head(file_url)
                 if response.status_code == 200:
                     file_size = int(response.headers.get('Content-Length', 0))
-                    if file_size > download_limit:
+                    if file_size > self.max_download_size:
                         msg = ("The file appears to be too large to download, "
-                               f"and the download limit is set to {download_limit} bytes.")
+                               f"and the download limit is set to {self.max_download_size} bytes.")
                         logger.warning(msg)
                         sentry.capture_message(msg)
                         raise Exception(msg)
@@ -629,7 +629,7 @@ class NotebookAdapter:
                 if validators.url(arg_par_value):
                     logger.debug(f'download {arg_par_value}')
                     try:
-                        file_name = self.download_file(arg_par_value, tmpdir, self.max_download_size)
+                        file_name = self.download_file(arg_par_value, tmpdir)
                         adapted_parameters[input_par_name] = file_name
                     except Exception as e:
                         exceptions.append(e)
