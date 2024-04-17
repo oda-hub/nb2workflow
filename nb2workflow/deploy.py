@@ -31,8 +31,8 @@ default_config = {
     "filename_pattern": '.*', 
 }
 
-default_ontology_path = "https://odahub.io/ontology/ontology.ttl"
 local_config = Dynaconf(settings_files=['settings.toml'])
+config_ontology_path = local_config.get('default.service.ontology_path', 'http://odahub.io/ontology/ontology.ttl')
 
 
 #TODO: probably want an option to really use the dir
@@ -70,11 +70,8 @@ def build_container(git_origin,
                     engine="docker",
                     cleanup=False,
                     nb2wversion=version(),
-                    ontology_path=None,
+                    ontology_path=config_ontology_path,
                     **kwargs):
-
-    if ontology_path is None:
-        ontology_path = local_config.get('default.service.ontology_path', default_ontology_path)
 
     if engine == "docker":
         return _build_with_docker(git_origin=git_origin,
@@ -202,7 +199,7 @@ def _build_with_kaniko(git_origin,
                       ontology_path=None):
 
     if ontology_path is None:
-        ontology_path = local_config.get('default.service.ontology_path', default_ontology_path)
+        ontology_path = local_config.get('default.service.ontology_path', config_ontology_path)
     
     #secret should be created beforehand https://github.com/GoogleContainerTools/kaniko#pushing-to-docker-hub
        
@@ -318,10 +315,7 @@ def _build_with_kaniko(git_origin,
         return container_metadata
 
 
-def _extract_resource_requirements(local_repo_path, ontology_path=None):
-
-    if ontology_path is None:
-        ontology_path = local_config.get('default.service.ontology_path', default_ontology_path)
+def _extract_resource_requirements(local_repo_path, ontology_path=config_ontology_path):
 
     ontology = Ontology(ontology_path)
     resources = {}
@@ -351,10 +345,7 @@ def _build_with_docker(git_origin,
                     source_from='localdir',
                     cleanup=False,
                     nb2wversion=version(),
-                    ontology_path=None):
-
-    if ontology_path is None:
-        ontology_path = local_config.get('default.service.ontology_path', default_ontology_path)
+                    ontology_path=config_ontology_path):
 
     if cleanup:
         logger.warning('Post-build cleanup is not implemented for docker builds')
@@ -585,11 +576,8 @@ def deploy(git_origin,
            build_timestamp=False,
            cleanup=False,
            nb2wversion=version(),
-           ontology_path=None):
+           ontology_path=config_ontology_path):
 
-    if ontology_path is None:
-        ontology_path = local_config.get('default.service.ontology_path', default_ontology_path)
-    
     container = build_container(git_origin,
                                 local=local, 
                                 run_tests=run_tests, 
@@ -634,10 +622,9 @@ def main():
 
     args = parser.parse_args()
 
-    ontology_path = local_config.get('default.service.ontology_path', default_ontology_path)
-
-    if args.ontology_path is not None:
-        ontology_path = args.ontology_path
+    deploy_ontology_path = args.ontology_path
+    if deploy_ontology_path is None:
+        deploy_ontology_path = config_ontology_path
 
     setup_logging()
     
@@ -647,7 +634,7 @@ def main():
            local=args.local, 
            build_engine=args.build_engine, 
            nb2wversion=args.nb2wversion,
-           ontology_path=ontology_path)
+           ontology_path=deploy_ontology_path)
 
 
 if __name__ == "__main__":
