@@ -15,6 +15,7 @@ from nb2workflow.nbadapter import NotebookAdapter, find_notebooks
 
 import nbformat
 from nbconvert.exporters import ScriptExporter
+from dynaconf import Dynaconf
 
 from ensureconda.api import ensureconda
 import subprocess as sp
@@ -29,8 +30,8 @@ import isort
 
 logger = logging.getLogger()
         
-               
-default_ontology_path = 'http://odahub.io/ontology/ontology.ttl'
+local_config = Dynaconf(settings_files=['settings.toml'])
+config_ontology_path = local_config.get('default.service.ontology_path', 'http://odahub.io/ontology/ontology.ttl')
 
 global_req = []
 
@@ -539,7 +540,7 @@ def to_galaxy(input_path,
               citations_bibfile = None,
               help_file = None,
               available_channels = ['default', 'conda-forge'],
-              ontology_path = default_ontology_path,
+              ontology_path = config_ontology_path,
               test_data_baseurl = None
               ):
     
@@ -690,7 +691,7 @@ def main():
     tool_version = args.tool_version
     ontology_path = args.ontology_path
     if ontology_path is None:
-        ontology_path = default_ontology_path
+        ontology_path = config_ontology_path
     bibfile = args.citations_bibfile
     help_file = args.help_file
     test_data_baseurl = args.test_data_baseurl
