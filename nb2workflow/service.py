@@ -95,6 +95,7 @@ def create_app():
     swagger = Swagger(app, template=template)
     app.wsgi_app = ReverseProxied(app.wsgi_app)
     app.json_encoder = CustomJSONEncoder
+    app.config["JSON_SORT_KEYS"] = False
     cache.init_app(app, config={'CACHE_TYPE': 'SimpleCache'})
 
 
