@@ -1,8 +1,10 @@
-[default.service]
-host = "127.0.0.1"
-port = 9191
+[default.global]
 max_download_size = 1000000000
 n_download_max_tries = 10
 download_retry_sleep = 0.5
 sentry_url = "https://63ae106793010d836c74830fa75b300c@o264756.ingest.sentry.io/4506186624335872"
 ontology_path = "https://odahub.io/ontology/ontology.ttl"
+
+[default.service]
+host = "127.0.0.1"
+port = 9191

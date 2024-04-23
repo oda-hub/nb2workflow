@@ -96,7 +96,7 @@ def create_app():
         }
     }
 
-    FlaskDynaconf(app, settings_files=["settings.toml"])
+    FlaskDynaconf(app, settings_files=["settings.toml"], env_switcher="MERGE_ENABLED_FOR_DYNACONF")
     swagger = Swagger(app, template=template)
     app.wsgi_app = ReverseProxied(app.wsgi_app)
     app.json_encoder = CustomJSONEncoder
@@ -699,13 +699,18 @@ def main():
     parser.add_argument('--one-shot', metavar='workflow', type=str)
     parser.add_argument('--pattern', type=str, default=r'.*')
     parser.add_argument('-s', '--settings', action="append", default=None)
+    parser.add_argument('--settings-path', action="append", default=None)
 
     args = parser.parse_args()
+
+    if args.settings_path is not None:
+        print("loading settings file from ", args.settings_path[0])
+        app.config.load_file(path=args.settings_path[0])
 
     if args.settings is not None:
         for item in args.settings:
             key, value = item.split('=')
-            app.config['SERVICE'][key] = value
+            app.config['global'][key] = value
 
     service_port = app.config.get('default.service.port', 9191)
     if args.port is not None:
