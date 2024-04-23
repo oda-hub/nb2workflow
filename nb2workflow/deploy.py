@@ -35,6 +35,8 @@ local_config = Dynaconf(settings_files=['settings.toml'])
 config_ontology_path = local_config.get('default.service.ontology_path', 'http://odahub.io/ontology/ontology.ttl')
 
 
+default_python_version = '3.10'
+
 #TODO: probably want an option to really use the dir
 def determine_origin(repo):
     if os.path.isdir(repo):
@@ -144,22 +146,28 @@ def _nb2w_dockerfile_gen(context_dir, git_origin, source_from, meta, nb2wversion
        
     if not config['use_repo_base_image']:
         has_conda_env = False
+        inject_python_version_str = f"sed -i '/dependencies/a \ \ - python={default_python_version}' /repo/environment.yml"
         if os.path.exists( local_repo_path / 'environment.yml' ):
             with open(local_repo_path / 'environment.yml') as fd:
                 parsed_env = yaml.safe_load(fd)
                 if 'dependencies' in parsed_env:
                     has_conda_env = True
+                    match_spec = re.compile(r'^python[~=<> ]')
+                    for dep in parsed_env['dependencies']:
+                        if match_spec.match(dep):
+                            inject_python_version_str = f'echo "Using {dep}"'
+                            break
                     
         if has_conda_env:
             dockerfile_content += dedent(f"""
-                RUN sed -i '/dependencies/a \ \ - python=3.10' /repo/environment.yml && \
+                RUN {inject_python_version_str} && \
                     micromamba install -y -n base -f /repo/environment.yml && \
                     micromamba install -y -n base -c conda-forge pip && \
                     micromamba clean --all --yes
                 """)
         else:
             dockerfile_content += dedent(f"""
-                RUN micromamba install -y -n base -c conda-forge python=3.10 pip && \
+                RUN micromamba install -y -n base -c conda-forge python={default_python_version} pip && \
                     micromamba clean --all --yes
                 """)
             
