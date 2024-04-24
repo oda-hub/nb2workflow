@@ -698,8 +698,8 @@ def main():
     parser.add_argument('--debug', action="store_true")
     parser.add_argument('--one-shot', metavar='workflow', type=str)
     parser.add_argument('--pattern', type=str, default=r'.*')
-    parser.add_argument('-s', '--settings', action="append", default=None)
     parser.add_argument('--settings-path', action="append", default=None)
+    parser.add_argument('-s', '--settings', nargs="*", default=[])
 
     args = parser.parse_args()
 
@@ -715,10 +715,12 @@ def main():
     service_port = app.config.get('default.service.port', 9191)
     if args.port is not None:
         service_port = args.port
+        app.config['SERVICE']['port'] = service_port
 
     service_host = app.config.get('default.service.host', "127.0.0.1")
     if args.host is not None:
         service_host = args.host
+        app.config['service.host'] = service_host
 
     handler = logging.StreamHandler()
     handler.setLevel(logging.INFO)
