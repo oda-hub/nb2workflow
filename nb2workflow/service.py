@@ -715,7 +715,7 @@ def main():
     service_port = app.config.get('default.service.port', 9191)
     if args.port is not None:
         service_port = args.port
-        app.config['SERVICE']['port'] = service_port
+        app.config['service.port'] = service_port
 
     service_host = app.config.get('default.service.host', "127.0.0.1")
     if args.host is not None:
