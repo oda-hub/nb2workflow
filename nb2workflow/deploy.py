@@ -19,6 +19,7 @@ import glob
 import rdflib
 from oda_api.ontology_helper import Ontology
 from nb2workflow.nbadapter import NotebookAdapter
+from dynaconf import Dynaconf
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +31,9 @@ default_config = {
     "filename_pattern": '.*', 
 }
 
-default_ontology_path = "https://odahub.io/ontology/ontology.ttl"
+local_config = Dynaconf(settings_files=['settings.toml'])
+config_ontology_path = local_config.get('default.service.ontology_path', 'http://odahub.io/ontology/ontology.ttl')
+
 
 default_python_version = '3.10'
 
@@ -69,8 +72,9 @@ def build_container(git_origin,
                     engine="docker",
                     cleanup=False,
                     nb2wversion=version(),
-                    ontology_path=default_ontology_path,
+                    ontology_path=config_ontology_path,
                     **kwargs):
+
     if engine == "docker":
         return _build_with_docker(git_origin=git_origin,
                                  local=local,
@@ -200,7 +204,10 @@ def _build_with_kaniko(git_origin,
                       namespace="oda-staging",
                       cleanup=True,
                       nb2wversion=version(),
-                      ontology_path=default_ontology_path):
+                      ontology_path=None):
+
+    if ontology_path is None:
+        ontology_path = config_ontology_path
     
     #secret should be created beforehand https://github.com/GoogleContainerTools/kaniko#pushing-to-docker-hub
        
@@ -316,7 +323,8 @@ def _build_with_kaniko(git_origin,
         return container_metadata
 
 
-def _extract_resource_requirements(local_repo_path, ontology_path=default_ontology_path):
+def _extract_resource_requirements(local_repo_path, ontology_path=config_ontology_path):
+
     ontology = Ontology(ontology_path)
     resources = {}
 
@@ -345,7 +353,8 @@ def _build_with_docker(git_origin,
                     source_from='localdir',
                     cleanup=False,
                     nb2wversion=version(),
-                    ontology_path=default_ontology_path):
+                    ontology_path=config_ontology_path):
+
     if cleanup:
         logger.warning('Post-build cleanup is not implemented for docker builds')
     
@@ -575,8 +584,8 @@ def deploy(git_origin,
            build_timestamp=False,
            cleanup=False,
            nb2wversion=version(),
-           ontology_path=default_ontology_path):
-    
+           ontology_path=config_ontology_path):
+
     container = build_container(git_origin,
                                 local=local, 
                                 run_tests=run_tests, 
@@ -617,9 +626,24 @@ def main():
     parser.add_argument('--local', action="store_true", default=False)
     parser.add_argument('--build-engine', metavar="build_engine", default="docker")
     parser.add_argument('--nb2wversion', metavar="nb2wversion", default=version())
-    parser.add_argument('--ontology-path', metavar="ontology_path", default=default_ontology_path)
-    
+    parser.add_argument('--ontology-path', metavar="ontology_path")
+    parser.add_argument('--settings-path', action="append", default=None)
+    parser.add_argument('-s', '--settings', nargs="*", default=[])
+
     args = parser.parse_args()
+
+    if args.settings_path is not None:
+        print("loading settings file from ", args.settings_path[0])
+        local_config.load_file(path=args.settings_path[0])
+
+    if args.settings is not None:
+        for item in args.settings:
+            key, value = item.split('=')
+            local_config['deploy'][key] = value
+
+    deploy_ontology_path = args.ontology_path
+    if deploy_ontology_path is None:
+        deploy_ontology_path = config_ontology_path
 
     setup_logging()
     
@@ -629,7 +653,7 @@ def main():
            local=args.local, 
            build_engine=args.build_engine, 
            nb2wversion=args.nb2wversion,
-           ontology_path=args.ontology_path)
+           ontology_path=deploy_ontology_path)
 
 
 if __name__ == "__main__":

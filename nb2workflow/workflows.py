@@ -12,6 +12,8 @@ from diskcache import Cache
 
 from nb2workflow import nbadapter
 
+from dynaconf import Dynaconf
+
 cache = Cache('.nb2workflow/cache')
 enable_cache = False
 
@@ -58,6 +60,8 @@ def evaluate(router, *args, **kwargs):
 
     print("async_request is not used here, but is set to", async_request)
 
+    config = Dynaconf(settings_files=['settings.toml'])
+    sentry.sentry_url = config.default.service.sentry_url
 
     logstasher.set_context(dict(router=router, args=args, kwargs=kwargs))
     logstasher.log(dict(event='starting'))
@@ -80,7 +84,7 @@ def evaluate(router, *args, **kwargs):
         location = args[0]
         args = args[1:]
 
-        nba = nbadapter.NotebookAdapter(location+"/%s.ipynb"%args[0])
+        nba = nbadapter.NotebookAdapter(location+"/%s.ipynb"%args[0], config=config)
 
         # unused args
 

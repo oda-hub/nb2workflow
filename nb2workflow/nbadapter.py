@@ -28,9 +28,10 @@ import scrapbook as sb
 import nbformat
 from nbconvert import HTMLExporter
 from urllib.parse import urlencode, urlparse
+from urllib import request
+from dynaconf import Dynaconf
 
 from . import logstash
-
 from nb2workflow.sentry import sentry
 from nb2workflow.health import current_health
 from nb2workflow import workflows
@@ -249,14 +250,20 @@ class NotebookAdapter:
     limit_output_attachment_file = None
 
 
-    def __init__(self, notebook_fn, tempdir_cache=None, n_download_max_tries=10, download_retry_sleep=.5):
+    def __init__(self, notebook_fn, tempdir_cache=None, config=None):
         self.notebook_fn = os.path.abspath(notebook_fn)
         self.name = notebook_short_name(notebook_fn)
         self.tempdir_cache = tempdir_cache
         logger.debug("notebook adapter for %s", self.notebook_fn)
         logger.debug(self.extract_parameters())
-        self.n_download_max_tries = n_download_max_tries
-        self.download_retry_sleep_s = download_retry_sleep
+
+        if config is None:
+            config = dict()
+
+        self.n_download_max_tries = config.get('SERVICE.N_DOWNLOAD_MAX_TRIES', 10)
+        self.download_retry_sleep_s = config.get('SERVICE.DOWNLOAD_RETRY_SLEEP', .5)
+        self.max_download_size = config.get('SERVICE.MAX_DOWNLOAD_SIZE', 1e6)
+        sentry.sentry_url = config.get('SERVICE.SENTRY_URL', None)
 
     @staticmethod
     def get_unique_filename_from_url(file_url):
@@ -567,26 +574,51 @@ class NotebookAdapter:
 
     def download_file(self, file_url, tmpdir):
         n_download_tries_left = self.n_download_max_tries
+        size_ok = False
+        file_downloaded = False
         file_name = NotebookAdapter.get_unique_filename_from_url(file_url)
-        while True:
+        file_path = os.path.join(tmpdir, file_name)
+        for _ in range(n_download_tries_left):
+            step = 'getting the file size'
+            if not size_ok:
+                response = requests.head(file_url)
+                if response.status_code == 200:
+                    file_size = int(response.headers.get('Content-Length', 0))
+                    if file_size > self.max_download_size:
+                        msg = ("The file appears to be too large to download, "
+                               f"and the download limit is set to {self.max_download_size} bytes.")
+                        logger.warning(msg)
+                        sentry.capture_message(msg)
+                        raise Exception(msg)
+                else:
+                    logger.warning(
+                        (f"An issue occurred when attempting to {step} of the file at the url {file_url}. "
+                         f"Sleeping {self.download_retry_sleep_s} seconds until retry")
+                    )
+                    time.sleep(self.download_retry_sleep_s)
+                    continue
+            size_ok = True
+            step = 'downloading file'
             response = requests.get(file_url)
             if response.status_code == 200:
-                with open(os.path.join(tmpdir, file_name), 'wb') as file:
+                with open(file_path, 'wb') as file:
                     file.write(response.content)
+                file_downloaded = True
                 break
             else:
-                n_download_tries_left -= 1
-                if n_download_tries_left > 0:
-                    logger.warning(
-                        f"An issue occurred when attempting to download the file at the url {file_url}, "
-                        f"sleeping {self.download_retry_sleep_s} seconds until retry")
-                    time.sleep(self.download_retry_sleep_s)
-                else:
-                    msg = (f"An issue occurred when attempting to download the url {file_url}, "
-                           "this might be related to an invalid url, please check the input provided")
-                    logger.warning(msg)
-                    sentry.capture_message(msg)
-                    raise Exception(msg)
+                logger.warning(
+                    (f"An issue occurred when attempting to {step} the file at the url {file_url}. "
+                     f"Sleeping {self.download_retry_sleep_s} seconds until retry")
+                )
+                time.sleep(self.download_retry_sleep_s)
+                continue
+
+        if not (file_downloaded and size_ok):
+            msg = (f"An issue occurred when attempting to {step} at the url {file_url}. "
+                   "This might be related to an invalid url, please check the input provided")
+            logger.warning(msg)
+            sentry.capture_message(msg)
+            raise Exception(msg)
 
         return file_name
 
@@ -712,13 +744,12 @@ if isinstance({output},str) and os.path.exists({output}):
 def notebook_short_name(ipynb_fn):
     return os.path.basename(ipynb_fn).replace(".ipynb","")
 
-def find_notebooks(source, tests=False, pattern = r'.*') -> Dict[str, NotebookAdapter]:
+def find_notebooks(source, tests=False, pattern = r'.*', config=None) -> Dict[str, NotebookAdapter]:
 
     def base_filter(fn): 
         good = "output" not in fn and "preproc" not in fn
         good = good and re.match(pattern, os.path.basename(fn)) 
         return good
-        
 
     if tests:
         filt = lambda fn: base_filter(fn) and "/test_" in fn
@@ -734,7 +765,10 @@ def find_notebooks(source, tests=False, pattern = r'.*') -> Dict[str, NotebookAd
             raise Exception("no notebooks found in the directory:",source)
 
         notebook_adapters=dict([
-                (notebook_short_name(notebook),NotebookAdapter(notebook)) for notebook in notebooks
+                (
+                    notebook_short_name(notebook),
+                    NotebookAdapter(notebook, config=config)
+                 ) for notebook in notebooks
             ])
         logger.debug("notebook adapters: %s",notebook_adapters)
 
@@ -742,15 +776,15 @@ def find_notebooks(source, tests=False, pattern = r'.*') -> Dict[str, NotebookAd
     elif os.path.isfile(source):
         if pattern != r'.*':
             logger.warning('Filename pattern is set but source %s is a single file. Ignoring pattern.')
-        notebook_adapters={notebook_short_name(source): NotebookAdapter(source)}
+        notebook_adapters={notebook_short_name(source): NotebookAdapter(source, config=config)}
 
     else:
         raise Exception("requested notebook not found:",source)
 
     return notebook_adapters
 
-def nbinspect(nb_source, out=True, machine_readable=False):
-    nbas = find_notebooks(nb_source)
+def nbinspect(nb_source, out=True, machine_readable=False, config=None):
+    nbas = find_notebooks(nb_source, config=config)
 
     # class CustomEncoder(json.JSONEncoder):
     #     def default(self, obj):
@@ -885,9 +919,9 @@ def validate_oda_dispatcher(nba: NotebookAdapter, optional=True, machine_readabl
         
     
 
-def nbrun(nb_source, inp, inplace=False, optional_dispather=True, machine_readable=False):
+def nbrun(nb_source, inp, inplace=False, optional_dispather=True, machine_readable=False, config=None):
 
-    nbas = find_notebooks(nb_source)
+    nbas = find_notebooks(nb_source, config=config)
 
     if len(nbas) > 1:
         nba = nbas[inp.pop('notebook')]
@@ -1011,7 +1045,9 @@ def main_inspect():
 
     setup_logging(args.debug)
 
-    nbinspect(args.notebook, machine_readable=args.machine_readable)
+    config = Dynaconf(settings_files=['settings.toml'])
+
+    nbinspect(args.notebook, machine_readable=args.machine_readable, config=config)
 
 
 def main():
@@ -1034,7 +1070,13 @@ def main():
         
     setup_logging(args.debug)
 
-    nbrun(args.notebook, inputs, inplace=args.inplace, optional_dispather=not args.mmoda_validation, machine_readable=args.machine_readable)
+    config = Dynaconf(settings_files=['settings.toml'])
+
+    nbrun(args.notebook, inputs,
+          inplace=args.inplace,
+          optional_dispather=not args.mmoda_validation,
+          machine_readable=args.machine_readable,
+          config=config)
 
 
 if __name__ == "__main__":

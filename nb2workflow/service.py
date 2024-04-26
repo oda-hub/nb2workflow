@@ -4,6 +4,7 @@ import re
 
 from werkzeug.routing import RequestRedirect
 
+
 try:
     from werkzeug.exceptions import MethodNotAllowed, NotFound
 except ImportError:
@@ -35,6 +36,8 @@ from bs4 import BeautifulSoup
 from flask import Flask, make_response, jsonify, request, url_for, send_file, Response
 from flask_caching import Cache
 from flask_cors import CORS
+
+from dynaconf import FlaskDynaconf
 
 from flasgger import LazyString, Swagger, swag_from
 
@@ -92,6 +95,8 @@ def create_app():
             "version": "0.0.1"
         }
     }
+
+    FlaskDynaconf(app, settings_files=["settings.toml"], env_switcher="MERGE_ENABLED_FOR_DYNACONF")
     swagger = Swagger(app, template=template)
     app.wsgi_app = ReverseProxied(app.wsgi_app)
     app.json_encoder = CustomJSONEncoder
@@ -173,7 +178,8 @@ class AsyncWorkflow:
             return
        
         template_nba = app.notebook_adapters.get(self.target)
-        nba = NotebookAdapter(template_nba.notebook_fn, tempdir_cache=app.async_workflow_jobdirs)
+
+        nba = NotebookAdapter(template_nba.notebook_fn, tempdir_cache=app.async_workflow_jobdirs, config=app.config)
         
         app.async_workflows[self.key] = 'started'
         self.perform_callback(action='progress')
@@ -265,7 +271,8 @@ def workflow(target, background=False, async_request=False):
         logger.debug("raw parameters %s", request.args)
 
     template_nba = app.notebook_adapters.get(target)
-    nba = NotebookAdapter(template_nba.notebook_fn)
+
+    nba = NotebookAdapter(template_nba.notebook_fn, config=app.config)
 
     if nba is None:
         interpreted_parameters = None
@@ -678,9 +685,8 @@ def main():
 
     parser = argparse.ArgumentParser(description='Process some integers.')
     parser.add_argument('notebook', metavar='notebook', type=str)
-    parser.add_argument('--host', metavar='host',
-                        type=str, default="127.0.0.1")
-    parser.add_argument('--port', metavar='port', type=int, default=9191)
+    parser.add_argument('--host', metavar='host', type=str)
+    parser.add_argument('--port', metavar='port', type=int)
     parser.add_argument('--async-workers', metavar='N', type=int, default=3)
     #parser.add_argument('--tmpdir', metavar='tmpdir', type=str, default=None)
     parser.add_argument('--publish', metavar='upstream-url',
@@ -692,8 +698,29 @@ def main():
     parser.add_argument('--debug', action="store_true")
     parser.add_argument('--one-shot', metavar='workflow', type=str)
     parser.add_argument('--pattern', type=str, default=r'.*')
+    parser.add_argument('--settings-path', action="append", default=None)
+    parser.add_argument('-s', '--settings', nargs="*", default=[])
 
     args = parser.parse_args()
+
+    if args.settings_path is not None:
+        print("loading settings file from ", args.settings_path[0])
+        app.config.load_file(path=args.settings_path[0])
+
+    if args.settings is not None:
+        for item in args.settings:
+            key, value = item.split('=')
+            app.config['global'][key] = value
+
+    service_port = app.config.get('default.service.port', 9191)
+    if args.port is not None:
+        service_port = args.port
+        app.config['service.port'] = service_port
+
+    service_host = app.config.get('default.service.host', "127.0.0.1")
+    if args.host is not None:
+        service_host = args.host
+        app.config['service.host'] = service_host
 
     handler = logging.StreamHandler()
     handler.setLevel(logging.INFO)
@@ -713,7 +740,7 @@ def main():
         root.setLevel(logging.INFO)
         handler.setLevel(logging.INFO)
 
-    app.notebook_adapters = find_notebooks(args.notebook, pattern=args.pattern)
+    app.notebook_adapters = find_notebooks(args.notebook, pattern=args.pattern, config=app.config)
     setup_routes(app)
     app.service_semantic_signature = ontology.service_semantic_signature(
         app.notebook_adapters)
@@ -725,13 +752,13 @@ def main():
             s = args.publish_as.split(":")
             publish_host, publish_port = ":".join(s[:-1]), int(s[-1])
         else:
-            publish_host, publish_port = args.host, args.port
+            publish_host, publish_port = service_host, service_port
 
         for nba_name, nba in app.notebook_adapters.items():
             publish.publish(args.publish, nba_name, publish_host, publish_port)
 
-  #  for rule in app.url_map.iter_rules():
- #       logger.debug("==>> %s %s %s %s",rule,rule.endpoint,rule.__class__,rule.__dict__)
+    #  for rule in app.url_map.iter_rules():
+    #       logger.debug("==>> %s %s %s %s",rule,rule.endpoint,rule.__class__,rule.__dict__)
 
     for worker_i in range(args.async_workers):
         async_worker = AsyncWorker('default-%i' % worker_i)

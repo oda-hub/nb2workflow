@@ -20,6 +20,10 @@ class Sentry:
             self._sentry_url = os.environ.get('SENTRY_URL', "https://63ae106793010d836c74830fa75b300c@o264756.ingest.sentry.io/4506186624335872")
         return self._sentry_url
 
+    @sentry_url.setter
+    def sentry_url(self, url):
+        self._sentry_url = url
+
     @property
     def have_sentry(self):
         if self.sentry_url is None or self.sentry_url == '' or sentry_sdk is None:

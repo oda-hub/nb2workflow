@@ -57,6 +57,7 @@ def test_service(client):
     for l in sorted(r.json, key=lambda x:x['ctime']):
         logger.info(l)
 
+
     job = r.json[-1]['fn'].split("/")[-1]
     logger.info("job %s", job)
 
