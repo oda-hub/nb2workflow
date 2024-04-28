@@ -184,6 +184,9 @@ class AsyncWorkflow:
         self.perform_callback(action='progress')
 
         try:
+            thread_id = threading.get_ident()
+            process_id = os.getpid()
+            logger.info(f'nba.execute thread id: {thread_id} ; process id: {process_id}')
             exceptions = nba.execute(self.params['request_parameters'], context=self.context, tmpdir_key=self.key)
         except PapermillWorkflowIncomplete as e:
             logger.info("found incomplete workflow: %s, rescheduling", repr(e))
@@ -737,6 +740,10 @@ def main():
 
         for nba_name, nba in app.notebook_adapters.items():
             publish.publish(args.publish, nba_name, publish_host, publish_port)
+
+    thread_id = threading.get_ident()
+    process_id = os.getpid()
+    logger.info(f'service main thread id: {thread_id} ; process id: {process_id}')
 
   #  for rule in app.url_map.iter_rules():
  #       logger.debug("==>> %s %s %s %s",rule,rule.endpoint,rule.__class__,rule.__dict__)
