@@ -22,6 +22,7 @@ import validators
 import requests
 import random
 import string
+import threading
 
 import papermill as pm
 import scrapbook as sb
@@ -497,6 +498,11 @@ class NotebookAdapter:
             try:
                 if token:
                     os.environ[self.token_env_variable] = token
+
+                thread_id = threading.get_ident()
+                process_id = os.getpid()
+                logger.info(f'pm.execute_notebook thread id: {thread_id} ; process id: {process_id}')
+
                 pm.execute_notebook(
                    self.preproc_notebook_fn,
                    self.output_notebook_fn,
