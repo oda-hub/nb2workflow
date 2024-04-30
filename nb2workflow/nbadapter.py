@@ -36,8 +36,9 @@ from nb2workflow.health import current_health
 from nb2workflow import workflows
 from nb2workflow.logging_setup import setup_logging
 from nb2workflow.json import CustomJSONEncoder
+from nb2workflow.url_helper import is_mmoda_url
+from nb2workflow.semantics import understand_comment_references
 
-from nb2workflow.semantics import understand_comment_references, oda_ontology_prefix
 from git import Repo, InvalidGitRepositoryError, GitCommandError
 
 import logging
@@ -590,7 +591,7 @@ class NotebookAdapter:
 
         return file_name
 
-    def extract_files_locally(self, parameters, tmpdir):
+    def handle_url_params(self, parameters, tmpdir):
         adapted_parameters = copy.deepcopy(parameters)
         exceptions = []
         for input_par_name, input_par_obj in self.input_parameters.items():
@@ -600,6 +601,13 @@ class NotebookAdapter:
                 if arg_par_value is None:
                     arg_par_value = input_par_obj['default_value']
                 if validators.url(arg_par_value):
+
+                    if is_mmoda_url(arg_par_value):
+                        token = adapted_parameters.get('token', None)
+                        if token is not None:
+                            logger.debug(f'adding token to the url: {arg_par_value}')
+                            adapted_parameters[input_par_name] += f"&token={token}"
+
                     logger.debug(f'download {arg_par_value}')
                     try:
                         file_name = self.download_file(arg_par_value, tmpdir)
