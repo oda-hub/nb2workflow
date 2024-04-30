@@ -483,7 +483,7 @@ class NotebookAdapter:
         self.inject_output_gathering()
         exceptions = []
 
-        r = self.extract_files_locally(parameters, tmpdir)
+        r = self.handle_url_params(parameters, tmpdir)
 
         if len(r['exceptions']) > 0:
             exceptions.extend(r['exceptions'])
