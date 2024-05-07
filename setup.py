@@ -78,7 +78,6 @@ setup(name='nb2workflow',
       },
 
       tests_require=[
-        'git+https://github.com/oda-hub/oda_api.git@158-notebooks-should-have-access-to-requesters-oda-token', # TODO: remove when oda-api PR is aproved
         'pytest',
         'pytest-xprocess',
         'matplotlib',
