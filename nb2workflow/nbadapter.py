@@ -27,7 +27,7 @@ import papermill as pm
 import scrapbook as sb
 import nbformat
 from nbconvert import HTMLExporter
-from urllib.parse import urlencode, urlparse
+from urllib.parse import urlparse
 
 from . import logstash
 
@@ -250,14 +250,15 @@ class NotebookAdapter:
     limit_output_attachment_file = None
 
 
-    def __init__(self, notebook_fn, tempdir_cache=None, n_download_max_tries=10, download_retry_sleep=.5):
+    def __init__(self, notebook_fn, tempdir_cache=None, n_download_max_tries=10, download_retry_sleep_s=.5, max_download_size=1e6):
         self.notebook_fn = os.path.abspath(notebook_fn)
         self.name = notebook_short_name(notebook_fn)
         self.tempdir_cache = tempdir_cache
         logger.debug("notebook adapter for %s", self.notebook_fn)
         logger.debug(self.extract_parameters())
         self.n_download_max_tries = n_download_max_tries
-        self.download_retry_sleep_s = download_retry_sleep
+        self.download_retry_sleep_s = download_retry_sleep_s
+        self.max_download_size = max_download_size
 
     @staticmethod
     def get_unique_filename_from_url(file_url):
@@ -568,26 +569,51 @@ class NotebookAdapter:
 
     def download_file(self, file_url, tmpdir):
         n_download_tries_left = self.n_download_max_tries
+        size_ok = False
+        file_downloaded = False
         file_name = NotebookAdapter.get_unique_filename_from_url(file_url)
-        while True:
+        file_path = os.path.join(tmpdir, file_name)
+        for _ in range(n_download_tries_left):
+            step = 'getting the file size'
+            if not size_ok:
+                response = requests.head(file_url)
+                if response.status_code == 200:
+                    file_size = int(response.headers.get('Content-Length', 0))
+                    if file_size > self.max_download_size:
+                        msg = ("The file appears to be too large to download, "
+                               f"and the download limit is set to {self.max_download_size} bytes.")
+                        logger.warning(msg)
+                        sentry.capture_message(msg)
+                        raise Exception(msg)
+                else:
+                    logger.warning(
+                        (f"An issue occurred when attempting to {step} of the file at the url {file_url}. "
+                         f"Sleeping {self.download_retry_sleep_s} seconds until retry")
+                    )
+                    time.sleep(self.download_retry_sleep_s)
+                    continue
+            size_ok = True
+            step = 'downloading file'
             response = requests.get(file_url)
             if response.status_code == 200:
-                with open(os.path.join(tmpdir, file_name), 'wb') as file:
+                with open(file_path, 'wb') as file:
                     file.write(response.content)
+                file_downloaded = True
                 break
             else:
-                n_download_tries_left -= 1
-                if n_download_tries_left > 0:
-                    logger.warning(
-                        f"An issue occurred when attempting to download the file at the url {file_url}, "
-                        f"sleeping {self.download_retry_sleep_s} seconds until retry")
-                    time.sleep(self.download_retry_sleep_s)
-                else:
-                    msg = (f"An issue occurred when attempting to download the url {file_url}, "
-                           "this might be related to an invalid url, please check the input provided")
-                    logger.warning(msg)
-                    sentry.capture_message(msg)
-                    raise Exception(msg)
+                logger.warning(
+                    (f"An issue occurred when attempting to {step} the file at the url {file_url}. "
+                     f"Sleeping {self.download_retry_sleep_s} seconds until retry")
+                )
+                time.sleep(self.download_retry_sleep_s)
+                continue
+
+        if not (file_downloaded and size_ok):
+            msg = (f"An issue occurred when attempting to {step} at the url {file_url}. "
+                   "This might be related to an invalid url, please check the input provided")
+            logger.warning(msg)
+            sentry.capture_message(msg)
+            raise Exception(msg)
 
         return file_name
 
