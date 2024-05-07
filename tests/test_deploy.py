@@ -1,15 +1,16 @@
 import json
 import pytest
 import subprocess as sp
-from nb2workflow.deploy import NBRepo, deploy, verify_resource_secret
 
 
 @pytest.mark.deploy
 def test_deploy():
+    from nb2workflow.deploy import deploy
     deploy("https://renkulab.io/gitlab/vladimir.savchenko/oda-sdss", "legacysurvey")
 
 
 def test_extract_resource_requirements(temp_dir, ontology_path):
+    from nb2workflow.deploy import NBRepo
     test_repo = "https://github.com/okolo/s3test.git"
     with NBRepo(test_repo, ontology_path=ontology_path) as repo:
         resources = repo.pre_build_metadata['resources']
@@ -25,6 +26,8 @@ def test_extract_resource_requirements(temp_dir, ontology_path):
 
 @pytest.mark.deploy
 def test_deploy_secret(ontology_path):
+    from nb2workflow.deploy import deploy, verify_resource_secret
+
     namespace = "oda-staging"
     secret_name = "crbeams3"
     credentials = dict(
