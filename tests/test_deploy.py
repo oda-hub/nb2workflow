@@ -1,36 +1,30 @@
+import json
 import pytest
 import subprocess as sp
-import os
+from nb2workflow.deploy import NBRepo, deploy, verify_resource_secret
+
 
 @pytest.mark.deploy
 def test_deploy():
-    from nb2workflow.deploy import deploy
-
     deploy("https://renkulab.io/gitlab/vladimir.savchenko/oda-sdss", "legacysurvey")
 
 
 def test_extract_resource_requirements(temp_dir, ontology_path):
-    from nb2workflow.deploy import _extract_resource_requirements
     test_repo = "https://github.com/okolo/s3test.git"
-    sp.check_call(
-            ["git", "clone", test_repo, "nb-repo"],
-            cwd=temp_dir)
-    local_repo_path = os.path.join(temp_dir, "nb-repo")
-    resources = _extract_resource_requirements(local_repo_path, ontology_path=ontology_path)
-    expected_resources = {
-        'crbeams3': {
-            'resource': 'CRBeamS3',
-            'required': True,
-            'env_vars': {'CRBEAM_S3_CREDENTIALS2', 'CRBEAM_S3_CREDENTIALS'}
+    with NBRepo(test_repo, ontology_path=ontology_path) as repo:
+        resources = repo.pre_build_metadata['resources']
+        expected_resources = {
+            'crbeams3': {
+                'resource': 'CRBeamS3',
+                'required': True,
+                'env_vars': {'CRBEAM_S3_CREDENTIALS2', 'CRBEAM_S3_CREDENTIALS'}
+            }
         }
-    }
-    assert expected_resources == resources
+        assert expected_resources == resources
 
 
 @pytest.mark.deploy
 def test_deploy_secret(ontology_path):
-    import json
-    from nb2workflow.deploy import deploy, verify_resource_secret, _extract_resource_requirements
     namespace = "oda-staging"
     secret_name = "crbeams3"
     credentials = dict(

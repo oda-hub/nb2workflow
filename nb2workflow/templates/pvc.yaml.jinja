@@ -1,0 +1,14 @@
+{% if with_volume %}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ deployment_name }}
+  namespace: {{ namespace }}
+spec:
+  accessModes:
+  - {{ 'ReadWriteMany' if rw_many else 'ReadWriteOnce' }}
+  resources:
+    requests:
+      storage: {{ volume_size }}Gi
+  storageClassName: {{ storageclass }}
+{% endif %}

@@ -1,0 +1,46 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kaniko-build-tmp42xff22q
+  namespace: staging
+spec:
+  backoffLimit: 1
+  ttlSecondsAfterFinished: 86400                
+  template:
+    spec:
+      containers:
+      - name: kaniko-build
+        image: gcr.io/kaniko-project/executor:v1.22.0
+        imagePullPolicy: IfNotPresent
+        args:
+        - "--dockerfile=/tmp/build/Dockerfile"
+        - "--context=dir:///tmp/build"
+        - "--push-retry=3"
+        - "--cache=true"
+        - "--no-push"
+        
+        volumeMounts:
+        - name: dockerfile
+          mountPath: /tmp/build/Dockerfile
+          subPath: Dockerfile
+        - name: kaniko-secret
+          mountPath: /kaniko/.docker/config.json
+          subPath: config.json
+        resources:
+          requests:
+            ephemeral-storage: 2G
+            cpu: 1
+            memory: 500M
+          limits:
+            ephemeral-storage: 5G
+            cpu: 2
+            memory: 2G
+      volumes:
+      - name: dockerfile
+        configMap:
+          name: nb2w-dockerfile-tmp42xff22q
+      - name: kaniko-secret
+        secret:
+          secretName: kaniko-secret
+      restartPolicy: Never
+      resources:
