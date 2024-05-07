@@ -43,7 +43,7 @@ jobs:
 
     - name: Test with pytest
       run: |
-        pip install .[rdf,service,mmoda,k8s]
+        pip install .[rdf,service,mmoda]
         PYTHONPATH=./ tox -e ${{ matrix.python-version-env }} 
 
     - name: Codecov
