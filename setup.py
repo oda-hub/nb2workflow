@@ -61,13 +61,13 @@ setup(name='nb2workflow',
             'matplotlib'
         ],
         "mmoda":[
-            'oda_api'
+            #'oda_api'
         ],
         "k8s":[
             'kubernetes'
         ],
         'galaxy':[
-            'oda_api',
+            #'oda_api',
             'ensureconda',
             'bibtexparser >= 2.0.0b3',
             'pypandoc_binary',
