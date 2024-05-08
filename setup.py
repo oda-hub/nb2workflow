@@ -61,13 +61,13 @@ setup(name='nb2workflow',
             'matplotlib'
         ],
         "mmoda":[
-            #'oda_api'
+            'oda_api @ git+https://github.com/oda-hub/oda_api.git@158-notebooks-should-have-access-to-requesters-oda-token'
         ],
         "k8s":[
             'kubernetes'
         ],
         'galaxy':[
-            #'oda_api',
+            'oda_api @ git+https://github.com/oda-hub/oda_api.git@158-notebooks-should-have-access-to-requesters-oda-token',
             'ensureconda',
             'bibtexparser >= 2.0.0b3',
             'pypandoc_binary',

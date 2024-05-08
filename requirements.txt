@@ -24,4 +24,3 @@ matplotlib
 werkzeug==2.0.3
 nbconvert>=7.0.0
 GitPython
-git+https://github.com/oda-hub/oda_api.git@158-notebooks-should-have-access-to-requesters-oda-token
