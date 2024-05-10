@@ -535,7 +535,7 @@ class NotebookAdapter:
         save context to file .oda_api_context in the notebook dir where it can be accessed by ODA API
         :param workdir: directory to save notebook in
         """
-        context_file = ".oda_api_context"  # perhaps it would be better to define this constant in a common lib
+        from oda_api import context_file
         context_file_path = os.path.join(workdir, context_file)
         with open(context_file_path, 'wt') as output:
             json.dump(context, output)
