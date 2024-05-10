@@ -24,7 +24,7 @@ def test_token_async(client):
         a=20,
         _async_request='yes',
         _async_request_callback=callback_url,
-                   _token=token)
+            _token=token)
 
     r = client.get('/api/v1.0/get/token',
                    query_string=query_string)
