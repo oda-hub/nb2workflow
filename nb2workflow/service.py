@@ -269,7 +269,7 @@ def workflow(target, background=False, async_request=False):
 
     async_request = request.args.get('_async_request', async_request)
     async_request_callback = request.args.get('_async_request_callback', None)
-    token =request.args.get("_token", None)
+    token = request.args.get("_token", None)
     context = dict(callback=async_request_callback, token=token)
 
     logger.debug("target %s", target)
