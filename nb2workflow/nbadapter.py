@@ -436,26 +436,26 @@ class NotebookAdapter:
 
     def execute(self, parameters, progress_bar=True, log_output=True, inplace=False, tmpdir_key=None, context=None):
 
-    if context is None:
-        context = {}
-        t0 = time.time()
-        logstasher.log(dict(origin="nb2workflow.execute", event="starting", parameters=parameters, workflow_name=notebook_short_name(self.notebook_fn), health=current_health()))
+        if context is None:
+            context = {}
+            t0 = time.time()
+            logstasher.log(dict(origin="nb2workflow.execute", event="starting", parameters=parameters, workflow_name=notebook_short_name(self.notebook_fn), health=current_health()))
 
-        logger.info("starting job")
-        exceptions = self._execute(parameters, progress_bar, log_output, inplace, context=context, tmpdir_key=tmpdir_key)
-            
-        tspent = time.time() - t0
-        logstasher.log(dict(origin="nb2workflow.execute", 
-                            event="done", 
-                            parameters=parameters, 
-                            workflow_name=notebook_short_name(self.notebook_fn), 
-                            exceptions=list(map(workflows.serialize_workflow_exception, exceptions)),
-                            health=current_health(), 
-                            time_spent=tspent))
+            logger.info("starting job")
+            exceptions = self._execute(parameters, progress_bar, log_output, inplace, context=context, tmpdir_key=tmpdir_key)
+
+            tspent = time.time() - t0
+            logstasher.log(dict(origin="nb2workflow.execute",
+                                event="done",
+                                parameters=parameters,
+                                workflow_name=notebook_short_name(self.notebook_fn),
+                                exceptions=list(map(workflows.serialize_workflow_exception, exceptions)),
+                                health=current_health(),
+                                time_spent=tspent))
 
         return exceptions
 
-    def _execute(self, parameters, progress_bar = True, log_output = True, inplace=False, context={}, tmpdir_key=None):
+    def _execute(self, parameters, progress_bar=True, log_output=True, inplace=False, context={}, tmpdir_key=None):
 
         if not inplace :
             tmpdir = self.new_tmpdir(tmpdir_key)
