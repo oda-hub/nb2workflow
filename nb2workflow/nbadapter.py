@@ -438,20 +438,20 @@ class NotebookAdapter:
 
         if context is None:
             context = {}
-            t0 = time.time()
-            logstasher.log(dict(origin="nb2workflow.execute", event="starting", parameters=parameters, workflow_name=notebook_short_name(self.notebook_fn), health=current_health()))
+        t0 = time.time()
+        logstasher.log(dict(origin="nb2workflow.execute", event="starting", parameters=parameters, workflow_name=notebook_short_name(self.notebook_fn), health=current_health()))
 
-            logger.info("starting job")
-            exceptions = self._execute(parameters, progress_bar, log_output, inplace, context=context, tmpdir_key=tmpdir_key)
+        logger.info("starting job")
+        exceptions = self._execute(parameters, progress_bar, log_output, inplace, context=context, tmpdir_key=tmpdir_key)
 
-            tspent = time.time() - t0
-            logstasher.log(dict(origin="nb2workflow.execute",
-                                event="done",
-                                parameters=parameters,
-                                workflow_name=notebook_short_name(self.notebook_fn),
-                                exceptions=list(map(workflows.serialize_workflow_exception, exceptions)),
-                                health=current_health(),
-                                time_spent=tspent))
+        tspent = time.time() - t0
+        logstasher.log(dict(origin="nb2workflow.execute",
+                            event="done",
+                            parameters=parameters,
+                            workflow_name=notebook_short_name(self.notebook_fn),
+                            exceptions=list(map(workflows.serialize_workflow_exception, exceptions)),
+                            health=current_health(),
+                            time_spent=tspent))
 
         return exceptions
 
