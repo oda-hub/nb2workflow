@@ -212,8 +212,7 @@ class NBRepo:
         search_pattern = os.path.join(self.context_dir,'**/*.ipynb')
         for nb_file in glob.glob(search_pattern, recursive=True):
             nba = NotebookAdapter(nb_file)
-            g = rdflib.Graph()
-            g.parse(data=nba.extra_ttl)
+            g = nba._graph
             for r in self.ontology.get_requested_resources(g):
                 resource_name = r['resource'].lower()
                 if resource_name in resources:

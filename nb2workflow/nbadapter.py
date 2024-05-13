@@ -1,21 +1,20 @@
+from __future__ import annotations
+
 import ast
 import builtins
-from collections import namedtuple
 
 from dataclasses import dataclass, asdict
+from functools import lru_cache
 import hashlib
 import os
-import sys
 import glob
 import shutil
-from tokenize import generate_tokens, COMMENT, STRING
+from tokenize import generate_tokens, COMMENT
 from typing import Optional, Dict
-import uuid
 import yaml 
 import re
 import time
 import tempfile
-import pprint
 import subprocess
 import yaml
 import argparse
@@ -44,7 +43,7 @@ from nb2workflow import workflows
 from nb2workflow.logging_setup import setup_logging
 from nb2workflow.json import CustomJSONEncoder
 
-from nb2workflow.semantics import understand_comment_references, oda_ontology_prefix
+from nb2workflow.semantics import understand_comment_references
 from git import Repo, InvalidGitRepositoryError, GitCommandError
 
 import logging
@@ -90,64 +89,6 @@ def cast_parameter(x,par):
         except:
             raise ValueError(f'Parameter {par["name"]} value "{x}" can not be interpreted as {par["python_type"].__name__}.')
     return par['python_type'](x)
-
-
-# TODO: to remove when unneded
-def parse_nbline(line: str, nb_uri=None) -> Optional[dict]:
-    """
-    this function is used in 3 cases:
-    * input parameters - No more
-    * outputs - No more
-    * full-line comments - to annotate notebook itself
-    """
-
-    if line.strip() == "":
-        return None
-
-    elif line.strip().startswith("#"):
-        comment = line.strip().strip("#")
-        logger.debug("found detached comment: \"%s\"",line)
-
-        if nb_uri is not None:
-            return understand_comment_references(comment, nb_uri)
-        else:
-            return None
-
-    else:
-        if "#" in line:
-            assignment_line, comment = line.split("#",1)
-        else:
-            assignment_line = line
-            comment = ""
-            
-        if "=" in assignment_line:
-            name, value_str = assignment_line.split("=", 1)
-            name = name.strip()
-            value_str = value_str.strip()
-        else:
-            name = assignment_line.strip()
-            value_str = None
-
-        try:
-            value = ast.literal_eval(value_str)
-            python_type = type(value)
-        except Exception:
-            value = value_str
-            python_type = str
-            
-        parsed_comment = understand_comment_references(comment, fallback_type=odahub_type_for_python_type(python_type))
-        
-        logger.info("parameter name=%s value=%s python_type=%s, owl_type=%s extra_ttl=%s", 
-                    name, value, python_type, parsed_comment['owl_type'], parsed_comment['extra_ttl'])
-
-        return dict(
-                    name = name,
-                    value = value,
-                    python_type = python_type,
-                    comment = comment,
-                    owl_type = parsed_comment.get('owl_type', None),
-                    extra_ttl = parsed_comment.get('extra_ttl', None),
-                )
 
 
 def odahub_type_for_python_type(python_type: type):
@@ -211,34 +152,6 @@ class InputParameter:
     owl_type: Optional[str] = None
     extra_ttl: Optional[str] = None
 
-    @classmethod
-    def from_nbline(cls,line):
-        # TODO: remove when unneded
-        parsed_nbline = parse_nbline(line)
-        if parsed_nbline is None or parsed_nbline.get('name', None) is None:
-            return None
-
-        else:
-            obj = cls(
-                raw_line = line,            
-                name = parsed_nbline['name'],
-                default_value = parsed_nbline['value'],
-                python_type = parsed_nbline['python_type'],
-                comment = parsed_nbline['comment'],
-                owl_type = parsed_nbline['owl_type'],
-                extra_ttl = parsed_nbline['extra_ttl']
-            )
-            
-            logger.info("interpreted %s %s %s comment: %s",
-                    obj.name,
-                    obj.default_value.__class__,obj.default_value,
-                    obj.comment)
-
-            if obj.owl_type is None:
-                obj.owl_type = "http://www.w3.org/2001/XMLSchema#" + obj.python_type.__name__ # also use this if already defined
-
-            return obj
-
     def as_dict(self):
         return asdict(self)
         
@@ -251,11 +164,18 @@ class NotebookAdapter:
         self.notebook_fn = os.path.abspath(notebook_fn)
         self.name = notebook_short_name(notebook_fn)
         self.tempdir_cache = tempdir_cache
+        self._graph = rdflib.Graph()
         logger.debug("notebook adapter for %s", self.notebook_fn)
         logger.debug(self.extract_parameters())
         self.n_download_max_tries = n_download_max_tries
         self.download_retry_sleep_s = download_retry_sleep_s
         self.max_download_size = max_download_size
+
+    @property
+    def graph(self):
+        # need to populate the graph (currently only notebook-wide annotations)
+        self.extract_parameters()
+        return self._graph
 
     @staticmethod
     def get_unique_filename_from_url(file_url):
@@ -304,12 +224,14 @@ class NotebookAdapter:
         if self._notebook_origin is None:
             notebook_dir = os.path.dirname(self.notebook_fn)
             logger.info('notebook_dir: %s', notebook_dir)
+            try:
+                url = subprocess.check_output(["git", "remote", "get-url", "origin"], cwd=notebook_dir).decode().strip()
+                revision = subprocess.check_output(["git", "describe", "--always", "--tags"], cwd=notebook_dir).decode().strip()
+                self._notebook_origin = f"{url}#{revision}"
+            except subprocess.CalledProcessError:
+                logger.warning('Not a git repo, making local name.')
+                self._notebook_origin = f'file://{os.path.abspath(notebook_dir)}'
 
-            url = subprocess.check_output(["git", "remote", "get-url", "origin"], cwd=notebook_dir).decode().strip()
-            revision = subprocess.check_output(["git", "describe", "--always", "--tags"], cwd=notebook_dir).decode().strip()
-
-            self._notebook_origin = f"{url}#{revision}"
-        
         return self._notebook_origin
 
     @property
@@ -361,20 +283,19 @@ class NotebookAdapter:
                 return res.string[1:]
         return ''
     
-    def parse_cell_multiline(self, cell):
+    def parse_source_multiline(self, source: str) -> dict[str, list[dict]]:
         result = {'assign': [], 
                   'standalone': []}
-        nt = namedtuple('nt', ['varname', 'type_annotation', 'value', 'comment', 'raw_line'])
         
-        tokens = generate_tokens(io.StringIO(cell['source']).readline)
+        tokens = generate_tokens(io.StringIO(source).readline)
         comments = []
         for token in tokens:
             if token.type == COMMENT:
                 comments.append(token)
            
-        parsed = ast.parse(cell['source'])        
+        parsed = ast.parse(source)
         for node in parsed.body:
-            node_code = "\n".join(cell['source'].split('\n')[node.lineno-1:node.end_lineno])
+            node_code = "\n".join(source.split('\n')[node.lineno-1:node.end_lineno])
             if isinstance(node, ast.Assign):
                 if len(node.targets) != 1:
                     raise NotImplementedError(f'Multiple assignment is not supported:\n{node_code}')
@@ -402,17 +323,18 @@ class NotebookAdapter:
             else:
                 value = None
             
+            comment = ''
             for line in range(node.lineno, node.end_lineno+1):
                 comment = self._pop_comment_by_line(comments, line)
                 # annotation must appear right after definition
                 if line != node.end_lineno:
                     continue
             
-            result['assign'].append(nt(varname = varname, 
-                                       type_annotation = type_annotation, 
-                                       value = value, 
-                                       comment = comment,
-                                       raw_line = node_code))
+            result['assign'].append(dict(varname = varname, 
+                                         type_annotation = type_annotation, 
+                                         value = value, 
+                                         comment = comment,
+                                         raw_line = node_code))
             
         # now parse full-line comments
         for comment in comments:
@@ -421,25 +343,28 @@ class NotebookAdapter:
         
         return result
     
-    def extract_parameters_from_cell(self, cell, G):
+    def extract_parameters_from_cell(self, cell):
         parameters = {}
         
-        parsed_cell = self.parse_cell_multiline(cell)
+        parsed_cell = self.parse_source_multiline(cell['source'])
         for par_detail in parsed_cell['assign']:
-            python_type = self.reconcile_python_type(par_detail.value, type_annotation=par_detail.type_annotation)
-                        
+            python_type = self.reconcile_python_type(par_detail['value'], type_annotation=par_detail['type_annotation'])
+
             fallback_type = odahub_type_for_python_type(python_type)
 
-            parsed_comment = understand_comment_references(par_detail.comment,
+            parsed_comment = understand_comment_references(par_detail['comment'],
                                                            fallback_type=fallback_type)
             
-            par = InputParameter(raw_line = par_detail.raw_line,
-                                 name = par_detail.varname,
-                                 default_value = par_detail.value,
+            par = InputParameter(raw_line = par_detail['raw_line'],
+                                 name = par_detail['varname'],
+                                 default_value = par_detail['value'],
                                  python_type = python_type,
-                                 comment = par_detail.comment,
+                                 comment = par_detail['comment'],
                                  owl_type = parsed_comment.get('owl_type', None),
                                  extra_ttl = parsed_comment.get('extra_ttl', None))
+            # it's not really used anywhere. # TODO: integrate with ontology.function_semantic_signature
+            # if par.extra_ttl is not None:
+            #     self.graph.parse(data=par.extra_ttl)
             parameters[par.name] = par.as_dict()
             parameters[par.name]['value'] = par.as_dict()['default_value']
         
@@ -448,20 +373,19 @@ class NotebookAdapter:
                 p = understand_comment_references(cstring, base_uri=self.nb_uri)
                 if p is not None:
                     try:
-                        G.parse(data=p['extra_ttl'])
+                        self._graph.parse(data=p['extra_ttl'])
                     except Exception as e:
-                        logger.warning("not a turtle: %s", p['extra_ttl'])                
+                        logger.warning("not a turtle: %s", p['extra_ttl'])
 
         return parameters
 
+    @lru_cache
     def extract_parameters(self):
         nb = self.read()
 
         self.input_parameters = {}
         self.system_parameters = {}
-        
-        G = rdflib.Graph()
-        
+               
         for cell in nb.cells:
             for tag, attr in [
                     ('parameters', 'input_parameters'),
@@ -469,18 +393,15 @@ class NotebookAdapter:
                     ('injected-parameters', 'input_parameters'),
                     ]:
                 if tag in cell.metadata.get('tags', []):
-                    pars = self.extract_parameters_from_cell(cell, G)
+                    pars = self.extract_parameters_from_cell(cell)
                     pars = {**getattr(self, attr), **pars}
                     setattr(self, attr, pars)
 
-        for n, p in self.input_parameters.items():
-            if p['extra_ttl'] is not None:
-                G.parse(data=p['extra_ttl'])
-
-        self.extra_ttl = G.serialize(format='turtle')
-
         return self.input_parameters
 
+    @property
+    def extra_ttl(self) -> str:
+        return self._graph.serialize(format='turtle')
     
     def interpret_parameters(self,parameters):
         expected_parameters = self.extract_parameters()
@@ -642,7 +563,7 @@ class NotebookAdapter:
 
         return outputs
 
-    
+    @lru_cache
     def extract_output_declarations(self):
         nb=self.read()
 
@@ -650,16 +571,16 @@ class NotebookAdapter:
 
         for cell in nb.cells:
             if 'outputs' in cell.metadata.get('tags',[]):
-                parsed_cell = self.parse_cell_multiline(cell)
+                parsed_cell = self.parse_source_multiline(cell['source'])
                 
                 # TODO: may use annotations (type/ontology) to get python type
                 for outp_detail in parsed_cell['assign']:
-                    parsed_comment = understand_comment_references(outp_detail.comment)
-                    outputs[outp_detail.varname] = {
-                        'name': outp_detail.varname,
-                        'value': outp_detail.value,
+                    parsed_comment = understand_comment_references(outp_detail['comment'])
+                    outputs[outp_detail['varname']] = {
+                        'name': outp_detail['varname'],
+                        'value': outp_detail['value'],
                         'python_type': str, # TODO: backwards compatible. May need None/Undefined
-                        'comment': outp_detail.comment,
+                        'comment': outp_detail['comment'],
                         'owl_type': parsed_comment.get('owl_type', None),
                         'extra_ttl': parsed_comment.get('extra_ttl', None),
                     }

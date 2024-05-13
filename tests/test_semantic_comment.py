@@ -2,15 +2,35 @@ import pytest
 
 import rdflib
 import rdflib.compare
+import nbformat
+import os
+import tempfile
 
 from nb2workflow.semantics import understand_comment_references
-from nb2workflow.nbadapter import parse_nbline
-
+from nb2workflow.nbadapter import NotebookAdapter
 
 def normalize(x):
     G = rdflib.Graph()
     G.parse(data=x, format='ttl')
     return list(sorted(rdflib.compare.to_canonical_graph(G)))
+
+
+def parse_nbline(line, kind='param'):
+    with tempfile.TemporaryDirectory() as tmpd:
+        nb = nbformat.v4.new_notebook()
+        cell = nbformat.v4.new_code_cell(line)
+        if kind in ['papam', 'nbwide']:
+            cell.metadata['tags'] = ['parameters']
+        elif kind == 'outp':
+            cell.metadata['tags'] = ['outputs']
+        nb.cells.append(cell)
+        
+        fp = os.path.join(tmpd, 'test.ipynb')
+        with open(fp) as fd:
+            nbformat.write(nb, fd)
+
+        nba = NotebookAdapter(fp)
+        return list(nba.extract_parameters().values())[0]
 
 
 def test_semantic_comments():
