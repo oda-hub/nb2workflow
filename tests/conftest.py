@@ -9,7 +9,7 @@ import tempfile
 import requests
 
 import nb2workflow.service
-
+from importlib import reload
 
 @pytest.fixture
 def test_notebook():
@@ -53,6 +53,18 @@ def app(test_notebook):
     nb2workflow.service.setup_routes(app)
     print("creating app")
     return app
+
+
+@pytest.fixture
+def app_low_download_limit():
+    testfiles_path = os.path.join(os.path.dirname(__file__), 'testfiles')
+    app_low_download_limit = nb2workflow.service.app
+    app_low_download_limit.notebook_adapters = nb2workflow.nbadapter.find_notebooks(testfiles_path)
+    for nb, nba_obj in app_low_download_limit.notebook_adapters.items():
+        nba_obj.max_download_size = 1
+    nb2workflow.service.setup_routes(app_low_download_limit)
+    print("creating app with low limit on the download of files")
+    return app_low_download_limit
 
 
 def kill_child_processes(parent_pid, sig=signal.SIGTERM):

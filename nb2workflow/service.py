@@ -95,6 +95,7 @@ def create_app():
     swagger = Swagger(app, template=template)
     app.wsgi_app = ReverseProxied(app.wsgi_app)
     app.json_encoder = CustomJSONEncoder
+    app.config["JSON_SORT_KEYS"] = False
     cache.init_app(app, config={'CACHE_TYPE': 'SimpleCache'})
 
 
@@ -172,7 +173,10 @@ class AsyncWorkflow:
             return
        
         template_nba = app.notebook_adapters.get(self.target)
-        nba = NotebookAdapter(template_nba.notebook_fn, tempdir_cache=app.async_workflow_jobdirs)
+        nba = NotebookAdapter(template_nba.notebook_fn, tempdir_cache=app.async_workflow_jobdirs,
+                              n_download_max_tries=template_nba.n_download_max_tries,
+                              download_retry_sleep_s=template_nba.download_retry_sleep_s,
+                              max_download_size=template_nba.max_download_size)
         
         app.async_workflows[self.key] = 'started'
         self.perform_callback(action='progress')
@@ -264,7 +268,10 @@ def workflow(target, background=False, async_request=False):
         logger.debug("raw parameters %s", request.args)
 
     template_nba = app.notebook_adapters.get(target)
-    nba = NotebookAdapter(template_nba.notebook_fn)
+    nba = NotebookAdapter(template_nba.notebook_fn,
+                          n_download_max_tries=template_nba.n_download_max_tries,
+                          download_retry_sleep_s=template_nba.download_retry_sleep_s,
+                          max_download_size=template_nba.max_download_size)
 
     if nba is None:
         interpreted_parameters = None
