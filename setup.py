@@ -6,12 +6,13 @@ if {'pytest', 'test', 'ptr'}.intersection(sys.argv):
     setup_requires.append('pytest-runner')
 
 setup(name='nb2workflow',
-      version = '1.3.73',
+      version = '1.3.74',
       description='convert notebook to workflow',
       author='Volodymyr Savchenko',
       author_email='contact@volodymyrsavchenko.com',
       license='GPLv3',
       packages=['nb2workflow'],
+      package_data={'nb2workflow': ['templates/*.jinja']},
       zip_safe=False,
 
       python_requires='>=3.9,<3.12',
@@ -53,6 +54,7 @@ setup(name='nb2workflow',
         "docker":[
             'docker',
             'checksumdir',
+            'Jinja2'
         ],
         "domains":[
             'numpy',
@@ -64,7 +66,8 @@ setup(name='nb2workflow',
             'oda_api'
         ],
         "k8s":[
-            'kubernetes'
+            'kubernetes',
+            'Jinja2'
         ],
         'galaxy':[
             'oda_api',
