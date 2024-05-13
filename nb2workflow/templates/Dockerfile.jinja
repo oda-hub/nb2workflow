@@ -1,0 +1,52 @@
+{% if dockerfile_base is none -%}
+FROM mambaorg/micromamba
+{% else %}
+{{ dockerfile_base }}
+ENV MAMBA_USER=${NB_USER:-root}
+{# run as root is the fallback for non-jupyter based images #}
+{% endif %}
+
+USER root
+RUN apt-get update && apt-get install -y git curl wget build-essential && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+{% if source_from == 'localdir' %}
+COPY --chown=$MAMBA_USER:$MAMBA_USER nb-repo/ /repo/
+USER $MAMBA_USER
+{% elif source_from == 'git' %}
+RUN curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | bash && \
+    apt-get install -y git-lfs && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* && \
+    mkdir /repo && chown $MAMBA_USER:$MAMBA_USER /repo
+USER $MAMBA_USER
+RUN git lfs install && git clone {{ git_origin }} /repo
+{% endif %}
+
+{% if dockerfile_base is none %}
+{% if has_conda_env %}
+RUN {{ inject_python_version_str }} && \
+    micromamba install -y -n base -f /repo/environment.yml && \
+    micromamba install -y -n base -c conda-forge pip && \
+    micromamba clean --all --yes
+{% else %}
+RUN micromamba install -y -n base -c conda-forge python={{ default_python_version }} pip && \
+    micromamba clean --all --yes
+{% endif %}
+ARG MAMBA_DOCKERFILE_ACTIVATE=1
+RUN pip install -r /repo/requirements.txt
+{% endif %}
+
+RUN pip install {{ nb2w_version_spec }}
+
+ENV ODA_WORKFLOW_VERSION="{{ metadata['descr'] }}"
+ENV ODA_WORKFLOW_LAST_AUTHOR="{{ metadata['author'] }}"
+ENV ODA_WORKFLOW_LAST_CHANGED="{{ metadata['last_change_time'] }}"
+
+RUN curl -o /tmp/jq -L https://github.com/stedolan/jq/releases/download/jq-1.5/jq-linux64 && \
+    chmod +x /tmp/jq && \
+    for nn in {{ nbpath }}/*.ipynb; do mv $nn $nn-tmp; \
+    /tmp/jq '.metadata.kernelspec.name |= "python3"' $nn-tmp > $nn ; rm $nn-tmp ; done
+
+CMD nb2service --debug --pattern '{{ filename_pattern }}' --host 0.0.0.0 --port 8000 {{ nbpath }}
