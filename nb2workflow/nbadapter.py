@@ -369,13 +369,13 @@ class NotebookAdapter:
             parameters[par.name]['value'] = par.as_dict()['default_value']
         
 
-            for cstring in parsed_cell['standalone']:
-                p = understand_comment_references(cstring, base_uri=self.nb_uri)
-                if p is not None:
-                    try:
-                        self._graph.parse(data=p['extra_ttl'])
-                    except Exception as e:
-                        logger.warning("not a turtle: %s", p['extra_ttl'])
+        for cstring in parsed_cell['standalone']:
+            p = understand_comment_references(cstring, base_uri=self.nb_uri)
+            if p is not None:
+                try:
+                    self._graph.parse(data=p['extra_ttl'])
+                except Exception as e:
+                    logger.warning("not a turtle: %s", p['extra_ttl'])
 
         return parameters
 
@@ -401,7 +401,7 @@ class NotebookAdapter:
 
     @property
     def extra_ttl(self) -> str:
-        return self._graph.serialize(format='turtle')
+        return self.graph.serialize(format='turtle')
     
     def interpret_parameters(self,parameters):
         expected_parameters = self.extract_parameters()
