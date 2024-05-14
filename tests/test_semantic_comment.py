@@ -26,7 +26,7 @@ def parse_nbline(line, kind='param'):
         nb.cells.append(cell)
         
         fp = os.path.join(tmpd, 'test.ipynb')
-        with open(fp) as fd:
+        with open(fp, 'w') as fd:
             nbformat.write(nb, fd)
 
         nba = NotebookAdapter(fp)
@@ -148,7 +148,6 @@ def test_single_ul(comment, expected_owl_type, expected_value):
 
     
 def test_semantic_nbline():
-    from nb2workflow.nbadapter import parse_nbline
 
     r = parse_nbline("t1=1 # http://odahub.io/ontology#StartTimeISOT")
     assert r['owl_type'] == "http://odahub.io/ontology#StartTimeISOT"
