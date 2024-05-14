@@ -54,10 +54,12 @@ def test_service(client):
     r=client.get('/trace/list')
     assert r.status_code == 200
 
-    for l in sorted(r.json, key=lambda x:x['ctime']):
+    sorted_json=sorted(r.json, key=lambda x:x['ctime'])
+    for l in sorted_json:
         logger.info(l)
 
-    job = r.json[-1]['fn'].split("/")[-1]
+    job = sorted_json[-1]['fn'].split("/")[-1]
+
     logger.info("job %s", job)
 
     r=client.get('/trace/'+job)
