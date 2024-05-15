@@ -11,6 +11,7 @@ import glob
 import shutil
 from tokenize import generate_tokens, COMMENT
 from typing import Optional, Dict
+import oda_api.ontology_helper
 import yaml 
 import re
 import time
@@ -26,7 +27,7 @@ import validators
 import requests
 import random
 import string
-from typing import Any, Optional
+from typing import Any, Optional, ForwardRef
 import io
 
 import papermill as pm
@@ -36,6 +37,8 @@ from nbconvert import HTMLExporter
 from urllib.parse import urlparse
 
 from . import logstash
+
+from oda_api.ontology_helper import Ontology
 
 from nb2workflow.sentry import sentry
 from nb2workflow.health import current_health
@@ -52,6 +55,13 @@ logger=logging.getLogger(__name__)
 
 logstasher = logstash.LogStasher()
 
+# TODO: will be configurable
+oda_ontology_path = "http://odahub.io/ontology/ontology.ttl"
+oda_ontology_prefix = "http://odahub.io/ontology#"
+
+class ModOntology(Ontology):
+    def _get_datatype_restriction(self, param_uri):
+        return super()._get_datatype_restriction(param_uri)
 
 def run(notebook_fn, params: dict):
     nba = NotebookAdapter(notebook_fn)
@@ -95,20 +105,19 @@ def odahub_type_for_python_type(python_type: type):
     out_type = python_type.__name__
 
     xml_scheme_url = "http://www.w3.org/2001/XMLSchema#"
-    oda_ontology_url = "http://odahub.io/ontology#"
 
     if python_type == int:
         out_type = 'Integer'
-        url_prefix = oda_ontology_url
+        url_prefix = oda_ontology_prefix
     elif python_type == str:
         out_type = 'String'
-        url_prefix = oda_ontology_url
+        url_prefix = oda_ontology_prefix
     elif python_type == bool:
         out_type = 'Boolean'
-        url_prefix = oda_ontology_url
+        url_prefix = oda_ontology_prefix
     elif python_type == float:
         out_type = 'Float'
-        url_prefix = oda_ontology_url
+        url_prefix = oda_ontology_prefix
     else:
         url_prefix = xml_scheme_url
 
@@ -121,7 +130,6 @@ def owl_type_for_python_type(python_type: type):
     out_type = python_type.__name__
 
     xml_scheme_url = "http://www.w3.org/2001/XMLSchema#"
-    oda_ontology_url = "http://odahub.io/ontology#"
 
     if python_type == int:
         out_type = 'integer'
@@ -136,11 +144,23 @@ def owl_type_for_python_type(python_type: type):
         out_type = 'float'
         url_prefix = xml_scheme_url
     else:
-        url_prefix = oda_ontology_url
+        url_prefix = oda_ontology_prefix
 
     output_url = f"{url_prefix}{out_type}"
 
     return output_url
+
+def reconcile_python_type(value: Any, type_annotation=None, owl_type=None):
+    if value is None:
+        valuetype = None
+    else:
+        valuetype = type(value)
+    
+
+
+
+
+    return res
 
 @dataclass
 class InputParameter:
@@ -256,24 +276,7 @@ class NotebookAdapter:
 
     @property
     def nb_uri(self):
-        return rdflib.URIRef(f"http://odahub.io/ontology#{self.unique_name}")
-
-    @staticmethod
-    def reconcile_python_type(value, type_annotation=None):
-        # TODO: optionally use ontology to reconcile type with owl_uri
-        if type_annotation is not None:
-            try:
-                python_type = getattr(builtins, type_annotation)
-            except AttributeError:
-                raise NotImplementedError(f"Type annotation '{type_annotation}' is not supported. Skipping")
-                python_type = type(value)
-        else:
-            python_type = type(value)
-
-        if python_type(value) != value:
-            raise ValueError(f"The value '{value}' doesn't match type annotation {type_annotation}")
-        
-        return python_type
+        return rdflib.URIRef(f"{oda_ontology_prefix}{self.unique_name}")      
     
     @staticmethod
     def _pop_comment_by_line(comment_tokens, l):
@@ -348,8 +351,9 @@ class NotebookAdapter:
         
         parsed_cell = self.parse_source_multiline(cell['source'])
         for par_detail in parsed_cell['assign']:
-            python_type = self.reconcile_python_type(par_detail['value'], type_annotation=par_detail['type_annotation'])
+            python_type = type(par_detail['value'])
 
+            # TODO: next two lines should rely on 'full' type reconcillation and also intoduce type_annotation key
             fallback_type = odahub_type_for_python_type(python_type)
 
             parsed_comment = understand_comment_references(par_detail['comment'],
@@ -579,7 +583,7 @@ class NotebookAdapter:
                     outputs[outp_detail['varname']] = {
                         'name': outp_detail['varname'],
                         'value': outp_detail['value'],
-                        'python_type': str, # TODO: backwards compatible. May need None/Undefined
+                        'python_type': str, # NOTE: kept for backward compatibility
                         'comment': outp_detail['comment'],
                         'owl_type': parsed_comment.get('owl_type', None),
                         'extra_ttl': parsed_comment.get('extra_ttl', None),
@@ -645,7 +649,7 @@ class NotebookAdapter:
         exceptions = []
         for input_par_name, input_par_obj in self.input_parameters.items():
             # TODO use oda_api.ontology_helper
-            if input_par_obj['owl_type'] == "http://odahub.io/ontology#POSIXPath":
+            if input_par_obj['owl_type'] == f"{oda_ontology_prefix}POSIXPath":
                 arg_par_value = parameters.get(input_par_name, None)
                 if arg_par_value is None:
                     arg_par_value = input_par_obj['default_value']
