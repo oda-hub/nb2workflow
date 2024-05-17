@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import ast
-import builtins
 
 from dataclasses import dataclass, asdict
 from functools import lru_cache
@@ -10,8 +9,8 @@ import os
 import glob
 import shutil
 from tokenize import generate_tokens, COMMENT
-from typing import Optional, Dict
-import oda_api.ontology_helper
+from typing import * # type: ignore 
+# need wildcard import to resolve (semi-)arbitrary ForwardRef of annotations in nb
 import yaml 
 import re
 import time
@@ -27,18 +26,19 @@ import validators
 import requests
 import random
 import string
-from typing import Any, Optional, ForwardRef
 import io
+from numbers import Number
 
 import papermill as pm
 import scrapbook as sb
+from typeguard import check_type, ForwardRefPolicy, TypeCheckError
 import nbformat
 from nbconvert import HTMLExporter
 from urllib.parse import urlparse
 
 from . import logstash
 
-from oda_api.ontology_helper import Ontology
+from oda_api.ontology_helper import Ontology, xsd_type_to_python_type
 
 from nb2workflow.sentry import sentry
 from nb2workflow.health import current_health
@@ -57,11 +57,15 @@ logstasher = logstash.LogStasher()
 
 # TODO: will be configurable
 oda_ontology_path = "http://odahub.io/ontology/ontology.ttl"
+#oda_ontology_path = "/home/dsavchenko/Projects/MMODA/ontology/ontology.ttl"
 oda_ontology_prefix = "http://odahub.io/ontology#"
 
+# TODO: add to oda_api
 class ModOntology(Ontology):
-    def _get_datatype_restriction(self, param_uri):
-        return super()._get_datatype_restriction(param_uri)
+    def is_optional(self, owl_url: str) -> bool:
+        return f"{oda_ontology_prefix}optional" in self.get_parameter_hierarchy(owl_url)
+
+ontology = ModOntology(oda_ontology_path)
 
 def run(notebook_fn, params: dict):
     nba = NotebookAdapter(notebook_fn)
@@ -75,7 +79,6 @@ def run(notebook_fn, params: dict):
 
 class PapermillWorkflowIncomplete(Exception):
     pass
-
 
 def cast_parameter(x,par):
     logger.debug("cast %s %s",x,par)
@@ -150,17 +153,84 @@ def owl_type_for_python_type(python_type: type):
 
     return output_url
 
-def reconcile_python_type(value: Any, type_annotation=None, owl_type=None):
+T = TypeVar("T")
+def reconcile_python_type(value: Any, 
+                          type_annotation: str | type[T] | None = None, 
+                          owl_type: str | None = None, 
+                          extra_ttl: str = '', 
+                          name: str = '') -> tuple[type, bool]:
+    '''
+    Reconcile python type of the default value with type and owl annotations
+    We expect ~json here, so basically int, float, str, list, dict or None
+    Respects duck typing: if default is int and float is allowed, returns float
+    '''
+
+    if type_annotation is None and owl_type is None:
+        if value is not None:
+            return type(value), False
+        else:
+            raise TypeCheckError(f"Default value of the required parameter {name} isn't defined.")
+
+    owl_dt = None
+    is_optional_owl = False
+    if owl_type is not None:
+        ontology.parse_extra_triples(extra_ttl)
+        xsd_dt = ontology._get_datatype_restriction(owl_type)
+        if xsd_dt:
+            owl_dt = xsd_type_to_python_type(xsd_dt)
+        is_optional_owl = ontology.is_optional(owl_type)
+
+    is_optional_hint = False
+    hint_fref = None
+    if type_annotation:
+        hint_fref = ForwardRef(type_annotation) if isinstance(type_annotation, str) else type_annotation
+        
+        try:
+            check_type(None, hint_fref, forward_ref_policy=ForwardRefPolicy.ERROR)
+        except TypeCheckError:
+            is_optional_hint = False
+        except NameError:
+            raise TypeCheckError(f"Type hint {type_annotation} for parameter {name} can't be resolved.")
+        else:
+            is_optional_hint = True
+
+    def check_type_both(v):
+        if owl_dt is not None:
+            check_type(v, owl_dt)
+        if hint_fref:
+            check_type(v, hint_fref) # forwardref is already checked for validity, no need to set policy
+
+    # need special treatment for None because it may be allowed by one annotation type only. 
+    # So other will fail checking value, but it's OK.
     if value is None:
-        valuetype = None
+        if not is_optional_owl and not is_optional_hint:
+            raise TypeCheckError(f"Default value of the required parameter {name} isn't defined.")
+        else:
+            possible_types_examples = [1.1, 1, 'foo', [], {}]
+            for ex in possible_types_examples: 
+                try:
+                    check_type_both(ex)
+                except TypeCheckError:
+                    pass
+                else:
+                    return type(ex), True
+            raise TypeCheckError(f"No possible type is found for the parameter {name}.")
+    elif isinstance(value, int):
+        # be permissive if float is possible
+        try:
+            check_type_both(float(value))
+        except TypeCheckError:
+            pass
+        else:
+            return float, is_optional_owl or is_optional_hint
+        
+        check_type_both(value)
+        return int, is_optional_owl or is_optional_hint
     else:
-        valuetype = type(value)
-    
+        check_type_both(value)
+        return type(value), is_optional_owl or is_optional_hint
 
 
-
-
-    return res
 
 @dataclass
 class InputParameter:
@@ -948,7 +1018,7 @@ def nbrun(nb_source, inp, inplace=False, optional_dispather=True, machine_readab
     elif len(nbas) == 1:
         nba = list(nbas.values())[0]
     else:
-        RuntimeError()
+        raise RuntimeError
 
     print("inp", inp)
 
