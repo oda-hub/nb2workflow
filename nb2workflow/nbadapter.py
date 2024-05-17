@@ -152,7 +152,7 @@ T = TypeVar("T")
 def reconcile_python_type(value: Any, 
                           type_annotation: str | type[T] | None = None, 
                           owl_type: str | None = None, 
-                          extra_ttl: str = '', 
+                          extra_ttl: str | None = None, 
                           name: str = '') -> tuple[type, bool]:
     '''
     Reconcile python type of the default value with type and owl annotations
@@ -169,6 +169,8 @@ def reconcile_python_type(value: Any,
     owl_dt = None
     is_optional_owl = False
     if owl_type is not None:
+        if extra_ttl is None: 
+            extra_ttl = ''
         ontology.parse_extra_triples(extra_ttl)
         xsd_dt = ontology._get_datatype_restriction(owl_type)
         if xsd_dt:
@@ -238,6 +240,7 @@ class InputParameter:
     comment: str
     owl_type: Optional[str] = None
     extra_ttl: Optional[str] = None
+    is_optional: bool = False
 
     def as_dict(self):
         return asdict(self)
@@ -419,13 +422,24 @@ class NotebookAdapter:
         parsed_cell = self.parse_source_multiline(cell['source'])
         for par_detail in parsed_cell['assign']:
             
-            # TODO: migrate type reconciliation. 
-            # Need to have fallback type, so probably reconcile twice, with and without owl
-            # Alternatively, maybe use oda:Unknown or smth
-            python_type = type(par_detail['value']) 
-            fallback_type = odahub_type_for_python_type(python_type)
+            # May need to have fallback type to properly parse owl
+            if par_detail['value'] is not None: 
+                fallback_type = odahub_type_for_python_type(type(par_detail['value']))
+            else:
+                try:
+                    fallback_type = reconcile_python_type(None, 
+                                        type_annotation=par_detail['type_annotation'])[0]
+                except TypeCheckError:
+                    fallback_type = None
+            
+            # Now full recoincilation
             parsed_comment = understand_comment_references(par_detail['comment'],
                                                            fallback_type=fallback_type)
+            
+            python_type, is_optional = reconcile_python_type(par_detail['value'],
+                                            type_annotation=par_detail['type_annotation'],
+                                            owl_type=parsed_comment.get('owl_type', None),
+                                            extra_ttl=parsed_comment.get('extra_ttl', None))
             
             par = InputParameter(raw_line = par_detail['raw_line'],
                                  name = par_detail['varname'],
@@ -433,7 +447,8 @@ class NotebookAdapter:
                                  python_type = python_type,
                                  comment = par_detail['comment'],
                                  owl_type = parsed_comment.get('owl_type', None),
-                                 extra_ttl = parsed_comment.get('extra_ttl', None))
+                                 extra_ttl = parsed_comment.get('extra_ttl', None),
+                                 is_optional=is_optional)
             
             # it's not really used anywhere. 
             # TODO: integrate with ontology.function_semantic_signature
