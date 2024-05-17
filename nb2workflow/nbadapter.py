@@ -56,8 +56,7 @@ logger=logging.getLogger(__name__)
 logstasher = logstash.LogStasher()
 
 # TODO: will be configurable
-#oda_ontology_path = "http://odahub.io/ontology/ontology.ttl"
-oda_ontology_path = "https://raw.githubusercontent.com/oda-hub/ontology/main/ontology.ttl"
+oda_ontology_path = "http://odahub.io/ontology/ontology.ttl"
 #oda_ontology_path = "/home/dsavchenko/Projects/MMODA/ontology/ontology.ttl"
 oda_ontology_prefix = "http://odahub.io/ontology#"
 
