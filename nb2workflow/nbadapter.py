@@ -60,13 +60,7 @@ oda_ontology_path = "http://odahub.io/ontology/ontology.ttl"
 #oda_ontology_path = "/home/dsavchenko/Projects/MMODA/ontology/ontology.ttl"
 oda_ontology_prefix = "http://odahub.io/ontology#"
 
-# TODO: move to oda_api
-class ModOntology(Ontology):
-    def is_optional(self, uri: str) -> bool:
-        s_qres = self.g.query("ASK { %s rdfs:subClassOf* oda:optional. }" % uri )
-        return cast(bool, list(s_qres)[0])
-
-ontology = ModOntology(oda_ontology_path)
+ontology = Ontology(oda_ontology_path)
 
 def run(notebook_fn, params: dict):
     nba = NotebookAdapter(notebook_fn)
