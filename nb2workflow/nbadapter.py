@@ -192,14 +192,16 @@ def reconcile_python_type(value: Any,
     def check_type_both(v):
         if owl_dt is not None:
             check_type(v, owl_dt)
-        if hint_fref:
+        if hint_fref is not None:
             check_type(v, hint_fref) # forwardref is already checked for validity, no need to set policy
 
     # need special treatment for None because it may be allowed by one annotation type only. 
     # So other will fail checking value, but it's OK.
     if value is None:
         if not is_optional_owl and not is_optional_hint:
-            raise TypeCheckError(f"Default value of the required parameter {name} isn't defined.")
+            raise TypeCheckError(f"Required parameter {name} shouldn't be None.")
+        elif owl_dt is None and hint_fref is None:
+            raise TypeCheckError(f"Default value of the parameter {name} can't be defined.")
         else:
             possible_types_examples = [1.1, 1, 'foo', [], {}]
             for ex in possible_types_examples: 
@@ -416,11 +418,12 @@ class NotebookAdapter:
         
         parsed_cell = self.parse_source_multiline(cell['source'])
         for par_detail in parsed_cell['assign']:
-            python_type = type(par_detail['value'])
-
-            # TODO: next two lines should rely on 'full' type reconcillation and also intoduce type_annotation key
+            
+            # TODO: migrate type reconciliation. 
+            # Need to have fallback type, so probably reconcile twice, with and without owl
+            # Alternatively, maybe use oda:Unknown or smth
+            python_type = type(par_detail['value']) 
             fallback_type = odahub_type_for_python_type(python_type)
-
             parsed_comment = understand_comment_references(par_detail['comment'],
                                                            fallback_type=fallback_type)
             
@@ -431,7 +434,9 @@ class NotebookAdapter:
                                  comment = par_detail['comment'],
                                  owl_type = parsed_comment.get('owl_type', None),
                                  extra_ttl = parsed_comment.get('extra_ttl', None))
-            # it's not really used anywhere. # TODO: integrate with ontology.function_semantic_signature
+            
+            # it's not really used anywhere. 
+            # TODO: integrate with ontology.function_semantic_signature
             # if par.extra_ttl is not None:
             #     self.graph.parse(data=par.extra_ttl)
             parameters[par.name] = par.as_dict()

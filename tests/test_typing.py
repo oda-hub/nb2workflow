@@ -20,7 +20,7 @@ ttl_prefix = """
                           (60446, None, 'oda:StartTimeMJD', '', float, False),
                           (25.5, None, 'oda:OptFloat', 'oda:OptFloat rdfs:subClassOf oda:Float, oda:optional .', float, True),
                           (None, None, 'oda:OptFloat', 'oda:OptFloat rdfs:subClassOf oda:Float, oda:optional .', float, True),
-                          
+
                           (1.2, 'float', None, '', float, False),
                           ('2017-03-06T13:26:48.0', 'str', None, '', str, False),
                           (60446.5, 'float', None, '', float, False),
@@ -40,6 +40,9 @@ ttl_prefix = """
 
                           (60446, 'int', 'oda:StartTimeMJD', '', int, False),
                           (60446, 'float', 'oda:Integer', '', int, False),
+
+                          ('foo', None, 'oda:WithNoTypeDefined', '', str, False),
+                          ({'foo': ['bar', 'baz']}, None, 'oda:WithNoTypeDefined', '', dict, False),
                           ]
                          )
 def test_reconcile_python_type(value,type_annotation,owl_type,extra_ttl,expected_type,expected_optional):
@@ -65,6 +68,8 @@ def test_reconcile_python_type(value,type_annotation,owl_type,extra_ttl,expected
                           (5.0, 'str', None),
                           
                           (5.0, 'str', 'oda:Float'),
+
+                          (None, None, 'oda:optional'), # optional have undefined type
                           ]
                          )
 def test_reconcile_python_type_failing(value,type_annotation,owl_type):
@@ -72,3 +77,4 @@ def test_reconcile_python_type_failing(value,type_annotation,owl_type):
         reconcile_python_type(value=value, 
                               type_annotation=type_annotation,
                               owl_type=owl_type)
+ 
