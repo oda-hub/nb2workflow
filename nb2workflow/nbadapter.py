@@ -58,9 +58,9 @@ logstasher = logstash.LogStasher()
 # TODO: will be configurable
 oda_ontology_path = "http://odahub.io/ontology/ontology.ttl"
 #oda_ontology_path = "/home/dsavchenko/Projects/MMODA/ontology/ontology.ttl"
-oda_ontology_prefix = "http://odahub.io/ontology#"
 
 ontology = Ontology(oda_ontology_path)
+oda_prefix = str([x[1] for x in ontology.g.namespaces() if x[0] == 'oda'][0])
 
 def run(notebook_fn, params: dict):
     nba = NotebookAdapter(notebook_fn)
@@ -106,16 +106,16 @@ def odahub_type_for_python_type(python_type: type):
 
     if python_type == int:
         out_type = 'Integer'
-        url_prefix = oda_ontology_prefix
+        url_prefix = oda_prefix
     elif python_type == str:
         out_type = 'String'
-        url_prefix = oda_ontology_prefix
+        url_prefix = oda_prefix
     elif python_type == bool:
         out_type = 'Boolean'
-        url_prefix = oda_ontology_prefix
+        url_prefix = oda_prefix
     elif python_type == float:
         out_type = 'Float'
-        url_prefix = oda_ontology_prefix
+        url_prefix = oda_prefix
     else:
         url_prefix = xml_scheme_url
 
@@ -142,7 +142,7 @@ def owl_type_for_python_type(python_type: type):
         out_type = 'float'
         url_prefix = xml_scheme_url
     else:
-        url_prefix = oda_ontology_prefix
+        url_prefix = oda_prefix
 
     output_url = f"{url_prefix}{out_type}"
 
@@ -341,7 +341,7 @@ class NotebookAdapter:
 
     @property
     def nb_uri(self):
-        return rdflib.URIRef(f"{oda_ontology_prefix}{self.unique_name}")      
+        return rdflib.URIRef(f"{oda_prefix}{self.unique_name}")      
     
     @staticmethod
     def _pop_comment_by_line(comment_tokens, l):
@@ -714,7 +714,7 @@ class NotebookAdapter:
         exceptions = []
         for input_par_name, input_par_obj in self.input_parameters.items():
             # TODO use oda_api.ontology_helper
-            if input_par_obj['owl_type'] == f"{oda_ontology_prefix}POSIXPath":
+            if input_par_obj['owl_type'] == f"{oda_prefix}POSIXPath":
                 arg_par_value = parameters.get(input_par_name, None)
                 if arg_par_value is None:
                     arg_par_value = input_par_obj['default_value']
