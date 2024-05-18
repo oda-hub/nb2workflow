@@ -50,6 +50,7 @@ from nb2workflow.semantics import understand_comment_references
 from git import Repo, InvalidGitRepositoryError, GitCommandError
 
 import logging
+from threading import Lock
 
 logger=logging.getLogger(__name__)
 
@@ -59,7 +60,18 @@ logstasher = logstash.LogStasher()
 oda_ontology_path = "http://odahub.io/ontology/ontology.ttl"
 #oda_ontology_path = "/home/dsavchenko/Projects/MMODA/ontology/ontology.ttl"
 
-ontology = Ontology(oda_ontology_path)
+class ModOntology(Ontology):
+    def __init__(self, ontology_path):
+        super().__init__(ontology_path)
+        self.lock = Lock()
+
+    def get_datatype_restriction(self, param_uri):
+        self.lock.acquire()
+        dt = super()._get_datatype_restriction(param_uri)
+        self.lock.release()
+        return dt
+
+ontology = ModOntology(oda_ontology_path)
 oda_prefix = str([x[1] for x in ontology.g.namespaces() if x[0] == 'oda'][0])
 
 def run(notebook_fn, params: dict):
@@ -172,7 +184,7 @@ def reconcile_python_type(value: Any,
         if extra_ttl is None: 
             extra_ttl = ''
         ontology.parse_extra_triples(extra_ttl, parse_oda_annotations=False)
-        xsd_dt = ontology._get_datatype_restriction(owl_type)
+        xsd_dt = ontology.get_datatype_restriction(owl_type)
         if xsd_dt:
             owl_dt = xsd_type_to_python_type(xsd_dt)
         is_optional_owl = ontology.is_optional(owl_type)
