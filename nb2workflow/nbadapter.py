@@ -205,7 +205,7 @@ def reconcile_python_type(value: Any,
         elif owl_dt is None and hint_fref is None:
             raise TypeCheckError(f"Default value of the parameter {name} can't be defined.")
         else:
-            possible_types_examples = [1.1, 1, 'foo', [], {}]
+            possible_types_examples = [1.1, 1, True, 'foo', [], {}]
             for ex in possible_types_examples: 
                 try:
                     check_type_both(ex)
@@ -214,7 +214,7 @@ def reconcile_python_type(value: Any,
                 else:
                     return type(ex), True
             raise TypeCheckError(f"No possible type is found for the parameter {name}.")
-    elif isinstance(value, int):
+    elif isinstance(value, int) and not isinstance(value, bool):
         # be permissive if float is possible
         try:
             check_type_both(float(value))
@@ -225,6 +225,15 @@ def reconcile_python_type(value: Any,
         
         check_type_both(value)
         return int, is_optional_owl or is_optional_hint
+    elif isinstance(value, bool):
+        check_type_both(value)
+        try:
+            check_type_both(int(value))
+        except TypeCheckError:
+            pass
+        else:
+            raise TypeCheckError("Boolean parameter {name} is annotated as integer.")
+        return type(value), is_optional_owl or is_optional_hint
     else:
         check_type_both(value)
         return type(value), is_optional_owl or is_optional_hint

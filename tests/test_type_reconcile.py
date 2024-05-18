@@ -15,6 +15,7 @@ ttl_prefix = """
                           (1, None, None, '', int, False),
                           (1.2, None, None, '', float, False),
                           (1.2, None, 'oda:Float', '', float, False),
+                          (True, None, 'oda:Boolean', '', bool, False),
                           ('2017-03-06T13:26:48.0', None, 'oda:StartTimeISOT', '', str, False),
                           (60446.5, None, 'oda:StartTimeMJD', '', float, False),
                           (60446, None, 'oda:StartTimeMJD', '', float, False),
@@ -25,12 +26,14 @@ ttl_prefix = """
                           ('2017-03-06T13:26:48.0', 'str', None, '', str, False),
                           (60446.5, 'float', None, '', float, False),
                           (60446, 'float', None, '', float, False),
+                          (True, 'bool', None, '', bool, False),
                           (25.5, 'float | None', None, '', float, True),
                           (25.5, 'Optional[float]', None, '', float, True),
                           (25.5, 'Union[float, None]', None, '', float, True),
                           ({"foo": ["bar", "baz"]}, 'dict[str,list]', None, '', dict, False),
 
                           (None, 'str | None', None, '', str, True),
+                          (None, 'bool|None', None, '', bool, True),
                           (None, 'Optional[list[int]]', None, '', list, True),
                           (None, 'Optional[List[str]]', None, '', list, True),
 
@@ -58,6 +61,9 @@ def test_reconcile_python_type(value,type_annotation,owl_type,extra_ttl,expected
                           (None, 'str', None),
                           (None, 'float', 'oda:Float'),
                           (None, 'float | None', 'oda:String'),
+                          
+                          (False, 'int | None', None),
+                          (1, 'bool', None),
 
                           ('foo', None, 'oda:Float'),
                           (5.0, None, 'oda:Integer'),
