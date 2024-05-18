@@ -154,16 +154,22 @@ def test_single_ul(comment, expected_owl_type, expected_value):
     
 def test_semantic_nbline():
 
-    r = parse_nbline("t1=1 # http://odahub.io/ontology#StartTimeISOT")
-    assert r['owl_type'] == "http://odahub.io/ontology#StartTimeISOT"
+    r = parse_nbline("t1=1 # http://odahub.io/ontology#StartTimeMJD")
+    assert r['owl_type'] == "http://odahub.io/ontology#StartTimeMJD"
     assert normalize(r['extra_ttl']) == []
     
-    r = parse_nbline("t2=2. # http://odahub.io/ontology#StartTimeISOT . # and some text")
-    assert r['owl_type'] == "http://odahub.io/ontology#StartTimeISOT"    
+    r = parse_nbline("t2=2. # http://odahub.io/ontology#StartTimeMJD . # and some text")
+    assert r['owl_type'] == "http://odahub.io/ontology#StartTimeMJD"    
 
-    # TODO: clarify if this is optional or just not allowed
-    #r = parse_nbline("t3 # oda:StartTimeISOT")
-    #assert r['owl_type'] == "http://odahub.io/ontology#StartTimeISOT"
+    r = parse_nbline("t3 # oda:StartTimeISOT, oda:optional")
+    assert normalize(r['extra_ttl']) == normalize(f"""
+        @prefix oda: <http://odahub.io/ontology#> . 
+        @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> . 
+        @prefix xsd: <http://www.w3.org/2001/XMLSchema#> . 
+        @prefix owl: <http://www.w3.org/2002/07/owl#> . 
+                                                  
+        <{r['owl_type']}> rdfs:subClassOf oda:StartTimeISOT, oda:optional . 
+    """)
 
     r = parse_nbline("tstart_seconds=1 # oda:upper_limit 2") 
     assert r['owl_type'] == "http://odahub.io/ontology#2integer_Integer_upper_limit"

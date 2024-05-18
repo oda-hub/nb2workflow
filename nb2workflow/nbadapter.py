@@ -171,7 +171,7 @@ def reconcile_python_type(value: Any,
     if owl_type is not None:
         if extra_ttl is None: 
             extra_ttl = ''
-        ontology.parse_extra_triples(extra_ttl)
+        ontology.parse_extra_triples(extra_ttl, parse_oda_annotations=False)
         xsd_dt = ontology._get_datatype_restriction(owl_type)
         if xsd_dt:
             owl_dt = xsd_type_to_python_type(xsd_dt)
@@ -232,7 +232,7 @@ def reconcile_python_type(value: Any,
         except TypeCheckError:
             pass
         else:
-            raise TypeCheckError("Boolean parameter {name} is annotated as integer.")
+            raise TypeCheckError(f"Boolean parameter {name} is annotated as integer.")
         return type(value), is_optional_owl or is_optional_hint
     else:
         check_type_both(value)
@@ -437,7 +437,8 @@ class NotebookAdapter:
             else:
                 try:
                     fallback_type = reconcile_python_type(None, 
-                                        type_annotation=par_detail['type_annotation'])[0]
+                                        type_annotation=par_detail['type_annotation'],
+                                        name = par_detail['varname'])[0]
                 except TypeCheckError:
                     fallback_type = None
             
@@ -448,7 +449,8 @@ class NotebookAdapter:
             python_type, is_optional = reconcile_python_type(par_detail['value'],
                                             type_annotation=par_detail['type_annotation'],
                                             owl_type=parsed_comment.get('owl_type', None),
-                                            extra_ttl=parsed_comment.get('extra_ttl', None))
+                                            extra_ttl=parsed_comment.get('extra_ttl', None),
+                                            name = par_detail['varname'])
             
             par = InputParameter(raw_line = par_detail['raw_line'],
                                  name = par_detail['varname'],
