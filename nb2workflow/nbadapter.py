@@ -451,6 +451,7 @@ class NotebookAdapter:
                     fallback_type = reconcile_python_type(None, 
                                         type_annotation=par_detail['type_annotation'],
                                         name = par_detail['varname'])[0]
+                    fallback_type = odahub_type_for_python_type(fallback_type)
                 except TypeCheckError:
                     fallback_type = None
             
@@ -473,7 +474,7 @@ class NotebookAdapter:
                                  extra_ttl = parsed_comment.get('extra_ttl', None),
                                  is_optional=is_optional)
             
-            # it's not really used anywhere. 
+            # This leads to some recursion, but it's not really used anywhere. 
             # TODO: integrate with ontology.function_semantic_signature
             # if par.extra_ttl is not None:
             #     self.graph.parse(data=par.extra_ttl)

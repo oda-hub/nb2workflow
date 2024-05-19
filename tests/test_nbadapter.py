@@ -2,7 +2,6 @@ import os
 import json
 import logging
 import pytest
-import tempfile
 
 
 # this can be also set in pytest call
@@ -199,3 +198,40 @@ def test_denumpyfy():
 
     r = json.dumps(denumpyfy(data))
     print(r)
+
+
+def test_multiline_parameters():
+    from nb2workflow.nbadapter import NotebookAdapter
+
+    nba = NotebookAdapter('tests/testfiles/multiline.ipynb')
+
+    pars = nba.input_parameters
+
+    assert pars['mline']['python_type'] == dict
+    assert pars['mline']['default_value'] == {'foo': ['bar', 'baz'],
+                                              'spam': ['ham', 'eggs']}
+    assert pars['mline']['owl_type'] == "http://odahub.io/ontology#StructuredParameter"
+    assert pars['mline']['is_optional'] == False
+
+
+    assert pars['opt']['python_type'] == float
+    assert pars['opt']['default_value'] == None
+    assert pars['opt']['owl_type'] == "http://odahub.io/ontology#Float"
+    assert pars['opt']['is_optional'] == True
+
+
+    assert pars['inten']['python_type'] == int
+    assert pars['inten']['default_value'] == 45
+    assert pars['inten']['owl_type'] == "http://odahub.io/ontology#Energy"
+    assert pars['inten']['is_optional'] == False
+
+
+    assert pars['flag']['python_type'] == bool
+    assert pars['flag']['default_value'] == True
+    assert pars['flag']['owl_type'] == "http://odahub.io/ontology#Boolean"
+    assert pars['flag']['is_optional'] == False
+
+    outp = nba.extract_output_declarations()
+
+    assert outp['static']['value'] == "Just a static\n            but multiline string"
+    
