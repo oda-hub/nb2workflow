@@ -382,6 +382,13 @@ class NotebookAdapter:
             if p['extra_ttl'] is not None:
                 G.parse(data=p['extra_ttl'])
 
+        oda_token_access = rdflib.term.URIRef('http://odahub.io/ontology#oda_token_access')
+        self.token_access = None
+        for s, p, o in G.triples((None, oda_token_access, None)):
+            if self.token_access is not None:
+                raise RuntimeError('Multiple oda_token_access annotations')
+            self.token_access = o
+
         self.extra_ttl = G.serialize(format='turtle')
 
         return self.input_parameters
@@ -539,6 +546,15 @@ class NotebookAdapter:
         :param workdir: directory to save notebook in
         """
         from oda_api import context_file
+
+        if str(self.token_access).endswith('InOdaContext'):
+            if 'token' not in context:
+                raise RuntimeError('token is not provided')
+        elif 'token' in context:
+            # don't pass token since it was not reqested
+            context = context.copy()
+            del context['token']
+
         context_file_path = os.path.join(workdir, context_file)
         with open(context_file_path, 'wt') as output:
             json.dump(context, output)
