@@ -100,7 +100,7 @@ setup(name='nb2workflow',
         'sentry_sdk',
         'rdflib',
         'GitPython',
-        'oda_api @ git+https://github.com/oda-hub/oda_api.git@158-notebooks-should-have-access-to-requesters-oda-token'
+        'oda_api'
       ],
 
 
