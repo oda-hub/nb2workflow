@@ -96,7 +96,7 @@ class NBRepo:
     
     def _make_tmpdir(self) -> str:
         tmpdir = tempfile.mkdtemp()
-        logger.info('Creating tempdir: ', tmpdir)
+        logger.info('Creating tempdir: %s', tmpdir)
         return tmpdir
         
     def cleanup(self):
