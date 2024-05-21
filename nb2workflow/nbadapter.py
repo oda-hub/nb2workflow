@@ -22,6 +22,7 @@ import validators
 import requests
 import random
 import string
+import threading
 
 import papermill as pm
 import scrapbook as sb
@@ -381,6 +382,13 @@ class NotebookAdapter:
             if p['extra_ttl'] is not None:
                 G.parse(data=p['extra_ttl'])
 
+        oda_token_access = rdflib.term.URIRef('http://odahub.io/ontology#oda_token_access')
+        self.token_access = None
+        for s, p, o in G.triples((None, oda_token_access, None)):
+            if self.token_access is not None:
+                raise RuntimeError('Multiple oda_token_access annotations')
+            self.token_access = o
+
         self.extra_ttl = G.serialize(format='turtle')
 
         return self.input_parameters
@@ -433,25 +441,29 @@ class NotebookAdapter:
 
         
 
-    def execute(self, parameters, progress_bar = True, log_output = True, inplace=False, tmpdir_key=None, callback_url=None):
+    def execute(self, parameters, progress_bar=True, log_output=True, inplace=False, tmpdir_key=None, context=None):
+
+        if context is None:
+            context = {}
         t0 = time.time()
         logstasher.log(dict(origin="nb2workflow.execute", event="starting", parameters=parameters, workflow_name=notebook_short_name(self.notebook_fn), health=current_health()))
 
         logger.info("starting job")
-        exceptions = self._execute(parameters, progress_bar, log_output, inplace, callback_url=callback_url, tmpdir_key=tmpdir_key)
-            
+        exceptions = self._execute(parameters, progress_bar, log_output, inplace, context=context, tmpdir_key=tmpdir_key)
+
         tspent = time.time() - t0
-        logstasher.log(dict(origin="nb2workflow.execute", 
-                            event="done", 
-                            parameters=parameters, 
-                            workflow_name=notebook_short_name(self.notebook_fn), 
+        logstasher.log(dict(origin="nb2workflow.execute",
+                            event="done",
+                            parameters=parameters,
+                            workflow_name=notebook_short_name(self.notebook_fn),
                             exceptions=list(map(workflows.serialize_workflow_exception, exceptions)),
-                            health=current_health(), 
+                            health=current_health(),
                             time_spent=tspent))
 
         return exceptions
 
-    def _execute(self, parameters, progress_bar = True, log_output = True, inplace=False, callback_url=None, tmpdir_key=None):
+    def _execute(self, parameters, progress_bar=True, log_output=True, inplace=False, context={}, tmpdir_key=None):
+
         if not inplace :
             tmpdir = self.new_tmpdir(tmpdir_key)
             logger.info("new tmpdir: %s", tmpdir)
@@ -475,8 +487,8 @@ class NotebookAdapter:
             tmpdir =os.path.dirname(os.path.realpath(self.notebook_fn))
             logger.info("executing inplace, no tmpdir is input dir: %s", tmpdir)
 
-        if callback_url:
-            self._pass_callback_url(tmpdir, callback_url)
+        if len(context) > 0:
+            self._pass_context(tmpdir, context)
 
         self.update_summary(state="started", parameters=parameters)
 
@@ -491,6 +503,10 @@ class NotebookAdapter:
         ntries = 10
         while ntries > 0:
             try:
+                thread_id = threading.get_ident()
+                process_id = os.getpid()
+                logger.info(f'pm.execute_notebook thread id: {thread_id} ; process id: {process_id}')
+
                 pm.execute_notebook(
                    self.preproc_notebook_fn,
                    self.output_notebook_fn,
@@ -524,16 +540,25 @@ class NotebookAdapter:
 
         return exceptions
 
-    def _pass_callback_url(self, workdir: str, callback_url: str):
+    def _pass_context(self, workdir: str, context: dict):
         """
-        save callback_url to file .oda_api_callback in the notebook dir where it can be accessed by ODA API
+        save context to file .oda_api_context in the notebook dir where it can be accessed by ODA API
         :param workdir: directory to save notebook in
         """
-        callback_file = ".oda_api_callback"  # perhaps it would be better to define this constant in a common lib
-        callback_file_path = os.path.join(workdir, callback_file)
-        with open(callback_file_path, 'wt') as output:
-            print(callback_url, file=output)
-        logger.info("callback file created: %s", callback_file_path)
+        from oda_api import context_file
+
+        if str(self.token_access).endswith('InOdaContext'):
+            if 'token' not in context:
+                raise RuntimeError('token is not provided')
+        elif 'token' in context:
+            # don't pass token since it was not reqested
+            context = context.copy()
+            del context['token']
+
+        context_file_path = os.path.join(workdir, context_file)
+        with open(context_file_path, 'wt') as output:
+            json.dump(context, output)
+        logger.info("context file created: %s", context_file_path)
 
     def extract_pm_output(self):
         nb = sb.read_notebook(self.output_notebook_fn)

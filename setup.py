@@ -63,14 +63,12 @@ setup(name='nb2workflow',
             'matplotlib'
         ],
         "mmoda":[
-            'oda_api'
         ],
         "k8s":[
             'kubernetes',
             'Jinja2'
         ],
         'galaxy':[
-            'oda_api',
             'ensureconda',
             'bibtexparser >= 2.0.0b3',
             'pypandoc_binary',
@@ -101,7 +99,8 @@ setup(name='nb2workflow',
         'validators',
         'sentry_sdk',
         'rdflib',
-        'GitPython'
+        'GitPython',
+        'oda_api'
       ],
 
 
@@ -110,6 +109,4 @@ setup(name='nb2workflow',
       keywords = ['jupyter', 'docker'],
       classifiers = [],
       setup_requires=setup_requires)
-
-
 
