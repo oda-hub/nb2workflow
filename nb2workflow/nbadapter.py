@@ -488,6 +488,10 @@ class NotebookAdapter:
             tmpdir =os.path.dirname(os.path.realpath(self.notebook_fn))
             logger.info("executing inplace, no tmpdir is input dir: %s", tmpdir)
 
+        print(f"context: {context}")
+
+        r = self.handle_url_params(parameters, tmpdir, context=context)
+
         if len(context) > 0:
             self._pass_context(tmpdir, context)
 
@@ -495,8 +499,6 @@ class NotebookAdapter:
 
         self.inject_output_gathering()
         exceptions = []
-
-        r = self.handle_url_params(parameters, tmpdir)
 
         if len(r['exceptions']) > 0:
             exceptions.extend(r['exceptions'])
@@ -642,7 +644,7 @@ class NotebookAdapter:
 
         return file_name
 
-    def handle_url_params(self, parameters, tmpdir):
+    def handle_url_params(self, parameters, tmpdir, context={}):
         adapted_parameters = copy.deepcopy(parameters)
         exceptions = []
         for input_par_name, input_par_obj in self.input_parameters.items():
@@ -654,7 +656,7 @@ class NotebookAdapter:
                 if validators.url(arg_par_value):
 
                     if is_mmoda_url(arg_par_value):
-                        token = adapted_parameters.get('token', None)
+                        token = context.get('token', None)
                         if token is not None:
                             logger.debug(f'adding token to the url: {arg_par_value}')
                             adapted_parameters[input_par_name] += f"&token={token}"
