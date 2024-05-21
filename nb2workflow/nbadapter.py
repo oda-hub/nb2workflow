@@ -28,7 +28,7 @@ import papermill as pm
 import scrapbook as sb
 import nbformat
 from nbconvert import HTMLExporter
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 
 from . import logstash
 
@@ -488,8 +488,6 @@ class NotebookAdapter:
             tmpdir =os.path.dirname(os.path.realpath(self.notebook_fn))
             logger.info("executing inplace, no tmpdir is input dir: %s", tmpdir)
 
-        print(f"context: {context}")
-
         r = self.handle_url_params(parameters, tmpdir, context=context)
 
         if len(context) > 0:
@@ -659,7 +657,12 @@ class NotebookAdapter:
                         token = context.get('token', None)
                         if token is not None:
                             logger.debug(f'adding token to the url: {arg_par_value}')
-                            adapted_parameters[input_par_name] += f"&token={token}"
+                            url_parts = urlparse(adapted_parameters[input_par_name])
+                            url_args = parse_qs(url_parts.query)
+                            url_args['token'] = [token]  # the values in the dictionary need to be lists
+                            new_url_parts = url_parts._replace(query=urlencode(url_args, doseq=True))
+                            adapted_parameters[input_par_name] = urlunparse(new_url_parts)
+
 
                     logger.debug(f'download {arg_par_value}')
                     try:
