@@ -135,13 +135,18 @@ class AsyncWorker(threading.Thread):
         async_workflow.run()
 
 class AsyncWorkflow:
-    def __init__(self, key, target, params, callback=None):
+    def __init__(self, key, target, params, context={}):
         self.key = key
         self.target = target
         self.params = params
-        self.callback = callback
+        self.context = context
 
-        logger.info("%s initializing callback %s", self, callback)
+        logger.info("%s initializing callback %s", self, self.callback)
+
+    @property
+    def callback(self):
+        return self.context.get('callback', None)
+
 
     def run(self):
         try:
@@ -182,7 +187,10 @@ class AsyncWorkflow:
         self.perform_callback(action='progress')
 
         try:
-            exceptions = nba.execute(self.params['request_parameters'], callback_url=self.callback, tmpdir_key=self.key)
+            thread_id = threading.get_ident()
+            process_id = os.getpid()
+            logger.info(f'nba.execute thread id: {thread_id} ; process id: {process_id}')
+            exceptions = nba.execute(self.params['request_parameters'], context=self.context, tmpdir_key=self.key)
         except PapermillWorkflowIncomplete as e:
             logger.info("found incomplete workflow: %s, rescheduling", repr(e))
 
@@ -261,6 +269,8 @@ def workflow(target, background=False, async_request=False):
 
     async_request = request.args.get('_async_request', async_request)
     async_request_callback = request.args.get('_async_request_callback', None)
+    token = request.args.get("_token", None)
+    context = dict(callback=async_request_callback, token=token)
 
     logger.debug("target %s", target)
 
@@ -299,7 +309,8 @@ def workflow(target, background=False, async_request=False):
             async_task = AsyncWorkflow(key=key,
                                        target=target,
                                        params=interpreted_parameters,
-                                       callback=async_request_callback)
+                                       context=context
+                                       )
 
             app.async_workflows[key] = 'submitted'
             async_queue.put(async_task)
@@ -328,7 +339,7 @@ def workflow(target, background=False, async_request=False):
     if len(issues) > 0:
         return make_response(jsonify(issues=issues), 400)
     else:
-        exceptions = nba.execute(interpreted_parameters['request_parameters'])
+        exceptions = nba.execute(interpreted_parameters['request_parameters'], context=context)
 
         nretry = 10
         while nretry > 0:
@@ -735,6 +746,10 @@ def main():
 
         for nba_name, nba in app.notebook_adapters.items():
             publish.publish(args.publish, nba_name, publish_host, publish_port)
+
+    thread_id = threading.get_ident()
+    process_id = os.getpid()
+    logger.info(f'service main thread id: {thread_id} ; process id: {process_id}')
 
   #  for rule in app.url_map.iter_rules():
  #       logger.debug("==>> %s %s %s %s",rule,rule.endpoint,rule.__class__,rule.__dict__)

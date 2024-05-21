@@ -110,7 +110,10 @@ def test_service_repo(client):
 
 
 def test_service_async_repo(client):
-    
+    thread_id = threading.get_ident()
+    process_id = os.getpid()
+    logger.info(f'test_service_async_repo thread id: {thread_id} ; process id: {process_id}')
+
     r = client.get('/api/v1.0/options')
     
     service_signature=r.json['workflow-notebook']
