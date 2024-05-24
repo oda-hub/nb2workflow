@@ -654,7 +654,7 @@ class NotebookAdapter:
                 if validators.url(arg_par_value):
                     logger.info(f"checking url: {arg_par_value}")
                     if is_mmoda_url(arg_par_value):
-                        logger.info(f"{arg_par_value} is an mmoda url")
+                        logger.debug(f"{arg_par_value} is an mmoda url")
                         token = context.get('token', None)
                         if token is not None:
                             logger.debug(f'adding token to the url: {arg_par_value}')
@@ -663,7 +663,7 @@ class NotebookAdapter:
                             url_args['token'] = [token] # the values in the dictionary need to be lists
                             new_url_parts = url_parts._replace(query=urlencode(url_args, doseq=True))
                             adapted_parameters[input_par_name] = urlunparse(new_url_parts)
-                            logger.info(f"updated url: {adapted_parameters[input_par_name]}")
+                            logger.debug(f"updated url: {adapted_parameters[input_par_name]}")
                             arg_par_value = adapted_parameters[input_par_name]
 
                     logger.debug(f'download {arg_par_value}')
