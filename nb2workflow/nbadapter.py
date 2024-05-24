@@ -601,7 +601,7 @@ class NotebookAdapter:
         for _ in range(n_download_tries_left):
             step = 'getting the file size'
             if not size_ok:
-                response = requests.head(file_url)
+                response = requests.head(file_url, allow_redirects=True)
                 if response.status_code == 200:
                     file_size = int(response.headers.get('Content-Length', 0))
                     if file_size > self.max_download_size:
@@ -652,17 +652,19 @@ class NotebookAdapter:
                 if arg_par_value is None:
                     arg_par_value = input_par_obj['default_value']
                 if validators.url(arg_par_value):
-
+                    logger.info(f"checking url: {arg_par_value}")
                     if is_mmoda_url(arg_par_value):
+                        logger.info(f"{arg_par_value} is an mmoda url")
                         token = context.get('token', None)
                         if token is not None:
                             logger.debug(f'adding token to the url: {arg_par_value}')
                             url_parts = urlparse(adapted_parameters[input_par_name])
                             url_args = parse_qs(url_parts.query)
-                            url_args['token'] = [token]  # the values in the dictionary need to be lists
+                            url_args['token'] = [token] # the values in the dictionary need to be lists
                             new_url_parts = url_parts._replace(query=urlencode(url_args, doseq=True))
                             adapted_parameters[input_par_name] = urlunparse(new_url_parts)
-
+                            logger.info(f"updated url: {adapted_parameters[input_par_name]}")
+                            arg_par_value = adapted_parameters[input_par_name]
 
                     logger.debug(f'download {arg_par_value}')
                     try:
