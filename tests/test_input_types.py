@@ -36,7 +36,7 @@ def test_posix_download_file_mmoda_url(client):
         '_token': 'test_token'
     })
     assert r.json['exceptions'][0] == ("Exception('An issue occurred when attempting to getting the file size at the url "
-                                       "https://www.astro.unige.ch/mmoda/test.fits. This might be related to an "
+                                       "https://www.astro.unige.ch/mmoda/test.fits?token=test_token. This might be related to an "
                                        "invalid url, please check the input provided')")
 
 def test_boolean_default(client):
