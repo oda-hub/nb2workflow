@@ -651,7 +651,7 @@ class NotebookAdapter:
                 arg_par_value = parameters.get(input_par_name, None)
                 if arg_par_value is None:
                     arg_par_value = input_par_obj['default_value']
-                if validators.url(arg_par_value):
+                if validators.url(arg_par_value, private=True):
                     logger.info(f"checking url: {arg_par_value}")
                     if is_mmoda_url(arg_par_value):
                         logger.debug(f"{arg_par_value} is an mmoda url")
