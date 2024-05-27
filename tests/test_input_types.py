@@ -2,6 +2,8 @@ import pytest
 import nb2workflow
 import os
 
+from urllib.parse import urlencode
+
 @pytest.fixture
 def app():
     testfiles_path = os.path.join(os.path.dirname(__file__), 'testfiles')
@@ -31,12 +33,23 @@ def test_posix_download_file_with_arg_wrong_url(client):
                                        "to an invalid url, please check the input provided')")
 
 @pytest.mark.parametrize("public", [True, False])
-def test_posix_download_file_mmoda_url(client, public):
-    fits_file_url = 'https://www.astro.unige.ch/mmoda/dispatch-data/test.fits'
-    query_string = { 'fits_file_path': fits_file_url}
+@pytest.mark.parametrize("mmoda_arg", [True, False])
+@pytest.mark.parametrize("mmoda_path", [True, False])
+def test_posix_download_file_mmoda_url(client, public, mmoda_arg, mmoda_path):
+    if not mmoda_path:
+        fits_file_url = 'https://www.astro.unige.ch/test.fits'
+    else:
+        fits_file_url = 'https://www.astro.unige.ch/mmoda/dispatch-data/test.fits'
+    query_string = {}
+    url_params = {}
     if not public:
         query_string['_token'] = 'test_token'
-        fits_file_url += '?token=test_token'
+        url_params['token'] = 'test_token'
+    if mmoda_arg:
+        url_params['_is_mmoda_url'] = 'True'
+    url_params_dict = urlencode(url_params)
+    fits_file_url = f'{fits_file_url}?{url_params_dict}'
+    query_string['fits_file_path'] = fits_file_url
     r = client.get('/api/v1.0/get/testposixpath', query_string=query_string)
     assert r.json['exceptions'][0] == ("Exception('An issue occurred when attempting to getting the file size at the url "
                                        f"{fits_file_url}. This might be related to an "
