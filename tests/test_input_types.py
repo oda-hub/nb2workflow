@@ -30,13 +30,16 @@ def test_posix_download_file_with_arg_wrong_url(client):
                                        "https://fits.gsfc.nasa.gov/samples/aaaaaa.fits. This might be related "
                                        "to an invalid url, please check the input provided')")
 
-def test_posix_download_file_mmoda_url(client):
-    r = client.get('/api/v1.0/get/testposixpath', query_string={
-        'fits_file_path': 'https://www.astro.unige.ch/mmoda/test.fits',
-        '_token': 'test_token'
-    })
+@pytest.mark.parametrize("public", [True, False])
+def test_posix_download_file_mmoda_url(client, public):
+    fits_file_url = 'https://www.astro.unige.ch/mmoda/dispatch-data/test.fits'
+    query_string = { 'fits_file_path': fits_file_url}
+    if not public:
+        query_string['_token'] = 'test_token'
+        fits_file_url += '?token=test_token'
+    r = client.get('/api/v1.0/get/testposixpath', query_string=query_string)
     assert r.json['exceptions'][0] == ("Exception('An issue occurred when attempting to getting the file size at the url "
-                                       "https://www.astro.unige.ch/mmoda/test.fits?token=test_token. This might be related to an "
+                                       f"{fits_file_url}. This might be related to an "
                                        "invalid url, please check the input provided')")
 
 def test_boolean_default(client):
