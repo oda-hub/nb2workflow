@@ -3,7 +3,7 @@ from __future__ import annotations
 import ast
 
 from dataclasses import dataclass, asdict
-from functools import lru_cache
+from functools import lru_cache, cached_property
 import hashlib
 import os
 import glob
@@ -28,13 +28,14 @@ import random
 import string
 import io
 from numbers import Number
+import threading
 
 import papermill as pm
 import scrapbook as sb
 from typeguard import check_type, ForwardRefPolicy, TypeCheckError
 import nbformat
 from nbconvert import HTMLExporter
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 
 from . import logstash
 
@@ -45,6 +46,8 @@ from nb2workflow.health import current_health
 from nb2workflow import workflows
 from nb2workflow.logging_setup import setup_logging
 from nb2workflow.json import CustomJSONEncoder
+from nb2workflow.url_helper import is_mmoda_url
+from nb2workflow.semantics import understand_comment_references
 
 from nb2workflow.semantics import understand_comment_references
 from git import Repo, InvalidGitRepositoryError, GitCommandError
@@ -512,7 +515,17 @@ class NotebookAdapter:
 
         return self.input_parameters
 
-    @property
+    @cached_property
+    def token_access(self):
+        oda_token_access = rdflib.URIRef(f"{oda_prefix}oda_token_access")
+        _token_access = None
+        for s, p, o in self.graph.triples((None, oda_token_access, None)):
+            if _token_access is not None:
+                raise RuntimeError('Multiple oda_token_access annotations')
+            _token_access = o
+        return _token_access
+        
+    @cached_property
     def extra_ttl(self) -> str:
         return self.graph.serialize(format='turtle')
     
@@ -563,25 +576,29 @@ class NotebookAdapter:
 
         
 
-    def execute(self, parameters, progress_bar = True, log_output = True, inplace=False, tmpdir_key=None, callback_url=None):
+    def execute(self, parameters, progress_bar=True, log_output=True, inplace=False, tmpdir_key=None, context=None):
+
+        if context is None:
+            context = {}
         t0 = time.time()
         logstasher.log(dict(origin="nb2workflow.execute", event="starting", parameters=parameters, workflow_name=notebook_short_name(self.notebook_fn), health=current_health()))
 
         logger.info("starting job")
-        exceptions = self._execute(parameters, progress_bar, log_output, inplace, callback_url=callback_url, tmpdir_key=tmpdir_key)
-            
+        exceptions = self._execute(parameters, progress_bar, log_output, inplace, context=context, tmpdir_key=tmpdir_key)
+
         tspent = time.time() - t0
-        logstasher.log(dict(origin="nb2workflow.execute", 
-                            event="done", 
-                            parameters=parameters, 
-                            workflow_name=notebook_short_name(self.notebook_fn), 
+        logstasher.log(dict(origin="nb2workflow.execute",
+                            event="done",
+                            parameters=parameters,
+                            workflow_name=notebook_short_name(self.notebook_fn),
                             exceptions=list(map(workflows.serialize_workflow_exception, exceptions)),
-                            health=current_health(), 
+                            health=current_health(),
                             time_spent=tspent))
 
         return exceptions
 
-    def _execute(self, parameters, progress_bar = True, log_output = True, inplace=False, callback_url=None, tmpdir_key=None):
+    def _execute(self, parameters, progress_bar=True, log_output=True, inplace=False, context={}, tmpdir_key=None):
+
         if not inplace :
             tmpdir = self.new_tmpdir(tmpdir_key)
             logger.info("new tmpdir: %s", tmpdir)
@@ -605,15 +622,15 @@ class NotebookAdapter:
             tmpdir =os.path.dirname(os.path.realpath(self.notebook_fn))
             logger.info("executing inplace, no tmpdir is input dir: %s", tmpdir)
 
-        if callback_url:
-            self._pass_callback_url(tmpdir, callback_url)
+        r = self.handle_url_params(parameters, tmpdir, context=context)
+
+        if len(context) > 0:
+            self._pass_context(tmpdir, context)
 
         self.update_summary(state="started", parameters=parameters)
 
         self.inject_output_gathering()
         exceptions = []
-
-        r = self.extract_files_locally(parameters, tmpdir)
 
         if len(r['exceptions']) > 0:
             exceptions.extend(r['exceptions'])
@@ -621,6 +638,10 @@ class NotebookAdapter:
         ntries = 10
         while ntries > 0:
             try:
+                thread_id = threading.get_ident()
+                process_id = os.getpid()
+                logger.info(f'pm.execute_notebook thread id: {thread_id} ; process id: {process_id}')
+
                 pm.execute_notebook(
                    self.preproc_notebook_fn,
                    self.output_notebook_fn,
@@ -654,16 +675,25 @@ class NotebookAdapter:
 
         return exceptions
 
-    def _pass_callback_url(self, workdir: str, callback_url: str):
+    def _pass_context(self, workdir: str, context: dict):
         """
-        save callback_url to file .oda_api_callback in the notebook dir where it can be accessed by ODA API
+        save context to file .oda_api_context in the notebook dir where it can be accessed by ODA API
         :param workdir: directory to save notebook in
         """
-        callback_file = ".oda_api_callback"  # perhaps it would be better to define this constant in a common lib
-        callback_file_path = os.path.join(workdir, callback_file)
-        with open(callback_file_path, 'wt') as output:
-            print(callback_url, file=output)
-        logger.info("callback file created: %s", callback_file_path)
+        from oda_api import context_file
+
+        if str(self.token_access).endswith('InOdaContext'):
+            if 'token' not in context:
+                raise RuntimeError('token is not provided')
+        elif 'token' in context:
+            # don't pass token since it was not reqested
+            context = context.copy()
+            del context['token']
+
+        context_file_path = os.path.join(workdir, context_file)
+        with open(context_file_path, 'wt') as output:
+            json.dump(context, output)
+        logger.info("context file created: %s", context_file_path)
 
     def extract_pm_output(self):
         nb = sb.read_notebook(self.output_notebook_fn)
@@ -712,7 +742,7 @@ class NotebookAdapter:
         for _ in range(n_download_tries_left):
             step = 'getting the file size'
             if not size_ok:
-                response = requests.head(file_url)
+                response = requests.head(file_url, allow_redirects=True)
                 if response.status_code == 200:
                     file_size = int(response.headers.get('Content-Length', 0))
                     if file_size > self.max_download_size:
@@ -753,7 +783,7 @@ class NotebookAdapter:
 
         return file_name
 
-    def extract_files_locally(self, parameters, tmpdir):
+    def handle_url_params(self, parameters, tmpdir, context={}):
         adapted_parameters = copy.deepcopy(parameters)
         exceptions = []
         for input_par_name, input_par_obj in self.input_parameters.items():
@@ -762,7 +792,21 @@ class NotebookAdapter:
                 arg_par_value = parameters.get(input_par_name, None)
                 if arg_par_value is None:
                     arg_par_value = input_par_obj['default_value']
-                if validators.url(arg_par_value):
+                if validators.url(arg_par_value, private=True):
+                    logger.info(f"checking url: {arg_par_value}")
+                    if is_mmoda_url(arg_par_value):
+                        logger.debug(f"{arg_par_value} is an mmoda url")
+                        token = context.get('token', None)
+                        if token is not None:
+                            logger.debug(f'adding token to the url: {arg_par_value}')
+                            url_parts = urlparse(adapted_parameters[input_par_name])
+                            url_args = parse_qs(url_parts.query)
+                            url_args['token'] = [token] # the values in the dictionary need to be lists
+                            new_url_parts = url_parts._replace(query=urlencode(url_args, doseq=True))
+                            adapted_parameters[input_par_name] = urlunparse(new_url_parts)
+                            logger.debug(f"updated url: {adapted_parameters[input_par_name]}")
+                            arg_par_value = adapted_parameters[input_par_name]
+
                     logger.debug(f'download {arg_par_value}')
                     try:
                         file_name = self.download_file(arg_par_value, tmpdir)

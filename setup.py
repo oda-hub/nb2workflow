@@ -6,7 +6,7 @@ if {'pytest', 'test', 'ptr'}.intersection(sys.argv):
     setup_requires.append('pytest-runner')
 
 setup(name='nb2workflow',
-      version = '1.3.76',
+      version = '1.3.82',
       description='convert notebook to workflow',
       author='Volodymyr Savchenko',
       author_email='contact@volodymyrsavchenko.com',
@@ -63,14 +63,12 @@ setup(name='nb2workflow',
             'matplotlib'
         ],
         "mmoda":[
-            'oda_api'
         ],
         "k8s":[
             'kubernetes',
             'Jinja2'
         ],
         'galaxy':[
-            'oda_api',
             'ensureconda',
             'bibtexparser >= 2.0.0b3',
             'pypandoc_binary',
@@ -98,11 +96,12 @@ setup(name='nb2workflow',
         'pyyaml',
         'scrapbook', 
         'werkzeug==2.0.3',
-        'validators',
+        'validators==0.28.3',
         'sentry_sdk',
         'rdflib',
         'GitPython',
-        'typeguard'
+        'typeguard',
+        'oda_api'
       ],
 
 
@@ -111,6 +110,4 @@ setup(name='nb2workflow',
       keywords = ['jupyter', 'docker'],
       classifiers = [],
       setup_requires=setup_requires)
-
-
 
