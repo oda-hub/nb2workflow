@@ -498,7 +498,7 @@ def build_container(git_origin,
                                           namespace=kwargs['namespace'],
                                           nb2wversion=nb2wversion)
         else:
-            return NotImplementedError('Unknown container build engine: %s', engine)
+            raise NotImplementedError('Unknown container build engine: %s', engine)
 
 def get_k8s_secrets(namespace="oda-staging"):
     json_data = sp.check_output(["kubectl", "get", "secrets", "-n", namespace, "-o", "json"])
