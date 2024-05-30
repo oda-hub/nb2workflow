@@ -55,6 +55,23 @@ def test_posix_download_file_mmoda_url(client, public, mmoda_arg, mmoda_path):
                                        f"{fits_file_url}. This might be related to an "
                                        "invalid url, please check the input provided')")
 
+@pytest.mark.parametrize("public", [True, False])
+@pytest.mark.parametrize("host", ["localhost", "0.0.0.0"])
+def test_posix_download_file_local_mmoda_url(client, public, host):
+    fits_file_url = f'https://{host}:1234/test.fits'
+    query_string = {}
+    url_params = {'_is_mmoda_url': True}
+    if not public:
+        query_string['_token'] = 'test_token'
+        url_params['token'] = 'test_token'
+    url_params_dict = urlencode(url_params)
+    fits_file_url = f'{fits_file_url}?{url_params_dict}'
+    query_string['fits_file_path'] = fits_file_url
+    r = client.get('/api/v1.0/get/testposixpath', query_string=query_string)
+    assert r.json['exceptions'][0] == ("Exception('An issue occurred when attempting to getting the file size at the url "
+                                       f"{fits_file_url}. This might be related to an "
+                                       "invalid url, please check the input provided')")
+
 def test_boolean_default(client):
     r = client.get('/api/v1.0/get/testbool')
     assert r.json['output']['output'] == 'boolean True'
