@@ -51,7 +51,7 @@ def test_posix_download_file_mmoda_url(client, public, mmoda_arg, mmoda_path):
     fits_file_url = f'{fits_file_url}?{url_params_dict}'
     query_string['fits_file_path'] = fits_file_url
     r = client.get('/api/v1.0/get/testposixpath', query_string=query_string)
-    assert r.json['exceptions'][0] == ("Exception('An issue occurred when attempting to getting the file size at the url "
+    assert r.json['exceptions'][0] == ("Exception('An issue, due to invalid status code, occurred when attempting to getting the file size at the url "
                                        f"{fits_file_url}. This might be related to an "
                                        "invalid url, please check the input provided')")
 
@@ -68,7 +68,7 @@ def test_posix_download_file_local_mmoda_url(client, public, host):
     fits_file_url = f'{fits_file_url}?{url_params_dict}'
     query_string['fits_file_path'] = fits_file_url
     r = client.get('/api/v1.0/get/testposixpath', query_string=query_string)
-    assert r.json['exceptions'][0] == ("Exception('An issue occurred when attempting to getting the file size at the url "
+    assert r.json['exceptions'][0] == ("Exception('An issue, due to connection error, occurred when attempting to getting the file size at the url "
                                        f"{fits_file_url}. This might be related to an "
                                        "invalid url, please check the input provided')")
 
