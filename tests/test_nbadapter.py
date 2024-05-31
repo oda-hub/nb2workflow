@@ -225,6 +225,10 @@ def test_multiline_parameters():
     assert pars['inten']['owl_type'] == "http://odahub.io/ontology#Energy"
     assert pars['inten']['is_optional'] == False
 
+    assert pars['intfloat']['python_type'] == float
+    assert pars['intfloat']['default_value'] == 10
+    assert pars['intfloat']['owl_type'] == "http://odahub.io/ontology#Float"
+    assert pars['intfloat']['is_optional'] == False
 
     assert pars['flag']['python_type'] == bool
     assert pars['flag']['default_value'] == True
