@@ -129,6 +129,8 @@ def test_casting_invalid(client):
     r = client.get('/api/v1.0/get/multiline', query_string={'inten': 20.1})
     assert len(r.json['issues']) > 0
 
-    r=client.get('/api/v1.0/get/multiline', query_string={'inten': 20.1, '_async_request': 'yes'})
+    # async
+    r=client.get('/api/v1.0/get/multiline', query_string={'inten': 20.1, 
+                                                          '_async_request': 'yes'})
     assert len(r.json['data']['exceptions']) > 0
-    
+
