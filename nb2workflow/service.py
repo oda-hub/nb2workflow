@@ -298,6 +298,11 @@ def workflow(target, background=False, async_request=False):
 
     # async
     if async_request:
+        if len(issues) > 0:
+            return make_response(jsonify(workflow_status="done",
+                                         data=dict(output={}, exceptions=issues),
+                                         comment=""), 200)
+
         key = hashlib.sha224(json.dumps(
             dict(target=target, params=interpreted_parameters)).encode('utf-8')).hexdigest()
 

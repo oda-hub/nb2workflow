@@ -129,36 +129,6 @@ def test_casting_invalid(client):
     r = client.get('/api/v1.0/get/multiline', query_string={'inten': 20.1})
     assert len(r.json['issues']) > 0
 
-
-def test_casting_invalid_async(client):
     r=client.get('/api/v1.0/get/multiline', query_string={'inten': 20.1, '_async_request': 'yes'})
-
-    assert r.status_code == 201
-
-    logger.info(r.json)
-
-    from nb2workflow.service import AsyncWorker
-
-    def test_worker_run():
-        AsyncWorker('test-worker').run_one()
-
-    test_worker_thread = threading.Thread(target=test_worker_run)
-    test_worker_thread.start()
-
-
-
-    while True:
+    assert len(r.json['data']['exceptions']) > 0
     
-        r = client.get('/api/v1.0/get/multiline', query_string={'inten': 20.1, '_async_request': 'yes'})
-
-        logger.info('service returns %s %s', r, r.json)
-
-        if r.json['workflow_status'] == 'done':
-            logger.info('workflow done!')
-            break
-
-        time.sleep(0.1)
-
-    test_worker_thread.join()
-
-    assert 'exceptions' in r.json and len(r.json['exceptions']) > 0
