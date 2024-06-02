@@ -600,8 +600,18 @@ class NotebookAdapter:
         file_path = os.path.join(tmpdir, file_name)
         for _ in range(n_download_tries_left):
             step = 'getting the file size'
+            reason = 'connection error'
             if not size_ok:
-                response = requests.head(file_url, allow_redirects=True)
+                try:
+                    response = requests.head(file_url, allow_redirects=True)
+                except requests.exceptions.ConnectionError as ce:
+                    logger.warning(
+                        (f"An issue, due to {reason}, occurred when attempting to {step} of the file at the url {file_url}. "
+                         f"Sleeping {self.download_retry_sleep_s} seconds until retry")
+                    )
+                    time.sleep(self.download_retry_sleep_s)
+                    continue
+                reason = 'invalid status code'
                 if response.status_code == 200:
                     file_size = int(response.headers.get('Content-Length', 0))
                     if file_size > self.max_download_size:
@@ -612,14 +622,24 @@ class NotebookAdapter:
                         raise Exception(msg)
                 else:
                     logger.warning(
-                        (f"An issue occurred when attempting to {step} of the file at the url {file_url}. "
+                        (f"An issue, due to {reason}, occurred when attempting to {step} of the file at the url {file_url}. "
                          f"Sleeping {self.download_retry_sleep_s} seconds until retry")
                     )
                     time.sleep(self.download_retry_sleep_s)
                     continue
             size_ok = True
             step = 'downloading file'
-            response = requests.get(file_url)
+            reason = 'connection error'
+            try:
+                response = requests.get(file_url)
+            except requests.ConnectionError as ce:
+                logger.warning(
+                    (f"An issue, due to {reason}, occurred when attempting to {step} of the file at the url {file_url}. "
+                     f"Sleeping {self.download_retry_sleep_s} seconds until retry")
+                )
+                time.sleep(self.download_retry_sleep_s)
+                continue
+            reason = 'invalid status code'
             if response.status_code == 200:
                 with open(file_path, 'wb') as file:
                     file.write(response.content)
@@ -634,7 +654,7 @@ class NotebookAdapter:
                 continue
 
         if not (file_downloaded and size_ok):
-            msg = (f"An issue occurred when attempting to {step} at the url {file_url}. "
+            msg = (f"An issue, due to {reason}, occurred when attempting to {step} at the url {file_url}. "
                    "This might be related to an invalid url, please check the input provided")
             logger.warning(msg)
             sentry.capture_message(msg)
@@ -651,7 +671,7 @@ class NotebookAdapter:
                 arg_par_value = parameters.get(input_par_name, None)
                 if arg_par_value is None:
                     arg_par_value = input_par_obj['default_value']
-                if validators.url(arg_par_value, private=True):
+                if validators.url(arg_par_value, simple_host=True):
                     logger.info(f"checking url: {arg_par_value}")
                     if is_mmoda_url(arg_par_value):
                         logger.debug(f"{arg_par_value} is an mmoda url")
