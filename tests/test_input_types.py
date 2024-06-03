@@ -1,6 +1,11 @@
 import pytest
 import nb2workflow
 import os
+import logging
+import threading
+import time
+
+logger = logging.getLogger(__name__)
 
 from urllib.parse import urlencode
 
@@ -117,3 +122,32 @@ def test_dict_complex(client):
 def test_dict_wrong(client):
     r = client.get('/api/v1.0/get/structured_input', query_string={'dct': 'baz'})
     assert r.json['issues'][0] == 'Parameter dct value "baz" can not be interpreted as dict.'
+
+
+@pytest.mark.parametrize('inp,outp', [({'opt': None}, {'opt': None}),
+                                       ({'opt': 10}, {'opt': 10.}),
+                                       ({'intfloat': 25}, {'intfloat': 25.}),
+                                       ({'intfloat': 25.}, {'intfloat': 25.}),
+                                       ({'inten': 20}, {'inten': 20}),
+                                       ({'flag': False}, {'flag': False}),
+                                       ({'flag': 0}, {'flag': False}),
+                                      ])
+def test_type_casting(client, inp, outp):
+    r = client.get('/api/v1.0/options')
+    pars = r.json['multiline']['parameters']
+    defaults = {k: v['default_value'] for k, v in pars.items()}
+
+    r = client.get('/api/v1.0/get/multiline', query_string=inp)
+    assert r.json['output']['echo'] == {**defaults, **outp}
+    for k, v in outp.items():
+        assert isinstance(r.json['output']['echo'][k], type(v))
+
+def test_casting_invalid(client):
+    r = client.get('/api/v1.0/get/multiline', query_string={'inten': 20.1})
+    assert len(r.json['issues']) > 0
+
+    # async
+    r=client.get('/api/v1.0/get/multiline', query_string={'inten': 20.1, 
+                                                          '_async_request': 'yes'})
+    assert len(r.json['data']['exceptions']) > 0
+

@@ -100,6 +100,7 @@ setup(name='nb2workflow',
         'sentry_sdk',
         'rdflib',
         'GitPython',
+        'typeguard',
         'oda_api'
       ],
 

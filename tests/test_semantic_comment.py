@@ -2,16 +2,43 @@ import pytest
 
 import rdflib
 import rdflib.compare
+import nbformat
+import os
+import tempfile
 
 from nb2workflow.semantics import understand_comment_references
-from nb2workflow.nbadapter import parse_nbline
-
+from nb2workflow.nbadapter import NotebookAdapter
 
 def normalize(x):
     G = rdflib.Graph()
     G.parse(data=x, format='ttl')
     return list(sorted(rdflib.compare.to_canonical_graph(G)))
 
+
+def parse_nbline(line, kind='param'):
+    with tempfile.TemporaryDirectory() as tmpd:
+        nb = nbformat.v4.new_notebook()
+        cell = nbformat.v4.new_code_cell(line)
+        if kind in ['param', 'nbwide']:
+            cell.metadata['tags'] = ['parameters']
+        elif kind == 'outp':
+            cell.metadata['tags'] = ['outputs']
+        nb.cells.append(cell)
+        
+        fp = os.path.join(tmpd, 'test.ipynb')
+        with open(fp, 'w') as fd:
+            nbformat.write(nb, fd)
+
+        nba = NotebookAdapter(fp)
+        if kind == 'nbwide':
+            res = {'owl_type': str(nba.nb_uri),
+                   'extra_ttl': nba.extra_ttl}
+        elif kind == 'outp':
+            res = list(nba.extract_output_declarations().values())[0]
+        else:
+            res = list(nba.extract_parameters().values())[0]
+    
+    return res
 
 def test_semantic_comments():
 
@@ -94,17 +121,15 @@ def test_semantic_comments():
                   oda:upper_limit 30 .
             """)
     
-    r = parse_nbline('# oda:version "v1"', nb_uri)
-    assert r['owl_type'] == str(nb_uri)
-    assert normalize(r['extra_ttl']) == normalize('@prefix oda: <http://odahub.io/ontology#> . <http://mynb> oda:version "v1" .')
+    r = parse_nbline('# oda:version "v1"', 'nbwide')
+    assert normalize(r['extra_ttl']) == normalize(f'@prefix oda: <http://odahub.io/ontology#> . <{r["owl_type"]}> oda:version "v1" .')
 
-    r = parse_nbline('# oda:reference https://doi.org/10.1051/0004-6361/202037850', nb_uri)        
-    assert r['owl_type'] == str(nb_uri)
-    assert normalize(r['extra_ttl']) == normalize('@prefix oda: <http://odahub.io/ontology#> . <http://mynb> oda:reference <https://doi.org/10.1051/0004-6361/202037850> .')
+    r = parse_nbline('# oda:reference https://doi.org/10.1051/0004-6361/202037850', 'nbwide')        
+    assert normalize(r['extra_ttl']) == normalize('@prefix oda: <http://odahub.io/ontology#> .'
+                                                  f'<{r["owl_type"]}> oda:reference <https://doi.org/10.1051/0004-6361/202037850> .')
 
-    r = parse_nbline('# oda:relevantForObject oda:Crab', nb_uri)
-    assert r['owl_type'] == str(nb_uri)
-    assert normalize(r['extra_ttl']) == normalize('@prefix oda: <http://odahub.io/ontology#> . <http://mynb> oda:relevantForObject oda:Crab .')
+    r = parse_nbline('# oda:relevantForObject oda:Crab', 'nbwide')
+    assert normalize(r['extra_ttl']) == normalize(f'@prefix oda: <http://odahub.io/ontology#> . <{r["owl_type"]}> oda:relevantForObject oda:Crab .')
     
 
 @pytest.mark.parametrize("comment, expected_owl_type, expected_value", [
@@ -128,17 +153,23 @@ def test_single_ul(comment, expected_owl_type, expected_value):
 
     
 def test_semantic_nbline():
-    from nb2workflow.nbadapter import parse_nbline
 
-    r = parse_nbline("t1=1 # http://odahub.io/ontology#StartTimeISOT")
-    assert r['owl_type'] == "http://odahub.io/ontology#StartTimeISOT"
+    r = parse_nbline("t1=1 # http://odahub.io/ontology#StartTimeMJD")
+    assert r['owl_type'] == "http://odahub.io/ontology#StartTimeMJD"
     assert normalize(r['extra_ttl']) == []
     
-    r = parse_nbline("t2=2. # http://odahub.io/ontology#StartTimeISOT . # and some text")
-    assert r['owl_type'] == "http://odahub.io/ontology#StartTimeISOT"    
+    r = parse_nbline("t2=2. # http://odahub.io/ontology#StartTimeMJD . # and some text")
+    assert r['owl_type'] == "http://odahub.io/ontology#StartTimeMJD"    
 
-    r = parse_nbline("t3 # oda:StartTimeISOT")
-    assert r['owl_type'] == "http://odahub.io/ontology#StartTimeISOT"
+    r = parse_nbline("t3 # oda:StartTimeISOT, oda:optional")
+    assert normalize(r['extra_ttl']) == normalize(f"""
+        @prefix oda: <http://odahub.io/ontology#> . 
+        @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> . 
+        @prefix xsd: <http://www.w3.org/2001/XMLSchema#> . 
+        @prefix owl: <http://www.w3.org/2002/07/owl#> . 
+                                                  
+        <{r['owl_type']}> rdfs:subClassOf oda:StartTimeISOT, oda:optional . 
+    """)
 
     r = parse_nbline("tstart_seconds=1 # oda:upper_limit 2") 
     assert r['owl_type'] == "http://odahub.io/ontology#2integer_Integer_upper_limit"
@@ -152,6 +183,10 @@ def test_semantic_nbline():
                                      oda:upper_limit 2 .
     """)
 
-    r = parse_nbline("result=obj_results # http://odahub.io/ontology#LightCurveList") 
-    assert r['owl_type'] == "http://odahub.io/ontology#LightCurveList"
+    r = parse_nbline("result=obj_results # http://odahub.io/ontology#LightCurve", 'outp') 
+    assert r['owl_type'] == "http://odahub.io/ontology#LightCurve"
+    assert normalize(r['extra_ttl']) == []
+
+    r = parse_nbline("obj_results # http://odahub.io/ontology#LightCurve", 'outp') 
+    assert r['owl_type'] == "http://odahub.io/ontology#LightCurve"
     assert normalize(r['extra_ttl']) == []

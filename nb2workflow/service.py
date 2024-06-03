@@ -298,6 +298,13 @@ def workflow(target, background=False, async_request=False):
 
     # async
     if async_request:
+        if len(issues) > 0:
+            exceptions = [serialize_workflow_exception(ValueError(v)) for v in issues]
+            return make_response(jsonify(workflow_status="done",
+                                        data=dict(output="incomplete", 
+                                                    exceptions=exceptions),
+                                        comment=""), 200)
+
         key = hashlib.sha224(json.dumps(
             dict(target=target, params=interpreted_parameters)).encode('utf-8')).hexdigest()
 

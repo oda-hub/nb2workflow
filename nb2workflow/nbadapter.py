@@ -1,16 +1,20 @@
-from ast import literal_eval
+from __future__ import annotations
+
+import ast
+
+from dataclasses import dataclass, asdict
+from functools import lru_cache, cached_property
 import hashlib
 import os
-import sys
 import glob
 import shutil
-from typing import Optional, Dict
-import uuid
+from tokenize import generate_tokens, COMMENT
+from typing import * # type: ignore 
+# need wildcard import to resolve (semi-)arbitrary ForwardRef of annotations in nb
 import yaml 
 import re
 import time
 import tempfile
-import pprint
 import subprocess
 import yaml
 import argparse
@@ -22,15 +26,20 @@ import validators
 import requests
 import random
 import string
+import io
+from numbers import Number
 import threading
 
 import papermill as pm
 import scrapbook as sb
+from typeguard import check_type, ForwardRefPolicy, TypeCheckError
 import nbformat
 from nbconvert import HTMLExporter
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 
 from . import logstash
+
+from oda_api.ontology_helper import Ontology, xsd_type_to_python_type
 
 from nb2workflow.sentry import sentry
 from nb2workflow.health import current_health
@@ -40,14 +49,33 @@ from nb2workflow.json import CustomJSONEncoder
 from nb2workflow.url_helper import is_mmoda_url
 from nb2workflow.semantics import understand_comment_references
 
+from nb2workflow.semantics import understand_comment_references
 from git import Repo, InvalidGitRepositoryError, GitCommandError
 
 import logging
+from threading import Lock
 
 logger=logging.getLogger(__name__)
 
 logstasher = logstash.LogStasher()
 
+# TODO: will be configurable
+oda_ontology_path = "http://odahub.io/ontology/ontology.ttl"
+#oda_ontology_path = "/home/dsavchenko/Projects/MMODA/ontology/ontology.ttl"
+
+class ModOntology(Ontology):
+    def __init__(self, ontology_path):
+        super().__init__(ontology_path)
+        self.lock = Lock()
+
+    def get_datatype_restriction(self, param_uri):
+        self.lock.acquire()
+        dt = super()._get_datatype_restriction(param_uri)
+        self.lock.release()
+        return dt
+
+ontology = ModOntology(oda_ontology_path)
+oda_prefix = str([x[1] for x in ontology.g.namespaces() if x[0] == 'oda'][0])
 
 def run(notebook_fn, params: dict):
     nba = NotebookAdapter(notebook_fn)
@@ -61,7 +89,6 @@ def run(notebook_fn, params: dict):
 
 class PapermillWorkflowIncomplete(Exception):
     pass
-
 
 def cast_parameter(x,par):
     logger.debug("cast %s %s",x,par)
@@ -87,82 +114,23 @@ def cast_parameter(x,par):
     return par['python_type'](x)
 
 
-
-def parse_nbline(line: str, nb_uri=None) -> Optional[dict]:
-    """
-    this function is used in 3 cases:
-    * input parameters
-    * outputs
-    * full-line comments - to annotate notebook itself
-    """
-
-    if line.strip() == "":
-        return None
-
-    elif line.strip().startswith("#"):
-        comment = line.strip().strip("#")
-        logger.debug("found detached comment: \"%s\"",line)
-
-        if nb_uri is not None:
-            return understand_comment_references(comment, nb_uri)
-        else:
-            return None
-
-    else:
-        if "#" in line:
-            assignment_line, comment = line.split("#",1)
-        else:
-            assignment_line = line
-            comment = ""
-            
-        if "=" in assignment_line:
-            name, value_str = assignment_line.split("=", 1)
-            name = name.strip()
-            value_str = value_str.strip()
-        else:
-            name = assignment_line.strip()
-            value_str = None
-
-        try:
-            value = literal_eval(value_str)
-            python_type = type(value)
-        except Exception:
-            value = value_str
-            python_type = str
-            
-        parsed_comment = understand_comment_references(comment, fallback_type=odahub_type_for_python_type(python_type))
-        
-        logger.info("parameter name=%s value=%s python_type=%s, owl_type=%s extra_ttl=%s", 
-                    name, value, python_type, parsed_comment['owl_type'], parsed_comment['extra_ttl'])
-
-        return dict(
-                    name = name,
-                    value = value,
-                    python_type = python_type,
-                    comment = comment,
-                    owl_type = parsed_comment.get('owl_type', None),
-                    extra_ttl = parsed_comment.get('extra_ttl', None),
-                )
-
-
 def odahub_type_for_python_type(python_type: type):
     out_type = python_type.__name__
 
     xml_scheme_url = "http://www.w3.org/2001/XMLSchema#"
-    oda_ontology_url = "http://odahub.io/ontology#"
 
     if python_type == int:
         out_type = 'Integer'
-        url_prefix = oda_ontology_url
+        url_prefix = oda_prefix
     elif python_type == str:
         out_type = 'String'
-        url_prefix = oda_ontology_url
+        url_prefix = oda_prefix
     elif python_type == bool:
         out_type = 'Boolean'
-        url_prefix = oda_ontology_url
+        url_prefix = oda_prefix
     elif python_type == float:
         out_type = 'Float'
-        url_prefix = oda_ontology_url
+        url_prefix = oda_prefix
     else:
         url_prefix = xml_scheme_url
 
@@ -175,7 +143,6 @@ def owl_type_for_python_type(python_type: type):
     out_type = python_type.__name__
 
     xml_scheme_url = "http://www.w3.org/2001/XMLSchema#"
-    oda_ontology_url = "http://odahub.io/ontology#"
 
     if python_type == int:
         out_type = 'integer'
@@ -190,62 +157,118 @@ def owl_type_for_python_type(python_type: type):
         out_type = 'float'
         url_prefix = xml_scheme_url
     else:
-        url_prefix = oda_ontology_url
+        url_prefix = oda_prefix
 
     output_url = f"{url_prefix}{out_type}"
 
     return output_url
 
-class InputParameter:
-    raw_line=None 
-    name=None
-    default_value=None
-    python_type=None
-    comment=None
-    owl_type=None
-    extra_ttl=None
+T = TypeVar("T")
+def reconcile_python_type(value: Any, 
+                          type_annotation: str | type[T] | None = None, 
+                          owl_type: str | None = None, 
+                          extra_ttl: str | None = None, 
+                          name: str = '') -> tuple[type, bool]:
+    '''
+    Reconcile python type of the default value with type and owl annotations
+    We expect ~json here, so basically int, float, str, list, dict or None
+    Respects duck typing: if default is int and float is allowed, returns float
+    '''
 
-    @classmethod
-    def from_nbline(cls,line):
-        parsed_nbline = parse_nbline(line)
-        if parsed_nbline is None or parsed_nbline.get('name', None) is None:
-            return None
-
+    if type_annotation is None and owl_type is None:
+        if value is not None:
+            return type(value), False
         else:
-            obj = cls()
+            raise TypeCheckError(f"Default value of the required parameter {name} isn't defined.")
 
-            obj.raw_line = line            
-            obj.name = parsed_nbline['name']
-            obj.default_value = parsed_nbline['value']
-            obj.python_type = parsed_nbline['python_type']
-            obj.comment = parsed_nbline['comment']
-            obj.owl_type = parsed_nbline['owl_type']
-            obj.extra_ttl = parsed_nbline['extra_ttl']
-            
-            logger.info("interpreted %s %s %s comment: %s",
-                    obj.name,
-                    obj.default_value.__class__,obj.default_value,
-                    obj.comment)
+    owl_dt = None
+    is_optional_owl = False
+    if owl_type is not None:
+        if extra_ttl is None: 
+            extra_ttl = ''
+        ontology.parse_extra_triples(extra_ttl, parse_oda_annotations=False)
+        xsd_dt = ontology.get_datatype_restriction(owl_type)
+        if xsd_dt:
+            owl_dt = xsd_type_to_python_type(xsd_dt)
+        is_optional_owl = ontology.is_optional(owl_type)
 
-            if obj.owl_type is None:
-                obj.owl_type = "http://www.w3.org/2001/XMLSchema#" + obj.python_type.__name__ # also use this if already defined
-
-            return obj
-    
+    is_optional_hint = False
+    hint_fref = None
+    if type_annotation:
+        hint_fref = ForwardRef(type_annotation) if isinstance(type_annotation, str) else type_annotation
         
+        try:
+            check_type(None, hint_fref, forward_ref_policy=ForwardRefPolicy.ERROR)
+        except TypeCheckError:
+            is_optional_hint = False
+        except NameError:
+            raise TypeCheckError(f"Type hint {type_annotation} for parameter {name} can't be resolved.")
+        else:
+            is_optional_hint = True
+
+    def check_type_both(v):
+        if owl_dt is not None:
+            check_type(v, owl_dt)
+        if hint_fref is not None:
+            check_type(v, hint_fref) # forwardref is already checked for validity, no need to set policy
+
+    # need special treatment for None because it may be allowed by one annotation type only. 
+    # So other will fail checking value, but it's OK.
+    if value is None:
+        if not is_optional_owl and not is_optional_hint:
+            raise TypeCheckError(f"Required parameter {name} shouldn't be None.")
+        elif owl_dt is None and hint_fref is None:
+            raise TypeCheckError(f"Default value of the parameter {name} can't be defined.")
+        else:
+            possible_types_examples = [1.1, 1, True, 'foo', [], {}]
+            for ex in possible_types_examples: 
+                try:
+                    check_type_both(ex)
+                except TypeCheckError:
+                    pass
+                else:
+                    return type(ex), True
+            raise TypeCheckError(f"No possible type is found for the parameter {name}.")
+    elif isinstance(value, int) and not isinstance(value, bool):
+        # be permissive if float is possible
+        try:
+            check_type_both(float(value))
+        except TypeCheckError:
+            pass
+        else:
+            return float, is_optional_owl or is_optional_hint
+        
+        check_type_both(value)
+        return int, is_optional_owl or is_optional_hint
+    elif isinstance(value, bool):
+        check_type_both(value)
+        try:
+            check_type_both(int(value))
+        except TypeCheckError:
+            pass
+        else:
+            raise TypeCheckError(f"Boolean parameter {name} is annotated as integer.")
+        return type(value), is_optional_owl or is_optional_hint
+    else:
+        check_type_both(value)
+        return type(value), is_optional_owl or is_optional_hint
+
+
+
+@dataclass
+class InputParameter:
+    raw_line: str
+    name: str
+    default_value: Any
+    python_type: type
+    comment: str
+    owl_type: Optional[str] = None
+    extra_ttl: Optional[str] = None
+    is_optional: bool = False
 
     def as_dict(self):
-        return dict(
-                    default_value=self.default_value,
-                    python_type=self.python_type,
-                    name=self.name,
-                    comment=self.comment,
-                    owl_type=self.owl_type,
-                    extra_ttl=self.extra_ttl
-                )
-
-
-
+        return asdict(self)
+        
 
 class NotebookAdapter:
     limit_output_attachment_file = None
@@ -255,11 +278,18 @@ class NotebookAdapter:
         self.notebook_fn = os.path.abspath(notebook_fn)
         self.name = notebook_short_name(notebook_fn)
         self.tempdir_cache = tempdir_cache
+        self._graph = rdflib.Graph()
         logger.debug("notebook adapter for %s", self.notebook_fn)
         logger.debug(self.extract_parameters())
         self.n_download_max_tries = n_download_max_tries
         self.download_retry_sleep_s = download_retry_sleep_s
         self.max_download_size = max_download_size
+
+    @property
+    def graph(self):
+        # need to populate the graph (currently only notebook-wide annotations)
+        self.extract_parameters()
+        return self._graph
 
     @staticmethod
     def get_unique_filename_from_url(file_url):
@@ -308,12 +338,14 @@ class NotebookAdapter:
         if self._notebook_origin is None:
             notebook_dir = os.path.dirname(self.notebook_fn)
             logger.info('notebook_dir: %s', notebook_dir)
+            try:
+                url = subprocess.check_output(["git", "remote", "get-url", "origin"], cwd=notebook_dir).decode().strip()
+                revision = subprocess.check_output(["git", "describe", "--always", "--tags"], cwd=notebook_dir).decode().strip()
+                self._notebook_origin = f"{url}#{revision}"
+            except subprocess.CalledProcessError:
+                logger.warning('Not a git repo, making local name.')
+                self._notebook_origin = f'file://{os.path.abspath(notebook_dir)}'
 
-            url = subprocess.check_output(["git", "remote", "get-url", "origin"], cwd=notebook_dir).decode().strip()
-            revision = subprocess.check_output(["git", "describe", "--always", "--tags"], cwd=notebook_dir).decode().strip()
-
-            self._notebook_origin = f"{url}#{revision}"
-        
         return self._notebook_origin
 
     @property
@@ -338,36 +370,138 @@ class NotebookAdapter:
 
     @property
     def nb_uri(self):
-        return rdflib.URIRef(f"http://odahub.io/ontology#{self.unique_name}")
-
-
-    def extract_parameters_from_cell(self, cell, G):
-        parameters = {}
-
-        for line in cell['source'].split("\n"):
-            par = InputParameter.from_nbline(line)
-            if par is not None:
-                parameters[par.name] = par.as_dict()
-                parameters[par.name]['value'] = par.as_dict()['default_value']
+        return rdflib.URIRef(f"{oda_prefix}{self.unique_name}")      
+    
+    @staticmethod
+    def _pop_comment_by_line(comment_tokens, l):
+        for i, x in enumerate(comment_tokens):
+            if x.start[0]==l:
+                res = comment_tokens.pop(i)
+                return res.string[1:]
+        return ''
+    
+    def parse_source_multiline(self, source: str) -> dict[str, list[dict]]:
+        result = {'assign': [], 
+                  'standalone': []}
+        
+        tokens = generate_tokens(io.StringIO(source).readline)
+        comments = []
+        for token in tokens:
+            if token.type == COMMENT:
+                comments.append(token)
+           
+        parsed = ast.parse(source)
+        for node in parsed.body:
+            node_code = "\n".join(source.split('\n')[node.lineno-1:node.end_lineno])
+            if isinstance(node, ast.Assign):
+                if len(node.targets) != 1:
+                    raise NotImplementedError(f'Multiple assignment is not supported:\n{node_code}')
+                varname = node.targets[0].id
+                type_annotation = None
+                value_node = node.value
+            elif isinstance(node, ast.AnnAssign):
+                varname = node.target.id
+                type_annotation = ast.unparse(node.annotation)
+                value_node = node.value
+            elif isinstance(node, ast.Expr) and isinstance(node.value, ast.Name):
+                # "hanging" output declaration
+                value_node = None
+                type_annotation = None
+                varname = node.value.id
             else:
-                p = parse_nbline(line, nb_uri=self.nb_uri)
-                if p is not None:
-                    try:
-                        G.parse(data=p['extra_ttl'])
-                    except Exception as e:
-                        logger.warning("not a turtle: %s", p['extra_ttl'])
+                logger.info(f"Skipping {node}")
+                continue
+            
+            if value_node is not None:
+                try:
+                    value = ast.literal_eval(value_node)
+                except ValueError:
+                    value = ast.unparse(value_node)
+            else:
+                value = None
+            
+            comment = ''
+            for line in range(node.lineno, node.end_lineno+1):
+                comment = self._pop_comment_by_line(comments, line)
+                # annotation must appear right after definition
+                if line != node.end_lineno:
+                    continue
+            
+            result['assign'].append(dict(varname = varname, 
+                                         type_annotation = type_annotation, 
+                                         value = value, 
+                                         comment = comment,
+                                         raw_line = node_code))
+            
+        # now parse full-line comments
+        for comment in comments:
+            cstring = comment.string[1:]
+            result['standalone'].append(cstring)        
+        
+        return result
+    
+    def extract_parameters_from_cell(self, cell):
+        parameters = {}
+        
+        parsed_cell = self.parse_source_multiline(cell['source'])
+        for par_detail in parsed_cell['assign']:
+            
+            # May need to have fallback type to properly parse owl
+            if par_detail['value'] is not None: 
+                fallback_type = odahub_type_for_python_type(type(par_detail['value']))
+            else:
+                try:
+                    fallback_type = reconcile_python_type(None, 
+                                        type_annotation=par_detail['type_annotation'],
+                                        name = par_detail['varname'])[0]
+                    fallback_type = odahub_type_for_python_type(fallback_type)
+                except TypeCheckError:
+                    fallback_type = None
+            
+            # Now full recoincilation
+            parsed_comment = understand_comment_references(par_detail['comment'],
+                                                           fallback_type=fallback_type)
+            
+            python_type, is_optional = reconcile_python_type(par_detail['value'],
+                                            type_annotation=par_detail['type_annotation'],
+                                            owl_type=parsed_comment.get('owl_type', None),
+                                            extra_ttl=parsed_comment.get('extra_ttl', None),
+                                            name = par_detail['varname'])
+            
+            par = InputParameter(raw_line = par_detail['raw_line'],
+                                 name = par_detail['varname'],
+                                 default_value = par_detail['value'],
+                                 python_type = python_type,
+                                 comment = par_detail['comment'],
+                                 owl_type = parsed_comment.get('owl_type', None),
+                                 extra_ttl = parsed_comment.get('extra_ttl', None),
+                                 is_optional=is_optional)
+            
+            # This leads to some recursion, but it's not really used anywhere. 
+            # TODO: integrate with ontology.function_semantic_signature
+            # if par.extra_ttl is not None:
+            #     self.graph.parse(data=par.extra_ttl)
+            parameters[par.name] = par.as_dict()
+            parameters[par.name]['value'] = par.as_dict()['default_value']
+        
+
+        for cstring in parsed_cell['standalone']:
+            p = understand_comment_references(cstring, base_uri=self.nb_uri)
+            if p is not None:
+                try:
+                    self._graph.parse(data=p['extra_ttl'])
+                except Exception as e:
+                    logger.warning("not a turtle: %s", p['extra_ttl'])
 
         return parameters
 
-
+    @lru_cache
     def extract_parameters(self):
         nb = self.read()
 
         self.input_parameters = {}
         self.system_parameters = {}
-        
-        G = rdflib.Graph()
-        
+               
         for cell in nb.cells:
             for tag, attr in [
                     ('parameters', 'input_parameters'),
@@ -375,25 +509,25 @@ class NotebookAdapter:
                     ('injected-parameters', 'input_parameters'),
                     ]:
                 if tag in cell.metadata.get('tags', []):
-                    pars = self.extract_parameters_from_cell(cell, G)
+                    pars = self.extract_parameters_from_cell(cell)
                     pars = {**getattr(self, attr), **pars}
                     setattr(self, attr, pars)
 
-        for n, p in self.input_parameters.items():
-            if p['extra_ttl'] is not None:
-                G.parse(data=p['extra_ttl'])
-
-        oda_token_access = rdflib.term.URIRef('http://odahub.io/ontology#oda_token_access')
-        self.token_access = None
-        for s, p, o in G.triples((None, oda_token_access, None)):
-            if self.token_access is not None:
-                raise RuntimeError('Multiple oda_token_access annotations')
-            self.token_access = o
-
-        self.extra_ttl = G.serialize(format='turtle')
-
         return self.input_parameters
 
+    @cached_property
+    def token_access(self):
+        oda_token_access = rdflib.URIRef(f"{oda_prefix}oda_token_access")
+        _token_access = None
+        for s, p, o in self.graph.triples((None, oda_token_access, None)):
+            if _token_access is not None:
+                raise RuntimeError('Multiple oda_token_access annotations')
+            _token_access = o
+        return _token_access
+        
+    @cached_property
+    def extra_ttl(self) -> str:
+        return self.graph.serialize(format='turtle')
     
     def interpret_parameters(self,parameters):
         expected_parameters = self.extract_parameters()
@@ -572,7 +706,7 @@ class NotebookAdapter:
 
         return outputs
 
-    
+    @lru_cache
     def extract_output_declarations(self):
         nb=self.read()
 
@@ -580,12 +714,19 @@ class NotebookAdapter:
 
         for cell in nb.cells:
             if 'outputs' in cell.metadata.get('tags',[]):
-                for line in cell['source'].split("\n"):
-                    p = parse_nbline(line)
-                    if p is None:
-                        continue
-                    outputs[p['name']] = p
-
+                parsed_cell = self.parse_source_multiline(cell['source'])
+                
+                # TODO: may use annotations (type/ontology) to get python type
+                for outp_detail in parsed_cell['assign']:
+                    parsed_comment = understand_comment_references(outp_detail['comment'])
+                    outputs[outp_detail['varname']] = {
+                        'name': outp_detail['varname'],
+                        'value': outp_detail['value'],
+                        'python_type': str, # NOTE: kept for backward compatibility
+                        'comment': outp_detail['comment'],
+                        'owl_type': parsed_comment.get('owl_type', None),
+                        'extra_ttl': parsed_comment.get('extra_ttl', None),
+                    }
 
         return outputs 
 
@@ -667,7 +808,7 @@ class NotebookAdapter:
         exceptions = []
         for input_par_name, input_par_obj in self.input_parameters.items():
             # TODO use oda_api.ontology_helper
-            if input_par_obj['owl_type'] == "http://odahub.io/ontology#POSIXPath":
+            if input_par_obj['owl_type'] == f"{oda_prefix}POSIXPath":
                 arg_par_value = parameters.get(input_par_name, None)
                 if arg_par_value is None:
                     arg_par_value = input_par_obj['default_value']
@@ -980,7 +1121,7 @@ def nbrun(nb_source, inp, inplace=False, optional_dispather=True, machine_readab
     elif len(nbas) == 1:
         nba = list(nbas.values())[0]
     else:
-        RuntimeError()
+        raise RuntimeError
 
     print("inp", inp)
 
