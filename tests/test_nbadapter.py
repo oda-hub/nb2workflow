@@ -230,6 +230,11 @@ def test_multiline_parameters():
     assert pars['intfloat']['owl_type'] == "http://odahub.io/ontology#Float"
     assert pars['intfloat']['is_optional'] == False
 
+    assert pars['string_param']['python_type'] == str
+    assert pars['string_param']['default_value'] == 'Foo Bar\nContains = Symbol\nSpam Ham\n'
+    assert pars['string_param']['owl_type'] == "http://odahub.io/ontology#LongString"
+    assert pars['string_param']['is_optional'] == False
+
     assert pars['flag']['python_type'] == bool
     assert pars['flag']['default_value'] == True
     assert pars['flag']['owl_type'] == "http://odahub.io/ontology#Boolean"
