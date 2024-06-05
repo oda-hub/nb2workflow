@@ -27,7 +27,6 @@ import requests
 import random
 import string
 import io
-from numbers import Number
 import threading
 
 import papermill as pm
@@ -43,10 +42,9 @@ from oda_api.ontology_helper import Ontology, xsd_type_to_python_type
 
 from nb2workflow.sentry import sentry
 from nb2workflow.health import current_health
-from nb2workflow import workflows
 from nb2workflow.logging_setup import setup_logging
 from nb2workflow.json import CustomJSONEncoder
-from nb2workflow.url_helper import is_mmoda_url
+from nb2workflow.helpers import is_mmoda_url, serialize_workflow_exception
 from nb2workflow.semantics import understand_comment_references
 
 from nb2workflow.semantics import understand_comment_references
@@ -591,7 +589,7 @@ class NotebookAdapter:
                             event="done",
                             parameters=parameters,
                             workflow_name=notebook_short_name(self.notebook_fn),
-                            exceptions=list(map(workflows.serialize_workflow_exception, exceptions)),
+                            exceptions=list(map(serialize_workflow_exception, exceptions)),
                             health=current_health(),
                             time_spent=tspent))
 
@@ -671,7 +669,7 @@ class NotebookAdapter:
         if len(exceptions) == 0:
             self.update_summary(state="done")
         else:
-            self.update_summary(state="failed", exceptions=list(map(workflows.serialize_workflow_exception, exceptions)))
+            self.update_summary(state="failed", exceptions=list(map(serialize_workflow_exception, exceptions)))
 
         return exceptions
 
@@ -1142,7 +1140,7 @@ def nbrun(nb_source, inp, inplace=False, optional_dispather=True, machine_readab
         logging.error("FAILED: %s", exceptions)
 
         with open("{}_exceptions.json".format(nba.name), "w") as f:
-            json.dump(list(map(workflows.serialize_workflow_exception, exceptions)), f)
+            json.dump(list(map(serialize_workflow_exception, exceptions)), f)
 
         fn = nba.export_html()
         open("{}_output.ipynb".format(nba.name), "wb").write(open(nba.output_notebook_fn, "rb").read())
