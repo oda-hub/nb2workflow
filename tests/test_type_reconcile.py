@@ -83,4 +83,17 @@ def test_reconcile_python_type_failing(value,type_annotation,owl_type):
         reconcile_python_type(value=value, 
                               type_annotation=type_annotation,
                               owl_type=owl_type)
- 
+
+
+@pytest.mark.parametrize('value,expected_type', [(False, bool),
+                                                 (1, int),
+                                                 (1.1, float),
+                                                 ('foo', str),
+                                                 ({'foo': 'bar'}, dict),
+                                                 ([1, 2, 3], list),
+                                                 ])
+def test_unknown_owl(value,expected_type,caplog):
+    extype = reconcile_python_type(value=value,
+                                   owl_type='http://odahub.io/ontology#UnknownType')
+    assert extype[0] == expected_type
+    assert 'Unknown datatype for owl_uri' in caplog.text
