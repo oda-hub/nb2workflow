@@ -204,7 +204,9 @@ def reconcile_python_type(value: Any,
         else:
             is_optional_hint = True
 
-    def check_type_both(v):
+    def check_type_both(v, fail_both_none=False):
+        if fail_both_none and owl_dt is None and hint_fref is None:
+            raise TypeCheckError('Type undefined')
         if owl_dt is not None:
             check_type(v, owl_dt)
         if hint_fref is not None:
@@ -230,7 +232,7 @@ def reconcile_python_type(value: Any,
     elif isinstance(value, int) and not isinstance(value, bool):
         # be permissive if float is possible
         try:
-            check_type_both(float(value))
+            check_type_both(float(value), fail_both_none=True)
         except TypeCheckError:
             pass
         else:
@@ -241,7 +243,7 @@ def reconcile_python_type(value: Any,
     elif isinstance(value, bool):
         check_type_both(value)
         try:
-            check_type_both(int(value))
+            check_type_both(int(value), fail_both_none=True)
         except TypeCheckError:
             pass
         else:
