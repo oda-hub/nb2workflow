@@ -92,8 +92,8 @@ def test_reconcile_python_type_failing(value,type_annotation,owl_type):
                                                  ({'foo': 'bar'}, dict),
                                                  ([1, 2, 3], list),
                                                  ])
-def test_unknown_owl(value,expected_type):
+def test_unknown_owl(value,expected_type,caplog):
     extype = reconcile_python_type(value=value,
                                    owl_type='http://odahub.io/ontology#UnknownType')
     assert extype[0] == expected_type
-    
+    assert 'Unknown datatype for owl_uri' in caplog.text

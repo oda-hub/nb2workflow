@@ -70,6 +70,8 @@ class ModOntology(Ontology):
         self.lock.acquire()
         dt = super()._get_datatype_restriction(param_uri)
         self.lock.release()
+        if dt is None:
+            logger.warning(f'Unknown datatype for owl_uri {param_uri}')
         return dt
 
 ontology = ModOntology(oda_ontology_path)
