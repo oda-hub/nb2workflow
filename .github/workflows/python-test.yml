@@ -36,6 +36,11 @@ jobs:
       run: |
         PYTHONPATH=./ tox -e flake8
 
+    - name: Test with pytest - no extras
+      run: |
+        pip install .
+        PYTHONPATH=./ tox -e ${{ matrix.python-version-env }} 
+
     - name: Test with pytest
       run: |
         pip install .[rdf,service,mmoda]

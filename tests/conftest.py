@@ -5,9 +5,11 @@ import pytest
 import signal
 import psutil
 import subprocess
+import tempfile
+import requests
 
 import nb2workflow.service
-
+from importlib import reload
 
 @pytest.fixture
 def test_notebook():
@@ -25,11 +27,24 @@ def test_notebook_repo():
     
     if path is None:
         path = os.path.join(os.getcwd(), 'tests/testrepo/')
-        shutil.rmtree(path)
+        if os.path.exists(path):
+            shutil.rmtree(path)
         subprocess.check_call(["git", "clone", "https://github.com/volodymyrss/nbworkflow-test.git", path])
 
     return path
 
+
+@pytest.fixture
+def test_notebook_lfs_repo():
+    path = os.environ.get('TEST_NOTEBOOK_LFS_REPO', None)
+
+    if path is None:
+        path = os.path.join(os.getcwd(), 'tests/testlfsrepo/')
+        if os.path.exists(path):
+            shutil.rmtree(path)
+        subprocess.check_call(["git", "clone", "https://gitlab.renkulab.io/astronomy/mmoda/crbeam.git", path])
+
+    return path
 
 @pytest.fixture
 def app(test_notebook):
@@ -38,6 +53,18 @@ def app(test_notebook):
     nb2workflow.service.setup_routes(app)
     print("creating app")
     return app
+
+
+@pytest.fixture
+def app_low_download_limit():
+    testfiles_path = os.path.join(os.path.dirname(__file__), 'testfiles')
+    app_low_download_limit = nb2workflow.service.app
+    app_low_download_limit.notebook_adapters = nb2workflow.nbadapter.find_notebooks(testfiles_path)
+    for nb, nba_obj in app_low_download_limit.notebook_adapters.items():
+        nba_obj.max_download_size = 1
+    nb2workflow.service.setup_routes(app_low_download_limit)
+    print("creating app with low limit on the download of files")
+    return app_low_download_limit
 
 
 def kill_child_processes(parent_pid, sig=signal.SIGTERM):
@@ -49,6 +76,35 @@ def kill_child_processes(parent_pid, sig=signal.SIGTERM):
     except psutil.NoSuchProcess:
         return
 
+
+def download_file(url, local_filename=None):
+    if local_filename is None:
+        local_filename = url.split('/')[-1]
+    # NOTE the stream=True parameter below
+    with requests.get(url, stream=True) as r:
+        r.raise_for_status()
+        with open(local_filename, 'wb') as f:
+            for chunk in r.iter_content(chunk_size=8192):
+                # If you have chunk encoded response uncomment if
+                # and set chunk_size parameter to None.
+                #if chunk:
+                f.write(chunk)
+    return local_filename
+
+
+@pytest.fixture(scope="module")
+def temp_dir(request):
+    with tempfile.TemporaryDirectory() as tmpdir:
+        yield tmpdir
+
+
+@pytest.fixture(scope="module")
+def ontology_path(temp_dir):
+    ontology_url = "https://raw.githubusercontent.com/oda-hub/ontology/main/ontology.ttl"
+    ontology_path = os.path.join(temp_dir, "ontology.ttl")
+    download_file(ontology_url, ontology_path)
+    # subprocess.check_call(["wget", ontology_url, "-O", ontology_path])
+    yield ontology_path
 
 @pytest.fixture
 def service_fixture(pytestconfig, test_notebook_repo):

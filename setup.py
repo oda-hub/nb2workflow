@@ -6,15 +6,16 @@ if {'pytest', 'test', 'ptr'}.intersection(sys.argv):
     setup_requires.append('pytest-runner')
 
 setup(name='nb2workflow',
-      version = '1.3.34',
+      version = '1.3.87',
       description='convert notebook to workflow',
       author='Volodymyr Savchenko',
       author_email='contact@volodymyrsavchenko.com',
       license='GPLv3',
       packages=['nb2workflow'],
+      package_data={'nb2workflow': ['templates/*.jinja']},
       zip_safe=False,
 
-      python_requires='>=3.9',
+      python_requires='>=3.9,<3.12',
 
       entry_points={
           'console_scripts': [
@@ -27,18 +28,20 @@ setup(name='nb2workflow',
             'nbrun=nb2workflow.nbadapter:main',
             'nbinspect=nb2workflow.nbadapter:main_inspect',
             'nbreduce=nb2workflow.nbadapter:main_reduce',
+            'nb2galaxy=nb2workflow.galaxy:main',
             ]
       },
       
       extras_require={
         "service":[
-            'flask',
+            'flask==2.0.3',
             'pytest-flask',
             'flask-caching', 
             'flask-cors',
             'flasgger',
             'python-consul',
             'apscheduler',
+            'beautifulsoup4'
         ],
         "rdf":[
             'rdflib',
@@ -51,6 +54,7 @@ setup(name='nb2workflow',
         "docker":[
             'docker',
             'checksumdir',
+            'Jinja2'
         ],
         "domains":[
             'numpy',
@@ -59,7 +63,18 @@ setup(name='nb2workflow',
             'matplotlib'
         ],
         "mmoda":[
-            'oda_api'
+        ],
+        "k8s":[
+            'kubernetes',
+            'Jinja2'
+        ],
+        'galaxy':[
+            'ensureconda',
+            'bibtexparser >= 2.0.0b3',
+            'pypandoc_binary',
+            'black',
+            'isort',
+            'autoflake'
         ]
       },
 
@@ -81,7 +96,12 @@ setup(name='nb2workflow',
         'pyyaml',
         'scrapbook', 
         'werkzeug==2.0.3',
-        'sentry_sdk'
+        'validators==0.28.3',
+        'sentry_sdk',
+        'rdflib',
+        'GitPython',
+        'typeguard',
+        'oda_api'
       ],
 
 
@@ -90,6 +110,4 @@ setup(name='nb2workflow',
       keywords = ['jupyter', 'docker'],
       classifiers = [],
       setup_requires=setup_requires)
-
-
 

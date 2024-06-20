@@ -1,11 +1,16 @@
-from flasgger import LazyJSONEncoder
+
+try:
+    from flasgger import LazyJSONEncoder as JSONEncoder
+except ImportError:
+    from json import JSONEncoder
+
 try:
     from oda_api.json import CustomJSONEncoder as MMODAJSONEncoder
     oda_encoder = True
 except (ModuleNotFoundError, ImportError):
     oda_encoder = False
 
-class CustomJSONEncoder(LazyJSONEncoder):
+class CustomJSONEncoder(JSONEncoder):
     def default(self, obj):
         try:
             if isinstance(obj, type):

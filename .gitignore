@@ -35,3 +35,5 @@ callback.json
 function.xml
 *_output.html
 *_output.json
+.nb2workflow/cache
+tests/testfiles/.nb2workflow

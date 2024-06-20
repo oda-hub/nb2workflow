@@ -1,43 +1,81 @@
-from ast import literal_eval
+from __future__ import annotations
+
+import ast
+
+from dataclasses import dataclass, asdict
+from functools import lru_cache, cached_property
 import hashlib
 import os
-import sys
 import glob
 import shutil
-from typing import Optional
-import uuid
+from tokenize import generate_tokens, COMMENT
+from typing import * # type: ignore 
+# need wildcard import to resolve (semi-)arbitrary ForwardRef of annotations in nb
 import yaml 
 import re
 import time
 import tempfile
-import pprint
 import subprocess
 import yaml
 import argparse
 import json
 import base64
 import rdflib
+import copy
+import validators
+import requests
+import random
+import string
+import io
+import threading
 
 import papermill as pm
 import scrapbook as sb
+from typeguard import check_type, ForwardRefPolicy, TypeCheckError
 import nbformat
 from nbconvert import HTMLExporter
+from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 
 from . import logstash
 
+from oda_api.ontology_helper import Ontology, xsd_type_to_python_type
+
+from nb2workflow.sentry import sentry
 from nb2workflow.health import current_health
-from nb2workflow import workflows
 from nb2workflow.logging_setup import setup_logging
 from nb2workflow.json import CustomJSONEncoder
+from nb2workflow.helpers import is_mmoda_url, serialize_workflow_exception
+from nb2workflow.semantics import understand_comment_references
 
-from nb2workflow.semantics import understand_comment_references, oda_ontology_prefix
+from nb2workflow.semantics import understand_comment_references
+from git import Repo, InvalidGitRepositoryError, GitCommandError
 
 import logging
+from threading import Lock
 
 logger=logging.getLogger(__name__)
 
 logstasher = logstash.LogStasher()
 
+# TODO: will be configurable
+oda_ontology_path = "http://odahub.io/ontology/ontology.ttl"
+#oda_ontology_path = "/home/dsavchenko/Projects/MMODA/ontology/ontology.ttl"
+
+class ModOntology(Ontology):
+    def __init__(self, ontology_path):
+        super().__init__(ontology_path)
+        self.lock = Lock()
+
+    def get_datatype_restriction(self, param_uri):
+        self.lock.acquire()
+        dt = super()._get_datatype_restriction(param_uri)
+        self.lock.release()
+        if dt is None:
+            logger.warning(f'Unknown datatype for owl_uri {param_uri}')
+        return dt
+
+ontology = ModOntology(oda_ontology_path)
+oda_prefix = str([x[1] for x in ontology.g.namespaces() if x[0] == 'oda'][0])
 
 def run(notebook_fn, params: dict):
     nba = NotebookAdapter(notebook_fn)
@@ -52,7 +90,6 @@ def run(notebook_fn, params: dict):
 class PapermillWorkflowIncomplete(Exception):
     pass
 
-
 def cast_parameter(x,par):
     logger.debug("cast %s %s",x,par)
     if par['python_type'] is bool:
@@ -62,134 +99,217 @@ def cast_parameter(x,par):
             return True
         else:
             raise ValueError(f'Parameter {par["name"]} value "{x}" can not be interpreted as boolean.')
+    if par['python_type'] in [list, dict]:
+        try:
+            if type(x) is str:
+                decoded = json.loads(x)
+            else:
+                decoded = x
+            if type(decoded) is par['python_type']:
+                return decoded
+            else:
+                raise ValueError
+        except:
+            raise ValueError(f'Parameter {par["name"]} value "{x}" can not be interpreted as {par["python_type"].__name__}.')
     return par['python_type'](x)
 
 
+def odahub_type_for_python_type(python_type: type):
+    out_type = python_type.__name__
 
-def parse_nbline(line: str, nb_uri=None) -> Optional[dict]:
-    """
-    this function is used in 3 cases:
-    * input parameters
-    * outputs
-    * full-line comments - to annotate notebook itself
-    """
+    xml_scheme_url = "http://www.w3.org/2001/XMLSchema#"
 
-    if line.strip() == "":
-        return None
-
-    elif line.strip().startswith("#"):
-        comment = line.strip().strip("#")
-        logger.debug("found detached comment: \"%s\"",line)
-
-        if nb_uri is not None:
-            return understand_comment_references(comment, nb_uri)
-        else:
-            return None
-
+    if python_type == int:
+        out_type = 'Integer'
+        url_prefix = oda_prefix
+    elif python_type == str:
+        out_type = 'String'
+        url_prefix = oda_prefix
+    elif python_type == bool:
+        out_type = 'Boolean'
+        url_prefix = oda_prefix
+    elif python_type == float:
+        out_type = 'Float'
+        url_prefix = oda_prefix
     else:
-        if "#" in line:
-            assignment_line, comment = line.split("#",1)
-        else:
-            assignment_line = line
-            comment = ""
-            
-        if "=" in assignment_line:
-            name, value_str = assignment_line.split("=", 1)
-            name = name.strip()
-            value_str = value_str.strip()
-        else:
-            name = assignment_line.strip()
-            value_str = None
+        url_prefix = xml_scheme_url
 
-        try:
-            value = literal_eval(value_str)
-            python_type = type(value)
-        except Exception:
-            value = value_str
-            python_type = str
-            
-        parsed_comment = understand_comment_references(comment, fallback_type=owl_type_for_python_type(python_type))        
-        
-        logger.info("parameter name=%s value=%s python_type=%s, owl_type=%s extra_ttl=%s", 
-                    name, value, python_type, parsed_comment['owl_type'], parsed_comment['extra_ttl'])
+    output_url = f"{url_prefix}{out_type}"
 
-        return dict(
-                    name = name,
-                    value = value,
-                    python_type = python_type,
-                    comment = comment,
-                    owl_type = parsed_comment.get('owl_type', None),
-                    extra_ttl = parsed_comment.get('extra_ttl', None),
-                )
+    return output_url
 
 
 def owl_type_for_python_type(python_type: type):
-    return "http://www.w3.org/2001/XMLSchema#"+ python_type.__name__ 
+    out_type = python_type.__name__
 
-class InputParameter:
-    raw_line=None 
-    name=None
-    default_value=None
-    python_type=None
-    comment=None
-    owl_type=None
-    extra_ttl=None
+    xml_scheme_url = "http://www.w3.org/2001/XMLSchema#"
 
-    @classmethod
-    def from_nbline(cls,line):
-        parsed_nbline = parse_nbline(line)
-        if parsed_nbline is None or parsed_nbline.get('name', None) is None:
-            return None
+    if python_type == int:
+        out_type = 'integer'
+        url_prefix = xml_scheme_url
+    elif python_type == str:
+        out_type = 'string'
+        url_prefix = xml_scheme_url
+    elif python_type == bool:
+        out_type = 'boolean'
+        url_prefix = xml_scheme_url
+    elif python_type == float:
+        out_type = 'float'
+        url_prefix = xml_scheme_url
+    else:
+        url_prefix = oda_prefix
 
+    output_url = f"{url_prefix}{out_type}"
+
+    return output_url
+
+T = TypeVar("T")
+def reconcile_python_type(value: Any, 
+                          type_annotation: str | type[T] | None = None, 
+                          owl_type: str | None = None, 
+                          extra_ttl: str | None = None, 
+                          name: str = '') -> tuple[type, bool]:
+    '''
+    Reconcile python type of the default value with type and owl annotations
+    We expect ~json here, so basically int, float, str, list, dict or None
+    Respects duck typing: if default is int and float is allowed, returns float
+    '''
+
+    if type_annotation is None and owl_type is None:
+        if value is not None:
+            return type(value), False
         else:
-            obj = cls()
+            raise TypeCheckError(f"Default value of the required parameter {name} isn't defined.")
 
-            obj.raw_line = line            
-            obj.name = parsed_nbline['name']
-            obj.default_value = parsed_nbline['value']
-            obj.python_type = parsed_nbline['python_type']
-            obj.comment = parsed_nbline['comment']
-            obj.owl_type = parsed_nbline['owl_type']
-            obj.extra_ttl = parsed_nbline['extra_ttl']
-            
-            logger.info("interpreted %s %s %s comment: %s",
-                    obj.name,
-                    obj.default_value.__class__,obj.default_value,
-                    obj.comment)
+    owl_dt = None
+    is_optional_owl = False
+    if owl_type is not None:
+        if extra_ttl is None: 
+            extra_ttl = ''
+        ontology.parse_extra_triples(extra_ttl, parse_oda_annotations=False)
+        xsd_dt = ontology.get_datatype_restriction(owl_type)
+        if xsd_dt:
+            owl_dt = xsd_type_to_python_type(xsd_dt)
+        is_optional_owl = ontology.is_optional(owl_type)
 
-            if obj.owl_type is None:
-                obj.owl_type = "http://www.w3.org/2001/XMLSchema#" + obj.python_type.__name__ # also use this if already defined
-
-            return obj
-    
+    is_optional_hint = False
+    hint_fref = None
+    if type_annotation:
+        hint_fref = ForwardRef(type_annotation) if isinstance(type_annotation, str) else type_annotation
         
+        try:
+            check_type(None, hint_fref, forward_ref_policy=ForwardRefPolicy.ERROR)
+        except TypeCheckError:
+            is_optional_hint = False
+        except NameError:
+            raise TypeCheckError(f"Type hint {type_annotation} for parameter {name} can't be resolved.")
+        else:
+            is_optional_hint = True
+
+    def check_type_both(v, fail_both_none=False):
+        if fail_both_none and owl_dt is None and hint_fref is None:
+            raise TypeCheckError('Type undefined')
+        if owl_dt is not None:
+            check_type(v, owl_dt)
+        if hint_fref is not None:
+            check_type(v, hint_fref) # forwardref is already checked for validity, no need to set policy
+
+    # need special treatment for None because it may be allowed by one annotation type only. 
+    # So other will fail checking value, but it's OK.
+    if value is None:
+        if not is_optional_owl and not is_optional_hint:
+            raise TypeCheckError(f"Required parameter {name} shouldn't be None.")
+        elif owl_dt is None and hint_fref is None:
+            raise TypeCheckError(f"Default value of the parameter {name} can't be defined.")
+        else:
+            possible_types_examples = [1.1, 1, True, 'foo', [], {}]
+            for ex in possible_types_examples: 
+                try:
+                    check_type_both(ex)
+                except TypeCheckError:
+                    pass
+                else:
+                    return type(ex), True
+            raise TypeCheckError(f"No possible type is found for the parameter {name}.")
+    elif isinstance(value, int) and not isinstance(value, bool):
+        # be permissive if float is possible
+        try:
+            check_type_both(float(value), fail_both_none=True)
+        except TypeCheckError:
+            pass
+        else:
+            return float, is_optional_owl or is_optional_hint
+        
+        check_type_both(value)
+        return int, is_optional_owl or is_optional_hint
+    elif isinstance(value, bool):
+        check_type_both(value)
+        try:
+            check_type_both(int(value), fail_both_none=True)
+        except TypeCheckError:
+            pass
+        else:
+            raise TypeCheckError(f"Boolean parameter {name} is annotated as integer.")
+        return type(value), is_optional_owl or is_optional_hint
+    else:
+        check_type_both(value)
+        return type(value), is_optional_owl or is_optional_hint
+
+
+
+@dataclass
+class InputParameter:
+    raw_line: str
+    name: str
+    default_value: Any
+    python_type: type
+    comment: str
+    owl_type: Optional[str] = None
+    extra_ttl: Optional[str] = None
+    is_optional: bool = False
 
     def as_dict(self):
-        return dict(
-                    default_value=self.default_value,
-                    python_type=self.python_type,
-                    name=self.name,
-                    comment=self.comment,
-                    owl_type=self.owl_type,
-                    extra_ttl=self.extra_ttl
-                )
-
+        return asdict(self)
+        
 
 class NotebookAdapter:
     limit_output_attachment_file = None
 
-    def __init__(self, notebook_fn):
+
+    def __init__(self, notebook_fn, tempdir_cache=None, n_download_max_tries=10, download_retry_sleep_s=.5, max_download_size=1e6):
         self.notebook_fn = os.path.abspath(notebook_fn)
         self.name = notebook_short_name(notebook_fn)
+        self.tempdir_cache = tempdir_cache
+        self._graph = rdflib.Graph()
         logger.debug("notebook adapter for %s", self.notebook_fn)
         logger.debug(self.extract_parameters())
+        self.n_download_max_tries = n_download_max_tries
+        self.download_retry_sleep_s = download_retry_sleep_s
+        self.max_download_size = max_download_size
 
-    def new_tmpdir(self):
+    @property
+    def graph(self):
+        # need to populate the graph (currently only notebook-wide annotations)
+        self.extract_parameters()
+        return self._graph
+
+    @staticmethod
+    def get_unique_filename_from_url(file_url):
+        parsed_arg_par_value = urlparse(file_url)
+        file_name_prefix = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
+        file_name = f"{file_name_prefix}_{parsed_arg_par_value.path.split('/')[-1]}"
+        return file_name
+
+    def new_tmpdir(self, cache_key=None):
         logger.debug("tmpdir was "+getattr(self,'_tmpdir','unset'))
         self._tmpdir = None
         logger.debug("tmpdir became %s", self._tmpdir)
 
-        return self.tmpdir
+        newdir = self.tmpdir
+        if ( self.tempdir_cache is not None ) and ( cache_key is not None ):
+            self.tempdir_cache[cache_key] = newdir
+
+        return newdir
 
     @property
     def tmpdir(self):
@@ -220,12 +340,14 @@ class NotebookAdapter:
         if self._notebook_origin is None:
             notebook_dir = os.path.dirname(self.notebook_fn)
             logger.info('notebook_dir: %s', notebook_dir)
+            try:
+                url = subprocess.check_output(["git", "remote", "get-url", "origin"], cwd=notebook_dir).decode().strip()
+                revision = subprocess.check_output(["git", "describe", "--always", "--tags"], cwd=notebook_dir).decode().strip()
+                self._notebook_origin = f"{url}#{revision}"
+            except subprocess.CalledProcessError:
+                logger.warning('Not a git repo, making local name.')
+                self._notebook_origin = f'file://{os.path.abspath(notebook_dir)}'
 
-            url = subprocess.check_output(["git", "remote", "get-url", "origin"], cwd=notebook_dir).decode().strip()
-            revision = subprocess.check_output(["git", "describe", "--always", "--tags"], cwd=notebook_dir).decode().strip()
-
-            self._notebook_origin = f"{url}#{revision}"
-        
         return self._notebook_origin
 
     @property
@@ -250,37 +372,138 @@ class NotebookAdapter:
 
     @property
     def nb_uri(self):
-        return rdflib.URIRef(f"http://odahub.io/ontology#{self.unique_name}")
-
-
-    def extract_parameters_from_cell(self, cell, G):
-        parameters = {}
-
-        for line in cell['source'].split("\n"):
-            par = InputParameter.from_nbline(line)
-            if par is not None:
-                parameters[par.name] = par.as_dict()
-                parameters[par.name]['value'] = par.as_dict()['default_value']
+        return rdflib.URIRef(f"{oda_prefix}{self.unique_name}")      
+    
+    @staticmethod
+    def _pop_comment_by_line(comment_tokens, l):
+        for i, x in enumerate(comment_tokens):
+            if x.start[0]==l:
+                res = comment_tokens.pop(i)
+                return res.string[1:]
+        return ''
+    
+    def parse_source_multiline(self, source: str) -> dict[str, list[dict]]:
+        result = {'assign': [], 
+                  'standalone': []}
+        
+        tokens = generate_tokens(io.StringIO(source).readline)
+        comments = []
+        for token in tokens:
+            if token.type == COMMENT:
+                comments.append(token)
+           
+        parsed = ast.parse(source)
+        for node in parsed.body:
+            node_code = "\n".join(source.split('\n')[node.lineno-1:node.end_lineno])
+            if isinstance(node, ast.Assign):
+                if len(node.targets) != 1:
+                    raise NotImplementedError(f'Multiple assignment is not supported:\n{node_code}')
+                varname = node.targets[0].id
+                type_annotation = None
+                value_node = node.value
+            elif isinstance(node, ast.AnnAssign):
+                varname = node.target.id
+                type_annotation = ast.unparse(node.annotation)
+                value_node = node.value
+            elif isinstance(node, ast.Expr) and isinstance(node.value, ast.Name):
+                # "hanging" output declaration
+                value_node = None
+                type_annotation = None
+                varname = node.value.id
             else:
-                p = parse_nbline(line, nb_uri=self.nb_uri)
-                if p is not None:
-                    try:
-                        G.parse(data=p['extra_ttl'])
-                    except Exception as e:
-                        logger.warning("not a turtle: %s", p['extra_ttl'])
+                logger.info(f"Skipping {node}")
+                continue
+            
+            if value_node is not None:
+                try:
+                    value = ast.literal_eval(value_node)
+                except ValueError:
+                    value = ast.unparse(value_node)
+            else:
+                value = None
+            
+            comment = ''
+            for line in range(node.lineno, node.end_lineno+1):
+                comment = self._pop_comment_by_line(comments, line)
+                # annotation must appear right after definition
+                if line != node.end_lineno:
+                    continue
+            
+            result['assign'].append(dict(varname = varname, 
+                                         type_annotation = type_annotation, 
+                                         value = value, 
+                                         comment = comment,
+                                         raw_line = node_code))
+            
+        # now parse full-line comments
+        for comment in comments:
+            cstring = comment.string[1:]
+            result['standalone'].append(cstring)        
+        
+        return result
+    
+    def extract_parameters_from_cell(self, cell):
+        parameters = {}
+        
+        parsed_cell = self.parse_source_multiline(cell['source'])
+        for par_detail in parsed_cell['assign']:
+            
+            # May need to have fallback type to properly parse owl
+            if par_detail['value'] is not None: 
+                fallback_type = odahub_type_for_python_type(type(par_detail['value']))
+            else:
+                try:
+                    fallback_type = reconcile_python_type(None, 
+                                        type_annotation=par_detail['type_annotation'],
+                                        name = par_detail['varname'])[0]
+                    fallback_type = odahub_type_for_python_type(fallback_type)
+                except TypeCheckError:
+                    fallback_type = None
+            
+            # Now full recoincilation
+            parsed_comment = understand_comment_references(par_detail['comment'],
+                                                           fallback_type=fallback_type)
+            
+            python_type, is_optional = reconcile_python_type(par_detail['value'],
+                                            type_annotation=par_detail['type_annotation'],
+                                            owl_type=parsed_comment.get('owl_type', None),
+                                            extra_ttl=parsed_comment.get('extra_ttl', None),
+                                            name = par_detail['varname'])
+            
+            par = InputParameter(raw_line = par_detail['raw_line'],
+                                 name = par_detail['varname'],
+                                 default_value = par_detail['value'],
+                                 python_type = python_type,
+                                 comment = par_detail['comment'],
+                                 owl_type = parsed_comment.get('owl_type', None),
+                                 extra_ttl = parsed_comment.get('extra_ttl', None),
+                                 is_optional=is_optional)
+            
+            # This leads to some recursion, but it's not really used anywhere. 
+            # TODO: integrate with ontology.function_semantic_signature
+            # if par.extra_ttl is not None:
+            #     self.graph.parse(data=par.extra_ttl)
+            parameters[par.name] = par.as_dict()
+            parameters[par.name]['value'] = par.as_dict()['default_value']
+        
+
+        for cstring in parsed_cell['standalone']:
+            p = understand_comment_references(cstring, base_uri=self.nb_uri)
+            if p is not None:
+                try:
+                    self._graph.parse(data=p['extra_ttl'])
+                except Exception as e:
+                    logger.warning("not a turtle: %s", p['extra_ttl'])
 
         return parameters
 
-
+    @lru_cache
     def extract_parameters(self):
         nb = self.read()
 
         self.input_parameters = {}
         self.system_parameters = {}
-        self.source_parameters = {}
-        
-        G = rdflib.Graph()
-        
+               
         for cell in nb.cells:
             for tag, attr in [
                     ('parameters', 'input_parameters'),
@@ -289,18 +512,25 @@ class NotebookAdapter:
                     ('refs', 'source_parameters'),
                     ]:
                 if tag in cell.metadata.get('tags', []):
-                    pars = self.extract_parameters_from_cell(cell, G)
+                    pars = self.extract_parameters_from_cell(cell)
                     pars = {**getattr(self, attr), **pars}
                     setattr(self, attr, pars)
-                                            
-        for n, p in self.input_parameters.items():
-            if p['extra_ttl'] is not None:
-                G.parse(data=p['extra_ttl'])
-
-        self.extra_ttl = G.serialize(format='turtle')
 
         return self.input_parameters
 
+    @cached_property
+    def token_access(self):
+        oda_token_access = rdflib.URIRef(f"{oda_prefix}oda_token_access")
+        _token_access = None
+        for s, p, o in self.graph.triples((None, oda_token_access, None)):
+            if _token_access is not None:
+                raise RuntimeError('Multiple oda_token_access annotations')
+            _token_access = o
+        return _token_access
+        
+    @cached_property
+    def extra_ttl(self) -> str:
+        return self.graph.serialize(format='turtle')
     
     def interpret_parameters(self,parameters):
         expected_parameters = self.extract_parameters()
@@ -349,57 +579,76 @@ class NotebookAdapter:
 
         
 
-    def execute(self, parameters, progress_bar = True, log_output = True, inplace=False):
+    def execute(self, parameters, progress_bar=True, log_output=True, inplace=False, tmpdir_key=None, context=None):
+
+        if context is None:
+            context = {}
         t0 = time.time()
         logstasher.log(dict(origin="nb2workflow.execute", event="starting", parameters=parameters, workflow_name=notebook_short_name(self.notebook_fn), health=current_health()))
 
         logger.info("starting job")
-        exceptions = self._execute(parameters, progress_bar, log_output, inplace)
-            
+        exceptions = self._execute(parameters, progress_bar, log_output, inplace, context=context, tmpdir_key=tmpdir_key)
+
         tspent = time.time() - t0
-        logstasher.log(dict(origin="nb2workflow.execute", 
-                            event="done", 
-                            parameters=parameters, 
-                            workflow_name=notebook_short_name(self.notebook_fn), 
-                            exceptions=list(map(workflows.serialize_workflow_exception, exceptions)),
-                            health=current_health(), 
+        logstasher.log(dict(origin="nb2workflow.execute",
+                            event="done",
+                            parameters=parameters,
+                            workflow_name=notebook_short_name(self.notebook_fn),
+                            exceptions=list(map(serialize_workflow_exception, exceptions)),
+                            health=current_health(),
                             time_spent=tspent))
 
         return exceptions
 
-    def _execute(self, parameters, progress_bar = True, log_output = True, inplace=False):
+    def _execute(self, parameters, progress_bar=True, log_output=True, inplace=False, context={}, tmpdir_key=None):
 
         if not inplace :
-            tmpdir = self.new_tmpdir()
+            tmpdir = self.new_tmpdir(tmpdir_key)
             logger.info("new tmpdir: %s", tmpdir)
-
+            repo_dir = os.path.dirname(os.path.realpath(self.notebook_fn))
             try:
-                output = subprocess.check_output(["git","clone", "--recurse-submodules", os.path.dirname(os.path.realpath(self.notebook_fn)), tmpdir])
-                # output = subprocess.check_output(["git","clone", "--depth", "1", "file://" + os.path.dirname(os.path.realpath(self.notebook_fn)), tmpdir])
-                logger.info("git clone output: %s", output)
-            except Exception as e:
-                logger.warning("git clone failed: %s, will attempt copytree", e)
-
+                repo = Repo(repo_dir)
+                repo.clone(tmpdir, multi_options=["--recurse-submodules"])
+            except InvalidGitRepositoryError:
+                logger.warning(f"repository {repo_dir} is invalid, will attempt copytree")
                 os.rmdir(tmpdir)
-
                 shutil.copytree(os.path.dirname(os.path.realpath(self.notebook_fn)), tmpdir)
+            except GitCommandError as e:
+                logger.warning(f"git command error: {e}")
+                if 'git-lfs' in str(e):
+                    # this error may occur if the repo was originally cloned by the different version of git utility
+                    # e.g. when repo is mounted with docker run -v
+                    raise Exception("We got some problem cloning the repository, the problem seems to be related to git-lfs. You might want to try reinitializing git-lfs with 'git-lfs install; git-lfs pull'")
+                else:
+                    raise e
         else:
             tmpdir =os.path.dirname(os.path.realpath(self.notebook_fn))
             logger.info("executing inplace, no tmpdir is input dir: %s", tmpdir)
 
-        
+        r = self.handle_url_params(parameters, tmpdir, context=context)
+
+        if len(context) > 0:
+            self._pass_context(tmpdir, context)
+
         self.update_summary(state="started", parameters=parameters)
 
         self.inject_output_gathering()
         exceptions = []
 
+        if len(r['exceptions']) > 0:
+            exceptions.extend(r['exceptions'])
+
         ntries = 10
         while ntries > 0:
             try:
+                thread_id = threading.get_ident()
+                process_id = os.getpid()
+                logger.info(f'pm.execute_notebook thread id: {thread_id} ; process id: {process_id}')
+
                 pm.execute_notebook(
                    self.preproc_notebook_fn,
                    self.output_notebook_fn,
-                   parameters = parameters,
+                   parameters = r['adapted_parameters'],
                    progress_bar = False,
                    log_output = True,
                    cwd = tmpdir, 
@@ -425,9 +674,29 @@ class NotebookAdapter:
         if len(exceptions) == 0:
             self.update_summary(state="done")
         else:
-            self.update_summary(state="failed", exceptions=list(map(workflows.serialize_workflow_exception, exceptions)))
+            self.update_summary(state="failed", exceptions=list(map(serialize_workflow_exception, exceptions)))
 
         return exceptions
+
+    def _pass_context(self, workdir: str, context: dict):
+        """
+        save context to file .oda_api_context in the notebook dir where it can be accessed by ODA API
+        :param workdir: directory to save notebook in
+        """
+        from oda_api import context_file
+
+        if str(self.token_access).endswith('InOdaContext'):
+            if 'token' not in context:
+                raise RuntimeError('token is not provided')
+        elif 'token' in context:
+            # don't pass token since it was not reqested
+            context = context.copy()
+            del context['token']
+
+        context_file_path = os.path.join(workdir, context_file)
+        with open(context_file_path, 'wt') as output:
+            json.dump(context, output)
+        logger.info("context file created: %s", context_file_path)
 
     def extract_pm_output(self):
         nb = sb.read_notebook(self.output_notebook_fn)
@@ -440,7 +709,7 @@ class NotebookAdapter:
 
         return outputs
 
-    
+    @lru_cache
     def extract_output_declarations(self):
         nb=self.read()
 
@@ -448,17 +717,130 @@ class NotebookAdapter:
 
         for cell in nb.cells:
             if 'outputs' in cell.metadata.get('tags',[]):
-                for line in cell['source'].split("\n"):
-                    p = parse_nbline(line)
-                    if p is None:
-                        continue
-                    outputs[p['name']] = p
-
+                parsed_cell = self.parse_source_multiline(cell['source'])
+                
+                # TODO: may use annotations (type/ontology) to get python type
+                for outp_detail in parsed_cell['assign']:
+                    parsed_comment = understand_comment_references(outp_detail['comment'])
+                    outputs[outp_detail['varname']] = {
+                        'name': outp_detail['varname'],
+                        'value': outp_detail['value'],
+                        'python_type': str, # NOTE: kept for backward compatibility
+                        'comment': outp_detail['comment'],
+                        'owl_type': parsed_comment.get('owl_type', None),
+                        'extra_ttl': parsed_comment.get('extra_ttl', None),
+                    }
 
         return outputs 
 
     def extract_output(self):
         return self.extract_pm_output()
+
+    def download_file(self, file_url, tmpdir):
+        n_download_tries_left = self.n_download_max_tries
+        size_ok = False
+        file_downloaded = False
+        file_name = NotebookAdapter.get_unique_filename_from_url(file_url)
+        file_path = os.path.join(tmpdir, file_name)
+        for _ in range(n_download_tries_left):
+            step = 'getting the file size'
+            reason = 'connection error'
+            if not size_ok:
+                try:
+                    response = requests.head(file_url, allow_redirects=True)
+                except requests.exceptions.ConnectionError as ce:
+                    logger.warning(
+                        (f"An issue, due to {reason}, occurred when attempting to {step} of the file at the url {file_url}. "
+                         f"Sleeping {self.download_retry_sleep_s} seconds until retry")
+                    )
+                    time.sleep(self.download_retry_sleep_s)
+                    continue
+                reason = 'invalid status code'
+                if response.status_code == 200:
+                    file_size = int(response.headers.get('Content-Length', 0))
+                    if file_size > self.max_download_size:
+                        msg = ("The file appears to be too large to download, "
+                               f"and the download limit is set to {self.max_download_size} bytes.")
+                        logger.warning(msg)
+                        sentry.capture_message(msg)
+                        raise Exception(msg)
+                else:
+                    logger.warning(
+                        (f"An issue, due to {reason}, occurred when attempting to {step} of the file at the url {file_url}. "
+                         f"Sleeping {self.download_retry_sleep_s} seconds until retry")
+                    )
+                    time.sleep(self.download_retry_sleep_s)
+                    continue
+            size_ok = True
+            step = 'downloading file'
+            reason = 'connection error'
+            try:
+                response = requests.get(file_url)
+            except requests.ConnectionError as ce:
+                logger.warning(
+                    (f"An issue, due to {reason}, occurred when attempting to {step} of the file at the url {file_url}. "
+                     f"Sleeping {self.download_retry_sleep_s} seconds until retry")
+                )
+                time.sleep(self.download_retry_sleep_s)
+                continue
+            reason = 'invalid status code'
+            if response.status_code == 200:
+                with open(file_path, 'wb') as file:
+                    file.write(response.content)
+                file_downloaded = True
+                break
+            else:
+                logger.warning(
+                    (f"An issue occurred when attempting to {step} the file at the url {file_url}. "
+                     f"Sleeping {self.download_retry_sleep_s} seconds until retry")
+                )
+                time.sleep(self.download_retry_sleep_s)
+                continue
+
+        if not (file_downloaded and size_ok):
+            msg = (f"An issue, due to {reason}, occurred when attempting to {step} at the url {file_url}. "
+                   "This might be related to an invalid url, please check the input provided")
+            logger.warning(msg)
+            sentry.capture_message(msg)
+            raise Exception(msg)
+
+        return file_name
+
+    def handle_url_params(self, parameters, tmpdir, context={}):
+        adapted_parameters = copy.deepcopy(parameters)
+        exceptions = []
+        for input_par_name, input_par_obj in self.input_parameters.items():
+            # TODO use oda_api.ontology_helper
+            if input_par_obj['owl_type'] == f"{oda_prefix}POSIXPath":
+                arg_par_value = parameters.get(input_par_name, None)
+                if arg_par_value is None:
+                    arg_par_value = input_par_obj['default_value']
+                if validators.url(arg_par_value, simple_host=True):
+                    logger.info(f"checking url: {arg_par_value}")
+                    if is_mmoda_url(arg_par_value):
+                        logger.debug(f"{arg_par_value} is an mmoda url")
+                        token = context.get('token', None)
+                        if token is not None:
+                            logger.debug(f'adding token to the url: {arg_par_value}')
+                            url_parts = urlparse(adapted_parameters[input_par_name])
+                            url_args = parse_qs(url_parts.query)
+                            url_args['token'] = [token] # the values in the dictionary need to be lists
+                            new_url_parts = url_parts._replace(query=urlencode(url_args, doseq=True))
+                            adapted_parameters[input_par_name] = urlunparse(new_url_parts)
+                            logger.debug(f"updated url: {adapted_parameters[input_par_name]}")
+                            arg_par_value = adapted_parameters[input_par_name]
+
+                    logger.debug(f'download {arg_par_value}')
+                    try:
+                        file_name = self.download_file(arg_par_value, tmpdir)
+                        adapted_parameters[input_par_name] = file_name
+                    except Exception as e:
+                        exceptions.append(e)
+
+        return dict(
+            adapted_parameters=adapted_parameters,
+            exceptions=exceptions
+        )
 
     def inject_output_gathering(self):
         outputs = self.extract_output_declarations()
@@ -498,8 +880,9 @@ if isinstance({output},str) and os.path.exists({output}):
         sb.glue(variable_name + "_content", encoded)
     else:
         # TODO: make a customizable upload to different DL platforms; before that it should be enabled with caution    
-        os.makedirs("/tmp/nb2w-store", exist_ok=True)
-        url = "file:///tmp/nb2w-store/" + str(hashlib.md5(content).hexdigest())
+        nb2w_store_base = os.getenv("NB2W_CACHE", os.getenv("HOME") + "/.cache/nb2workflow/bigoutputs")
+        os.makedirs(nb2w_store_base, exist_ok=True)
+        url = "file://" + nb2w_store_base +  "/" + str(hashlib.md5(content).hexdigest())
         print("storing file to URL", url)
         with open(url.replace("file://", ""), "wb") as f:
             f.write(content)
@@ -559,9 +942,13 @@ if isinstance({output},str) and os.path.exists({output}):
 def notebook_short_name(ipynb_fn):
     return os.path.basename(ipynb_fn).replace(".ipynb","")
 
-def find_notebooks(source, tests=False): # -> dict[str, NotebookAdapter]:
+def find_notebooks(source, tests=False, pattern = r'.*') -> Dict[str, NotebookAdapter]:
 
-    base_filter = lambda fn: "output" not in fn and "preproc" not in fn
+    def base_filter(fn): 
+        good = "output" not in fn and "preproc" not in fn
+        good = good and re.match(pattern, os.path.basename(fn)) 
+        return good
+        
 
     if tests:
         filt = lambda fn: base_filter(fn) and "/test_" in fn
@@ -569,7 +956,7 @@ def find_notebooks(source, tests=False): # -> dict[str, NotebookAdapter]:
         filt = lambda fn: base_filter(fn) and "/test_" not in fn
 
     if os.path.isdir(source):
-        notebooks=[ fn for fn in glob.glob(source+"/*ipynb") if filt(fn) ]
+        notebooks=[ fn for fn in glob.glob(source+"/*ipynb") if filt(fn) ]        
 
         logger.debug("found notebooks: %s",notebooks)
 
@@ -583,6 +970,8 @@ def find_notebooks(source, tests=False): # -> dict[str, NotebookAdapter]:
 
 
     elif os.path.isfile(source):
+        if pattern != r'.*':
+            logger.warning('Filename pattern is set but source %s is a single file. Ignoring pattern.')
         notebook_adapters={notebook_short_name(source): NotebookAdapter(source)}
 
     else:
@@ -735,7 +1124,7 @@ def nbrun(nb_source, inp, inplace=False, optional_dispather=True, machine_readab
     elif len(nbas) == 1:
         nba = list(nbas.values())[0]
     else:
-        RuntimeError()
+        raise RuntimeError
 
     print("inp", inp)
 
@@ -756,7 +1145,7 @@ def nbrun(nb_source, inp, inplace=False, optional_dispather=True, machine_readab
         logging.error("FAILED: %s", exceptions)
 
         with open("{}_exceptions.json".format(nba.name), "w") as f:
-            json.dump(list(map(workflows.serialize_workflow_exception, exceptions)), f)
+            json.dump(list(map(serialize_workflow_exception, exceptions)), f)
 
         fn = nba.export_html()
         open("{}_output.ipynb".format(nba.name), "wb").write(open(nba.output_notebook_fn, "rb").read())

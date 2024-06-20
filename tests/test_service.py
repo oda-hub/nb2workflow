@@ -54,17 +54,33 @@ def test_service(client):
     r=client.get('/trace/list')
     assert r.status_code == 200
 
-    for l in sorted(r.json, key=lambda x:x['ctime']):
+    sorted_json=sorted(r.json, key=lambda x:x['ctime'])
+    for l in sorted_json:
         logger.info(l)
 
-    job = r.json[-1]['fn'].split("/")[-1]
-    
+    job = sorted_json[-1]['fn'].split("/")[-1]
+
+    logger.info("job %s", job)
+
     r=client.get('/trace/'+job)
 
-    logger.info("job %s", r.json)
+    logger.info("r.json %s", r.json)
+    print("r.json ", r.json)
 
 #    open("output.png","wb").write(base64.b64decode(r.json['output']['spectrum_png_content']))
+    service_name = r.json[0].split("/")[-1].replace('_output.ipynb', '')
+    r = client.get(os.path.join('trace', job, service_name),
+                   query_string=dict(include_glued_output=True))
 
+    html_output = r.data.decode()
+    assert "celltag_injected-gather-outputs" in html_output
+
+    r = client.get(os.path.join('trace', job, service_name),
+                   query_string=dict(include_glued_output=False))
+
+    html_output = r.data.decode()
+    assert "celltag_injected-gather-outputs" not in html_output
+    assert "<title>500 Internal Server Error</title>" not in html_output
 
 
 def test_service_repo(client):
@@ -94,7 +110,10 @@ def test_service_repo(client):
 
 
 def test_service_async_repo(client):
-    
+    thread_id = threading.get_ident()
+    process_id = os.getpid()
+    logger.info(f'test_service_async_repo thread id: {thread_id} ; process id: {process_id}')
+
     r = client.get('/api/v1.0/options')
     
     service_signature=r.json['workflow-notebook']
@@ -125,8 +144,8 @@ def test_service_async_repo(client):
 
 
     while True:
-        if os.path.exists(callback_fn):
-            callback_json = json.load(open(callback_fn))
+        # if os.path.exists(callback_fn):
+        #     callback_json = json.load(open(callback_fn))
             # assert callback_json['action'] == 'done'
         
         options = client.get('/api/v1.0/options')
@@ -141,6 +160,10 @@ def test_service_async_repo(client):
 
         logger.info('service returns %s %s', r, r.json)
 
+        if r.json['workflow_status'] == 'started':
+            assert 'jobdir' in r.json
+            logger.info('jobdir is reported as %s', r.json['jobdir'])
+        
         if r.json['workflow_status'] == 'done':
             logger.info('workflow done!')
             break

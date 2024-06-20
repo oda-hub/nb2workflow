@@ -9,6 +9,7 @@ try:
 except ImportError:
     from werkzeug.routing import MethodNotAllowed, NotFound
 
+
 import queue
 from nb2workflow import ontology, publish, schedule
 from nb2workflow.nbadapter import NotebookAdapter, find_notebooks, PapermillWorkflowIncomplete
@@ -18,7 +19,6 @@ import json
 import glob
 import time
 import logging
-import inspect
 import requests
 import base64
 import hashlib
@@ -28,15 +28,15 @@ import nbformat
 import yaml
 
 from io import BytesIO
+from bs4 import BeautifulSoup
 
 
 from flask import Flask, make_response, jsonify, request, url_for, send_file, Response
 from flask_caching import Cache
-from flask_cors import CORS
 
 from flasgger import LazyString, Swagger, swag_from
 
-from nb2workflow.workflows import serialize_workflow_exception
+from nb2workflow.helpers import serialize_workflow_exception
 from nb2workflow.json import CustomJSONEncoder
 
 import threading
@@ -93,6 +93,7 @@ def create_app():
     swagger = Swagger(app, template=template)
     app.wsgi_app = ReverseProxied(app.wsgi_app)
     app.json_encoder = CustomJSONEncoder
+    app.config["JSON_SORT_KEYS"] = False
     cache.init_app(app, config={'CACHE_TYPE': 'SimpleCache'})
 
 
@@ -103,6 +104,7 @@ def create_app():
 app = create_app()
 
 app.async_workflows = dict()
+app.async_workflow_jobdirs = dict()
 app.started_at = datetime.datetime.now()
 
 
@@ -131,13 +133,18 @@ class AsyncWorker(threading.Thread):
         async_workflow.run()
 
 class AsyncWorkflow:
-    def __init__(self, key, target, params, callback=None):
+    def __init__(self, key, target, params, context={}):
         self.key = key
         self.target = target
         self.params = params
-        self.callback = callback
+        self.context = context
 
-        logger.info("%s initializing callback %s", self, callback)
+        logger.info("%s initializing callback %s", self, self.callback)
+
+    @property
+    def callback(self):
+        return self.context.get('callback', None)
+
 
     def run(self):
         try:
@@ -167,15 +174,21 @@ class AsyncWorkflow:
             async_queue.put(self)
             app.async_workflows[self.key] = 'submitted'
             return
-
-        app.async_workflows[self.key] = 'started'
-
+       
         template_nba = app.notebook_adapters.get(self.target)
-
-        nba = NotebookAdapter(template_nba.notebook_fn)
+        nba = NotebookAdapter(template_nba.notebook_fn, tempdir_cache=app.async_workflow_jobdirs,
+                              n_download_max_tries=template_nba.n_download_max_tries,
+                              download_retry_sleep_s=template_nba.download_retry_sleep_s,
+                              max_download_size=template_nba.max_download_size)
+        
+        app.async_workflows[self.key] = 'started'
+        self.perform_callback(action='progress')
 
         try:
-            exceptions = nba.execute(self.params['request_parameters'])
+            thread_id = threading.get_ident()
+            process_id = os.getpid()
+            logger.info(f'nba.execute thread id: {thread_id} ; process id: {process_id}')
+            exceptions = nba.execute(self.params['request_parameters'], context=self.context, tmpdir_key=self.key)
         except PapermillWorkflowIncomplete as e:
             logger.info("found incomplete workflow: %s, rescheduling", repr(e))
 
@@ -222,7 +235,7 @@ class AsyncWorkflow:
 
         self.perform_callback()
 
-    def perform_callback(self):
+    def perform_callback(self, action='done'):
         if self.callback is None:
             logger.info('no callback registered, skipping')
             return
@@ -233,7 +246,7 @@ class AsyncWorkflow:
         result = app.async_workflows[self.key]
 
         callback_payload = dict(
-            action='done'
+            action=action
         )
         
         if re.match('^file://', self.callback):
@@ -254,6 +267,8 @@ def workflow(target, background=False, async_request=False):
 
     async_request = request.args.get('_async_request', async_request)
     async_request_callback = request.args.get('_async_request_callback', None)
+    token = request.args.get("_token", None)
+    context = dict(callback=async_request_callback, token=token)
 
     logger.debug("target %s", target)
 
@@ -261,7 +276,10 @@ def workflow(target, background=False, async_request=False):
         logger.debug("raw parameters %s", request.args)
 
     template_nba = app.notebook_adapters.get(target)
-    nba = NotebookAdapter(template_nba.notebook_fn)
+    nba = NotebookAdapter(template_nba.notebook_fn,
+                          n_download_max_tries=template_nba.n_download_max_tries,
+                          download_retry_sleep_s=template_nba.download_retry_sleep_s,
+                          max_download_size=template_nba.max_download_size)
 
     if nba is None:
         interpreted_parameters = None
@@ -278,6 +296,13 @@ def workflow(target, background=False, async_request=False):
 
     # async
     if async_request:
+        if len(issues) > 0:
+            exceptions = [serialize_workflow_exception(ValueError(v)) for v in issues]
+            return make_response(jsonify(workflow_status="done",
+                                        data=dict(output="incomplete", 
+                                                    exceptions=exceptions),
+                                        comment=""), 200)
+
         key = hashlib.sha224(json.dumps(
             dict(target=target, params=interpreted_parameters)).encode('utf-8')).hexdigest()
 
@@ -286,24 +311,40 @@ def workflow(target, background=False, async_request=False):
         print('cache key/value', key, value)
 
         if value is None:
-            async_task = AsyncWorkflow(
-                key=key, target=target, params=interpreted_parameters, callback=async_request_callback)
-
-            async_queue.put(async_task)
+            async_task = AsyncWorkflow(key=key,
+                                       target=target,
+                                       params=interpreted_parameters,
+                                       context=context
+                                       )
 
             app.async_workflows[key] = 'submitted'
-            return make_response(jsonify(workflow_status="submitted", comment="task created"), 201)
+            async_queue.put(async_task)
 
-        elif value in ['started', 'submitted']:
-            return make_response(jsonify(workflow_status=value, comment="task is "+value), 201)
+            return make_response(jsonify(workflow_status="submitted",
+                                         comment="task created"),
+                                 201)
+
+        elif value == 'submitted':
+            return make_response(jsonify(workflow_status=value,
+                                         comment="task is "+value),
+                                 201)
+
+        elif value == 'started':
+            return make_response(jsonify(workflow_status=value,
+                                         comment="task is "+value,
+                                         jobdir=app.async_workflow_jobdirs.get(key)),
+                                 201)
 
         else:
-            return make_response(jsonify(workflow_status="done", data=value, comment=""), 200)
+            return make_response(jsonify(workflow_status="done",
+                                         data=value,
+                                         comment=""),
+                                 200)
 
     if len(issues) > 0:
         return make_response(jsonify(issues=issues), 400)
     else:
-        exceptions = nba.execute(interpreted_parameters['request_parameters'])
+        exceptions = nba.execute(interpreted_parameters['request_parameters'], context=context)
 
         nretry = 10
         while nretry > 0:
@@ -646,7 +687,7 @@ def root():
     if len(issues) == 0:
         return {
                     "message": "all is ok!",
-                    "versiom": os.getenv("ODA_WORKFLOW_VERSION"),
+                    "version": os.getenv("ODA_WORKFLOW_VERSION"),
                     "last_author": os.getenv("ODA_WORKFLOW_LAST_AUTHOR"),
                     "last_changed": os.getenv("ODA_WORKFLOW_LAST_CHANGED")                    
             }
@@ -672,6 +713,7 @@ def main():
         '--profile', metavar='service profile', type=str, default="oda")
     parser.add_argument('--debug', action="store_true")
     parser.add_argument('--one-shot', metavar='workflow', type=str)
+    parser.add_argument('--pattern', type=str, default=r'.*')
 
     args = parser.parse_args()
 
@@ -693,7 +735,7 @@ def main():
         root.setLevel(logging.INFO)
         handler.setLevel(logging.INFO)
 
-    app.notebook_adapters = find_notebooks(args.notebook)
+    app.notebook_adapters = find_notebooks(args.notebook, pattern=args.pattern)
     setup_routes(app)
     app.service_semantic_signature = ontology.service_semantic_signature(
         app.notebook_adapters)
@@ -709,6 +751,10 @@ def main():
 
         for nba_name, nba in app.notebook_adapters.items():
             publish.publish(args.publish, nba_name, publish_host, publish_port)
+
+    thread_id = threading.get_ident()
+    process_id = os.getpid()
+    logger.info(f'service main thread id: {thread_id} ; process id: {process_id}')
 
   #  for rule in app.url_map.iter_rules():
  #       logger.debug("==>> %s %s %s %s",rule,rule.endpoint,rule.__class__,rule.__dict__)
@@ -813,12 +859,23 @@ def trace_get_func(job, func):
     if func == "custom.css":
         return ""
 
+    include_glued_output = request.args.get('include_glued_output', True) == 'True'
+
     from nbconvert.exporters import HTMLExporter
     exporter = HTMLExporter()
 
     fn = os.path.join(tempfile.gettempdir(), job, func+"_output.ipynb")
 
     output, resources = exporter.from_filename(fn)
+
+    if not include_glued_output:
+        logger.info("include_glued_output arg passed")
+        soup = BeautifulSoup(output, 'html.parser')
+        div_glued_output = soup.find('div', {'class': 'celltag_injected-gather-outputs'})
+        if div_glued_output is not None:
+            div_glued_output.decompose()
+        output = str(soup)
+        logger.info("div element removed form html")
 
     return output
 

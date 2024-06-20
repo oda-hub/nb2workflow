@@ -1,0 +1,48 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kaniko-build-{{ suffix }}
+  namespace: {{ namespace }}
+spec:
+  backoffLimit: 1
+  ttlSecondsAfterFinished: 86400                
+  template:
+    spec:
+      containers:
+      - name: kaniko-build
+        image: gcr.io/kaniko-project/executor:v1.22.0
+        imagePullPolicy: IfNotPresent
+        args:
+        - "--dockerfile=/workspace/Dockerfile"
+        - "--push-retry=3"
+        {% if no_push %}
+        - "--no-push"
+        {% else %}
+        - "--destination={{ image }}"
+        {% endif %}
+   
+        volumeMounts:
+        - name: dockerfile
+          mountPath: /workspace/Dockerfile
+          subPath: Dockerfile
+        - name: kaniko-secret
+          mountPath: /kaniko/.docker/config.json
+          subPath: config.json
+
+        resources:
+          requests:
+            ephemeral-storage: 20G
+            cpu: 0.5
+            memory: 4G
+          limits:
+            ephemeral-storage: 20G
+            cpu: 1
+            memory: 16G
+      volumes:
+      - name: dockerfile
+        configMap:
+          name: nb2w-dockerfile-{{ suffix }}
+      - name: kaniko-secret
+        secret:
+          secretName: kaniko-secret
+      restartPolicy: Never

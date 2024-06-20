@@ -2,7 +2,6 @@ import os
 import json
 import logging
 import pytest
-import tempfile
 
 
 # this can be also set in pytest call
@@ -44,7 +43,7 @@ def test_nbadapter(test_notebook, morph_notebook, caplog):
     assert 'comment' in parameters['scwid']
     assert parameters['scwid']['owl_type'] == "http://odahub.io/ontology/integral#ScWID"
 
-    assert parameters['enabled']['owl_type'] == "http://www.w3.org/2001/XMLSchema#bool"
+    assert parameters['enabled']['owl_type'] == "http://odahub.io/ontology#Boolean"
 
     outputs = nba.extract_output_declarations()
     print("outputs", outputs)
@@ -71,6 +70,25 @@ def test_nbadapter(test_notebook, morph_notebook, caplog):
 
     assert 'spectrum' in output
 
+def test_find_notebooks(caplog):
+    from nb2workflow.nbadapter import find_notebooks, NotebookAdapter
+    testfiles_path = os.path.join(os.path.dirname(__file__), 'testfiles')
+    nb_dir = testfiles_path
+    single_nb = os.path.join(testfiles_path, 'lightcurve.ipynb')
+    
+    nbas = find_notebooks(single_nb)
+    assert len(nbas) == 1
+    
+    nbas = find_notebooks(single_nb, pattern=r'.*bool')
+    assert len(nbas) == 1
+    assert 'Ignoring pattern.' in caplog.text
+    
+    nbas = find_notebooks(nb_dir)
+    assert len(nbas) == 8
+    
+    nbas = find_notebooks(nb_dir, pattern=r'.*bool')
+    assert len(nbas) == 1
+    
 
 def test_nbadapter_repo(test_notebook_repo):
     from nb2workflow.nbadapter import NotebookAdapter, find_notebooks, validate_oda_dispatcher
@@ -104,6 +122,29 @@ def test_nbadapter_repo(test_notebook_repo):
 
         validate_oda_dispatcher(nba)
 
+@pytest.mark.skip(reason="Reproducing this condition in the test is difficult")
+def test_nbadapter_lfs_repo(test_notebook_lfs_repo):
+    from nb2workflow.nbadapter import NotebookAdapter, find_notebooks, validate_oda_dispatcher
+
+    nbas = find_notebooks(test_notebook_lfs_repo)
+
+    assert len(nbas) >= 1
+
+    for nba_name, nba in nbas.items():
+        print("notebook", nba_name)
+
+        if os.path.exists(nba.output_notebook_fn):
+            os.remove(nba.output_notebook_fn)
+
+        if os.path.exists(nba.preproc_notebook_fn):
+            os.remove(nba.preproc_notebook_fn)
+
+        try:
+            nba.execute(dict())
+            assert False, 'nba.execute is expected to fail'
+        except Exception as ex:
+            assert ex.message == "git-lfs is not initialized"
+        break
 
 def test_nbreduce(test_notebook):
     from nb2workflow.nbadapter import NotebookAdapter, nbreduce, setup_logging
@@ -157,3 +198,48 @@ def test_denumpyfy():
 
     r = json.dumps(denumpyfy(data))
     print(r)
+
+
+def test_multiline_parameters():
+    from nb2workflow.nbadapter import NotebookAdapter
+
+    nba = NotebookAdapter('tests/testfiles/multiline.ipynb')
+
+    pars = nba.input_parameters
+
+    assert pars['mline']['python_type'] == dict
+    assert pars['mline']['default_value'] == {'foo': ['bar', 'baz'],
+                                              'spam': ['ham', 'eggs']}
+    assert pars['mline']['owl_type'] == "http://odahub.io/ontology#StructuredParameter"
+    assert pars['mline']['is_optional'] == False
+
+
+    assert pars['opt']['python_type'] == float
+    assert pars['opt']['default_value'] == None
+    assert pars['opt']['owl_type'] == "http://odahub.io/ontology#Float"
+    assert pars['opt']['is_optional'] == True
+
+
+    assert pars['inten']['python_type'] == int
+    assert pars['inten']['default_value'] == 45
+    assert pars['inten']['owl_type'] == "http://odahub.io/ontology#Energy"
+    assert pars['inten']['is_optional'] == False
+
+    assert pars['intfloat']['python_type'] == float
+    assert pars['intfloat']['default_value'] == 10
+    assert pars['intfloat']['owl_type'] == "http://odahub.io/ontology#Float"
+    assert pars['intfloat']['is_optional'] == False
+
+    assert pars['string_param']['python_type'] == str
+    assert pars['string_param']['default_value'] == 'Foo Bar\nContains = Symbol\nSpam Ham\n'
+    assert pars['string_param']['owl_type'] == "http://odahub.io/ontology#LongString"
+    assert pars['string_param']['is_optional'] == False
+
+    assert pars['flag']['python_type'] == bool
+    assert pars['flag']['default_value'] == True
+    assert pars['flag']['owl_type'] == "http://odahub.io/ontology#Boolean"
+    assert pars['flag']['is_optional'] == False
+
+    outp = nba.extract_output_declarations()
+
+    assert outp['static']['value'] == "Just a static\n            but multiline string"

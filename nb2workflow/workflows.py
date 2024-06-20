@@ -2,10 +2,11 @@ import json
 import os
 import requests
 import time
-import datetime
-import logging
 from collections import OrderedDict
+
+from nb2workflow.helpers import serialize_workflow_exception
 from . import logstash
+from .sentry import sentry
 
 from diskcache import Cache
 
@@ -14,36 +15,11 @@ from nb2workflow import nbadapter
 cache = Cache('.nb2workflow/cache')
 enable_cache = False
 
-try:
-    import sentry_sdk
-    sentry_sdk.init(os.environ.get("SENTRY_URI", open("/cdci-resources/sentry-uri").read().strip()))
-except ImportError:
-    sentry_sdk = None
-except Exception as e:
-    import logging
-    logging.debug("big problem with sentry: %s",repr(e))
-    sentry_sdk = None
-
 logstasher = logstash.LogStasher()
 
 class WorkflowException(Exception):
     pass
 
-def serialize_workflow_exception(e):
-    try:
-        return dict(
-                    ename = e[0].ename,
-                    evalue = e[0].evalue,
-                    edump = e[1][0],
-                )
-    except TypeError:
-        return dict(
-                    ename = repr(e),
-                    evalue = "",
-                    edump = repr(e)
-                )
-
-    
 def reroute(router, *args, **kwargs):
     workflow_routes = dict([ r.split("=") for r in os.environ.get('WORKFLOW_ROUTES','').split(",") if len(r.split("=")) == 2 ])
 
@@ -156,8 +132,7 @@ def evaluate(router, *args, **kwargs):
                 logstasher.log(dict(event='problem evaluating',exception=repr(e)))
                 
                 if ntries <= 1:
-                    if sentry_sdk:
-                        sentry_sdk.capture_exception()
+                    sentry.capture_exception(e)
                     raise
 
                 time.sleep(5)

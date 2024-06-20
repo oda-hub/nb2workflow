@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: {{ deployment_name }}
+  name: {{ deployment_name }}
+  namespace: {{ namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ deployment_name }}
+  strategy:
+    type: {{ 'RollingUpdate' if rw_many else 'Recreate' }}
+  template:
+    metadata:
+      labels:
+        app: {{ deployment_name }}
+    spec:
+      containers:
+      - image: {{ image }}
+        imagePullPolicy: IfNotPresent
+        name: {{ deployment_name }}
+        resources:
+          requests:
+            cpu: 0.5
+            memory: 2G
+            ephemeral-storage: 3G
+          limits:
+            cpu: 1
+            memory: 4G
+            ephemeral-storage: 3G
+        {% if with_volume %}
+        volumeMounts:
+          - mountPath: /tmp
+            name: workdir
+        {% endif %}
+        {% if secretenv %}
+        env:
+        {% for evn, sn in secretenv %}
+          - name: {{ evn }}
+            valueFrom:
+              secretKeyRef:
+                name: {{ sn }}
+                key: credentials
+        {% endfor %}
+        {% endif %}
+        startupProbe:
+          failureThreshold: 10
+          httpGet:
+            path: /health
+            port: 8000
+            scheme: HTTP
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 2
+        livenessProbe:
+          failureThreshold: 6
+          httpGet:
+            path: /health
+            port: 8000
+            scheme: HTTP
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 2
+      restartPolicy: Always
+      {% if with_volume %}
+      volumes:
+        - name: workdir
+          persistentVolumeClaim:
+            claimName: {{ deployment_name }}
+      {% endif %}
