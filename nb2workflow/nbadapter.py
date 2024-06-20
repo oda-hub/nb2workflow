@@ -509,7 +509,6 @@ class NotebookAdapter:
                     ('parameters', 'input_parameters'),
                     ('system-parameters', 'system_parameters'),
                     ('injected-parameters', 'input_parameters'),
-                    ('refs', 'source_parameters'),
                     ]:
                 if tag in cell.metadata.get('tags', []):
                     pars = self.extract_parameters_from_cell(cell)
