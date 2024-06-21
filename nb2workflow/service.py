@@ -346,21 +346,24 @@ def workflow(target, background=False, async_request=False):
     else:
         exceptions = nba.execute(interpreted_parameters['request_parameters'], context=context)
 
-        nretry = 10
-        while nretry > 0:
-            try:
-                output = nba.extract_output()
-                if len(output) == 0:
+        if not os.path.exists(nba.output_notebook_fn):
+            output = {}
+        else:
+            nretry = 10
+            while nretry > 0:
+                try:
+                    output = nba.extract_output()
+                    if len(output) == 0:
+                        logger.debug(
+                            "output from notebook is empty, something failed, attempts left: %s", nretry)
+                    else:
+                        break
+                except nbformat.reader.NotJSONError as e:
                     logger.debug(
-                        "output from notebook is empty, something failed, attempts left: %s", nretry)
-                else:
-                    break
-            except nbformat.reader.NotJSONError as e:
-                logger.debug(
-                    "output notebook incomplte %s attempts left: %s", e, nretry)
+                        "output notebook incomplte %s attempts left: %s", e, nretry)
 
-            nretry -= 1
-            time.sleep(1)
+                nretry -= 1
+                time.sleep(1)
 
         logger.debug("output: %s", output)
         logger.debug("exceptions: %s", exceptions)
