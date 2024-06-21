@@ -37,7 +37,7 @@ spec:
         {% endif %}
         {% if secretenv %}
         env:
-        {% for evn, sn in with_volume %}
+        {% for evn, sn in secretenv %}
           - name: {{ evn }}
             valueFrom:
               secretKeyRef:

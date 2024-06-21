@@ -19,7 +19,6 @@ import json
 import glob
 import time
 import logging
-import inspect
 import requests
 import base64
 import hashlib
@@ -34,11 +33,10 @@ from bs4 import BeautifulSoup
 
 from flask import Flask, make_response, jsonify, request, url_for, send_file, Response
 from flask_caching import Cache
-from flask_cors import CORS
 
 from flasgger import LazyString, Swagger, swag_from
 
-from nb2workflow.workflows import serialize_workflow_exception
+from nb2workflow.helpers import serialize_workflow_exception
 from nb2workflow.json import CustomJSONEncoder
 
 import threading

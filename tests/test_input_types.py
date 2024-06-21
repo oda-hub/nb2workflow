@@ -131,6 +131,7 @@ def test_dict_wrong(client):
                                        ({'inten': 20}, {'inten': 20}),
                                        ({'flag': False}, {'flag': False}),
                                        ({'flag': 0}, {'flag': False}),
+                                       ({'string_param': 'contains = symbol'}, {'string_param': 'contains = symbol'})
                                       ])
 def test_type_casting(client, inp, outp):
     r = client.get('/api/v1.0/options')

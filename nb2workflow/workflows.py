@@ -2,9 +2,9 @@ import json
 import os
 import requests
 import time
-import datetime
-import logging
 from collections import OrderedDict
+
+from nb2workflow.helpers import serialize_workflow_exception
 from . import logstash
 from .sentry import sentry
 
@@ -20,21 +20,6 @@ logstasher = logstash.LogStasher()
 class WorkflowException(Exception):
     pass
 
-def serialize_workflow_exception(e):
-    try:
-        return dict(
-                    ename = e[0].ename,
-                    evalue = e[0].evalue,
-                    edump = e[1][0],
-                )
-    except (TypeError, AttributeError):
-        return dict(
-                    ename = repr(e),
-                    evalue = "",
-                    edump = repr(e)
-                )
-
-    
 def reroute(router, *args, **kwargs):
     workflow_routes = dict([ r.split("=") for r in os.environ.get('WORKFLOW_ROUTES','').split(",") if len(r.split("=")) == 2 ])
 

@@ -27,7 +27,6 @@ import requests
 import random
 import string
 import io
-from numbers import Number
 import threading
 
 import papermill as pm
@@ -43,10 +42,9 @@ from oda_api.ontology_helper import Ontology, xsd_type_to_python_type
 
 from nb2workflow.sentry import sentry
 from nb2workflow.health import current_health
-from nb2workflow import workflows
 from nb2workflow.logging_setup import setup_logging
 from nb2workflow.json import CustomJSONEncoder
-from nb2workflow.url_helper import is_mmoda_url
+from nb2workflow.helpers import is_mmoda_url, serialize_workflow_exception
 from nb2workflow.semantics import understand_comment_references
 
 from nb2workflow.semantics import understand_comment_references
@@ -72,6 +70,8 @@ class ModOntology(Ontology):
         self.lock.acquire()
         dt = super()._get_datatype_restriction(param_uri)
         self.lock.release()
+        if dt is None:
+            logger.warning(f'Unknown datatype for owl_uri {param_uri}')
         return dt
 
 ontology = ModOntology(oda_ontology_path)
@@ -206,7 +206,9 @@ def reconcile_python_type(value: Any,
         else:
             is_optional_hint = True
 
-    def check_type_both(v):
+    def check_type_both(v, fail_both_none=False):
+        if fail_both_none and owl_dt is None and hint_fref is None:
+            raise TypeCheckError('Type undefined')
         if owl_dt is not None:
             check_type(v, owl_dt)
         if hint_fref is not None:
@@ -232,7 +234,7 @@ def reconcile_python_type(value: Any,
     elif isinstance(value, int) and not isinstance(value, bool):
         # be permissive if float is possible
         try:
-            check_type_both(float(value))
+            check_type_both(float(value), fail_both_none=True)
         except TypeCheckError:
             pass
         else:
@@ -243,7 +245,7 @@ def reconcile_python_type(value: Any,
     elif isinstance(value, bool):
         check_type_both(value)
         try:
-            check_type_both(int(value))
+            check_type_both(int(value), fail_both_none=True)
         except TypeCheckError:
             pass
         else:
@@ -591,7 +593,7 @@ class NotebookAdapter:
                             event="done",
                             parameters=parameters,
                             workflow_name=notebook_short_name(self.notebook_fn),
-                            exceptions=list(map(workflows.serialize_workflow_exception, exceptions)),
+                            exceptions=list(map(serialize_workflow_exception, exceptions)),
                             health=current_health(),
                             time_spent=tspent))
 
@@ -671,7 +673,7 @@ class NotebookAdapter:
         if len(exceptions) == 0:
             self.update_summary(state="done")
         else:
-            self.update_summary(state="failed", exceptions=list(map(workflows.serialize_workflow_exception, exceptions)))
+            self.update_summary(state="failed", exceptions=list(map(serialize_workflow_exception, exceptions)))
 
         return exceptions
 
@@ -1142,7 +1144,7 @@ def nbrun(nb_source, inp, inplace=False, optional_dispather=True, machine_readab
         logging.error("FAILED: %s", exceptions)
 
         with open("{}_exceptions.json".format(nba.name), "w") as f:
-            json.dump(list(map(workflows.serialize_workflow_exception, exceptions)), f)
+            json.dump(list(map(serialize_workflow_exception, exceptions)), f)
 
         fn = nba.export_html()
         open("{}_output.ipynb".format(nba.name), "wb").write(open(nba.output_notebook_fn, "rb").read())
