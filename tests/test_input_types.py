@@ -29,7 +29,8 @@ def test_posix_download_file_with_arg(client):
 
 def test_posix_download_file_with_arg_low_download_limit(client, app_low_download_limit):
     r = client.get('/api/v1.0/get/testposixpath', query_string={'fits_file_path': 'https://fits.gsfc.nasa.gov/samples/testkeys.fits'})
-    assert r.json['output']['output_file_download'] == 'file not downloaded'
+    assert r.json['output'] == {}
+    assert r.json['exceptions'][0] == "Exception('The file appears to be too large to download, and the download limit is set to 1 bytes.')"
 
 def test_posix_download_file_with_arg_wrong_url(client):
     r = client.get('/api/v1.0/get/testposixpath', query_string={'fits_file_path': 'https://fits.gsfc.nasa.gov/samples/aaaaaa.fits'})

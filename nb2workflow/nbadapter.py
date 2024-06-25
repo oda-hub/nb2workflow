@@ -276,7 +276,7 @@ class NotebookAdapter:
     limit_output_attachment_file = None
 
 
-    def __init__(self, notebook_fn, tempdir_cache=None, n_download_max_tries=10, download_retry_sleep_s=.5, max_download_size=1e6):
+    def __init__(self, notebook_fn, tempdir_cache=None, n_download_max_tries=10, download_retry_sleep_s=.5, max_download_size=500e6):
         self.notebook_fn = os.path.abspath(notebook_fn)
         self.name = notebook_short_name(notebook_fn)
         self.tempdir_cache = tempdir_cache
@@ -636,39 +636,39 @@ class NotebookAdapter:
 
         if len(r['exceptions']) > 0:
             exceptions.extend(r['exceptions'])
+        else:
+            ntries = 10
+            while ntries > 0:
+                try:
+                    thread_id = threading.get_ident()
+                    process_id = os.getpid()
+                    logger.info(f'pm.execute_notebook thread id: {thread_id} ; process id: {process_id}')
 
-        ntries = 10
-        while ntries > 0:
-            try:
-                thread_id = threading.get_ident()
-                process_id = os.getpid()
-                logger.info(f'pm.execute_notebook thread id: {thread_id} ; process id: {process_id}')
+                    pm.execute_notebook(
+                       self.preproc_notebook_fn,
+                       self.output_notebook_fn,
+                       parameters = r['adapted_parameters'],
+                       progress_bar = False,
+                       log_output = True,
+                       cwd = tmpdir,
+                    )
+                except pm.PapermillExecutionError as e:
+                    exceptions.append([e,e.args])
+                    logger.info(e)
+                    logger.info(e.args)
 
-                pm.execute_notebook(
-                   self.preproc_notebook_fn,
-                   self.output_notebook_fn,
-                   parameters = r['adapted_parameters'],
-                   progress_bar = False,
-                   log_output = True,
-                   cwd = tmpdir, 
-                )
-            except pm.PapermillExecutionError as e:
-                exceptions.append([e,e.args])
-                logger.info(e)
-                logger.info(e.args)
-            
-                if e.ename == "WorkflowIncomplete":
-                    logger.info("detected incomplete workflow")
-                    self.update_summary(state="incomplete dependency", dependency=repr(e))
-                    raise  PapermillWorkflowIncomplete()
+                    if e.ename == "WorkflowIncomplete":
+                        logger.info("detected incomplete workflow")
+                        self.update_summary(state="incomplete dependency", dependency=repr(e))
+                        raise  PapermillWorkflowIncomplete()
 
-            except nbformat.reader.NotJSONError:
-                ntries -= 1
-                logger.info("retrying... %s", ntries)
-                time.sleep(2)
-                continue   
+                except nbformat.reader.NotJSONError:
+                    ntries -= 1
+                    logger.info("retrying... %s", ntries)
+                    time.sleep(2)
+                    continue
 
-            break
+                break
 
         if len(exceptions) == 0:
             self.update_summary(state="done")
