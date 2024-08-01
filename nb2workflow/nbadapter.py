@@ -111,6 +111,11 @@ def cast_parameter(x,par):
                 raise ValueError
         except:
             raise ValueError(f'Parameter {par["name"]} value "{x}" can not be interpreted as {par["python_type"].__name__}.')
+    if x == '\x00':
+        if par.get('is_optional', False):
+            return None
+        else:
+            raise ValueError(f'Non-optional parameter is set to None')
     return par['python_type'](x)
 
 

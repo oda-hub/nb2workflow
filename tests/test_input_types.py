@@ -132,7 +132,8 @@ def test_dict_wrong(client):
                                        ({'inten': 20}, {'inten': 20}),
                                        ({'flag': False}, {'flag': False}),
                                        ({'flag': 0}, {'flag': False}),
-                                       ({'string_param': 'contains = symbol'}, {'string_param': 'contains = symbol'})
+                                       ({'string_param': 'contains = symbol'}, {'string_param': 'contains = symbol'}),
+                                       ({'otheropt': '\x00'}, {'otheropt': None})
                                       ])
 def test_type_casting(client, inp, outp):
     r = client.get('/api/v1.0/options')
@@ -144,12 +145,14 @@ def test_type_casting(client, inp, outp):
     for k, v in outp.items():
         assert isinstance(r.json['output']['echo'][k], type(v))
 
-def test_casting_invalid(client):
-    r = client.get('/api/v1.0/get/multiline', query_string={'inten': 20.1})
+@pytest.mark.parametrize('query', [{'inten': 20.1}, {'intfloat': '\x00'}])
+def test_casting_invalid(client, query):
+    r = client.get('/api/v1.0/get/multiline', query_string=query)
     assert len(r.json['issues']) > 0
 
     # async
-    r=client.get('/api/v1.0/get/multiline', query_string={'inten': 20.1, 
-                                                          '_async_request': 'yes'})
+    query.update({'_async_request': 'yes'})
+    r=client.get('/api/v1.0/get/multiline', 
+                 query_string=query)
     assert len(r.json['data']['exceptions']) > 0
 

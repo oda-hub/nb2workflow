@@ -74,9 +74,12 @@ cache = Cache(config={'CACHE_TYPE': 'simple'})
 def create_app():
     app = Flask(__name__)
 
+    app.config['SWAGGER'] = {
+        'uiversion': 3,
+        "openapi": "3.0.3",
+    }
     template = {
         "swaggerUiPrefix": LazyString(lambda: request.environ.get('HTTP_X_FORWARDED_PREFIX', '')),
-        "swagger": "2.0",
         "info": {
             "title": "ODAHub API",
             "description": "",
@@ -438,7 +441,12 @@ def setup_routes(app):
                 {
                     "name": p_name,
                     "in": "query",
-                    "type": to_oapi_type(p_data['python_type']),
+                    "schema": {
+                        "type": to_oapi_type(p_data['python_type']),
+                        "nullable": p_data.get('is_optional', False)
+                        # strictly speaking, there is no way to set query parameter to null
+                        # we define a convention in which '%00' string represents null
+                        },
                     "required": False,
                     "default": p_data['default_value'],
                     "description": p_data['comment']+" "+p_data['owl_type'],
