@@ -810,7 +810,8 @@ class NotebookAdapter:
         exceptions = []
         for input_par_name, input_par_obj in self.input_parameters.items():
             # TODO use oda_api.ontology_helper
-            if input_par_obj['owl_type'] == f"{oda_prefix}POSIXPath":
+            parameter_hierarchy = ontology.get_parameter_hierarchy(input_par_obj['owl_type'])
+            if f"{oda_prefix}FileReference" in parameter_hierarchy:
                 arg_par_value = parameters.get(input_par_name, None)
                 if arg_par_value is None:
                     arg_par_value = input_par_obj['default_value']
