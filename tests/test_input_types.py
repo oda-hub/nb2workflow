@@ -23,7 +23,7 @@ def test_posix_download_file(client):
     assert r.json['output']['output_file_download'] == 'file not downloaded'
 
 def test_posix_download_file_no_ontology(client):
-    r = client.get('/api/v1.0/get/testposixpath', query_string={'fits_file_path': 'https://fits.gsfc.nasa.gov/samples/testkeys.fits'})
+    r = client.get('/api/v1.0/get/testposixpath_extra_annotated', query_string={'fits_file_path': 'https://fits.gsfc.nasa.gov/samples/testkeys.fits'})
     assert r.json['output']['output_file_download'] == 'file downloaded successfully'
 
 def test_posix_download_file_with_arg(client):
