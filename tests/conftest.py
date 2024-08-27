@@ -54,6 +54,7 @@ def app(test_notebook):
     app = nb2workflow.service.app
     app.notebook_adapters = nb2workflow.nbadapter.find_notebooks(test_notebook)
     nb2workflow.service.setup_routes(app)
+    nb2workflow.nbadapter.ontology._is_ontology_available = True
     print("creating app")
     return app
 
@@ -66,6 +67,7 @@ def app_low_download_limit():
     for nb, nba_obj in app_low_download_limit.notebook_adapters.items():
         nba_obj.max_download_size = 1
     nb2workflow.service.setup_routes(app_low_download_limit)
+    nb2workflow.nbadapter.ontology._is_ontology_available = True
     print("creating app with low limit on the download of files")
     return app_low_download_limit
 
