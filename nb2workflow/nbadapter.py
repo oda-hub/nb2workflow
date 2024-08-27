@@ -74,6 +74,10 @@ class ModOntology(Ontology):
             logger.warning(f'Unknown datatype for owl_uri {param_uri}')
         return dt
 
+    @property
+    def is_ontology_available(self):
+        return True
+
 ontology = ModOntology(oda_ontology_path)
 oda_prefix = str([x[1] for x in ontology.g.namespaces() if x[0] == 'oda'][0])
 
@@ -813,11 +817,8 @@ class NotebookAdapter:
     def handle_url_params(self, parameters, tmpdir, context={}):
         adapted_parameters = copy.deepcopy(parameters)
         exceptions = []
-        ontology_available = False
-        if len(ontology.g) > 0:
-            ontology_available = True
         for input_par_name, input_par_obj in self.input_parameters.items():
-            if ontology_available:
+            if ontology.is_ontology_available:
                 parameter_hierarchy = ontology.get_parameter_hierarchy(input_par_obj['owl_type'])
                 is_posix_path = f"{oda_prefix}POSIXPath" in parameter_hierarchy
             else:
