@@ -178,7 +178,7 @@ class NBRepo:
                         has_conda_env = True
                         match_spec = re.compile(r'^python[~=<> ]')
                         for dep in parsed_env['dependencies']:
-                            if match_spec.match(dep):
+                            if isinstance(dep, str) and match_spec.match(dep):
                                 inject_python_version_str = f'echo "Using {dep}"'
                                 break
 
