@@ -73,9 +73,7 @@ def app_low_download_limit():
 # TODO improve this, as it requires changes also in the oda_api
 @pytest.fixture
 def app_not_available_ontology():
-    nb2workflow.nbadapter.ontology.g = rdf.Graph()
-    nb2workflow.nbadapter.ontology.g.bind('oda', ODA)
-    nb2workflow.nbadapter.ontology.g.bind('odas', ODAS)
+    nb2workflow.nbadapter.ontology._is_ontology_available = False
     yield
 
 
