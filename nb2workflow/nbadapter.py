@@ -65,6 +65,7 @@ class ModOntology(Ontology):
     def __init__(self, ontology_path):
         super().__init__(ontology_path)
         self.lock = Lock()
+        self._is_ontology_available = True
 
     def get_datatype_restriction(self, param_uri):
         self.lock.acquire()
@@ -76,7 +77,8 @@ class ModOntology(Ontology):
 
     @property
     def is_ontology_available(self):
-        return True
+        # TODO will be developed properly in the ontology_helper
+        return self._is_ontology_available
 
 ontology = ModOntology(oda_ontology_path)
 oda_prefix = str([x[1] for x in ontology.g.namespaces() if x[0] == 'oda'][0])
