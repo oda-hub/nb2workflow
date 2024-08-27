@@ -821,7 +821,7 @@ class NotebookAdapter:
                 parameter_hierarchy = ontology.get_parameter_hierarchy(input_par_obj['owl_type'])
                 is_posix_path = f"{oda_prefix}POSIXPath" in parameter_hierarchy
             else:
-                is_posix_path = f"{oda_prefix}POSIXPath" in input_par_obj['owl_type']
+                is_posix_path = f"{oda_prefix}POSIXPath" == input_par_obj['owl_type']
             if is_posix_path:
                 arg_par_value = parameters.get(input_par_name, None)
                 if arg_par_value is None:
