@@ -267,7 +267,10 @@ class NBRepo:
                           build_timestamp: bool = False,
                           namespace: str = "oda-staging",
                           cleanup: bool = True,
-                          nb2wversion=version(print_it=False)) -> dict:
+                          nb2wversion=version(print_it=False),
+                          kaniko_pod_antiaffinity=True,
+                          dispatcher_app_label='oda-dispatcher',
+                          frontend_app_label='frontend') -> dict:
        
         #secret should be created beforehand https://github.com/GoogleContainerTools/kaniko#pushing-to-docker-hub
         
@@ -291,7 +294,10 @@ class NBRepo:
                 suffix = suffix,
                 namespace = namespace,
                 no_push = no_push,
-                image = image
+                image = image,
+                kaniko_pod_antiaffinity = kaniko_pod_antiaffinity,
+                dispatcher_app_label = dispatcher_app_label,
+                frontend_app_label = frontend_app_label
             ))
 
         tmpl = jenv.get_template('dockerfile_cm.yaml.jinja')

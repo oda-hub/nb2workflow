@@ -8,6 +8,19 @@ spec:
   ttlSecondsAfterFinished: 86400                
   template:
     spec:
+      {% if kaniko_pod_antiaffinity %}
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                - {{ dispatcher_app_label }}
+                - {{ frontend_app_label }}
+            topologyKey: "kubernetes.io/hostname"
+      {% endif %}
       containers:
       - name: kaniko-build
         image: gcr.io/kaniko-project/executor:v1.22.0
