@@ -15,16 +15,28 @@ def app():
     app = nb2workflow.service.app
     app.notebook_adapters = nb2workflow.nbadapter.find_notebooks(testfiles_path)
     nb2workflow.service.setup_routes(app)
+    nb2workflow.nbadapter.ontology._is_ontology_available = True
     print("creating app")
     return app
-
 
 def test_posix_download_file(client):
     r = client.get('/api/v1.0/get/testposixpath')
     assert r.json['output']['output_file_download'] == 'file not downloaded'
 
+def test_posix_download_file_no_ontology(client, app_not_available_ontology):
+    r = client.get('/api/v1.0/get/testposixpath', query_string={'fits_file_path': 'https://fits.gsfc.nasa.gov/samples/testkeys.fits'})
+    assert r.json['output']['output_file_download'] == 'file downloaded successfully'
+
+def test_posix_download_file_no_ontology_extra_annotations(client, app_not_available_ontology):
+    r = client.get('/api/v1.0/get/testposixpath_extra_annotated', query_string={'fits_file_path': 'https://fits.gsfc.nasa.gov/samples/testkeys.fits'})
+    assert r.json['output']['output_file_download'] == 'file downloaded successfully'
+
 def test_posix_download_file_with_arg(client):
     r = client.get('/api/v1.0/get/testposixpath', query_string={'fits_file_path': 'https://fits.gsfc.nasa.gov/samples/testkeys.fits'})
+    assert r.json['output']['output_file_download'] == 'file downloaded successfully'
+
+def test_posix_download_file_extra_annotations(client):
+    r = client.get('/api/v1.0/get/testposixpath_extra_annotated', query_string={'fits_file_path': 'https://fits.gsfc.nasa.gov/samples/testkeys.fits'})
     assert r.json['output']['output_file_download'] == 'file downloaded successfully'
 
 def test_posix_download_file_with_arg_low_download_limit(client, app_low_download_limit):

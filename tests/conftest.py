@@ -10,6 +10,9 @@ import requests
 
 import nb2workflow.service
 from importlib import reload
+import rdflib as rdf
+
+from oda_api.ontology_helper import ODA, ODAS
 
 @pytest.fixture
 def test_notebook():
@@ -51,6 +54,7 @@ def app(test_notebook):
     app = nb2workflow.service.app
     app.notebook_adapters = nb2workflow.nbadapter.find_notebooks(test_notebook)
     nb2workflow.service.setup_routes(app)
+    nb2workflow.nbadapter.ontology._is_ontology_available = True
     print("creating app")
     return app
 
@@ -63,8 +67,17 @@ def app_low_download_limit():
     for nb, nba_obj in app_low_download_limit.notebook_adapters.items():
         nba_obj.max_download_size = 1
     nb2workflow.service.setup_routes(app_low_download_limit)
+    nb2workflow.nbadapter.ontology._is_ontology_available = True
     print("creating app with low limit on the download of files")
     return app_low_download_limit
+
+
+# TODO improve this, as it requires changes also in the oda_api
+@pytest.fixture
+def app_not_available_ontology():
+    nb2workflow.nbadapter.ontology._is_ontology_available = False
+    yield
+
 
 
 def kill_child_processes(parent_pid, sig=signal.SIGTERM):

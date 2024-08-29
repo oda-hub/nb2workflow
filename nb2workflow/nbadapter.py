@@ -65,6 +65,7 @@ class ModOntology(Ontology):
     def __init__(self, ontology_path):
         super().__init__(ontology_path)
         self.lock = Lock()
+        self._is_ontology_available = True
 
     def get_datatype_restriction(self, param_uri):
         self.lock.acquire()
@@ -73,6 +74,11 @@ class ModOntology(Ontology):
         if dt is None:
             logger.warning(f'Unknown datatype for owl_uri {param_uri}')
         return dt
+
+    @property
+    def is_ontology_available(self):
+        # TODO will be developed properly in the ontology_helper
+        return self._is_ontology_available
 
 ontology = ModOntology(oda_ontology_path)
 oda_prefix = str([x[1] for x in ontology.g.namespaces() if x[0] == 'oda'][0])
@@ -813,9 +819,15 @@ class NotebookAdapter:
     def handle_url_params(self, parameters, tmpdir, context={}):
         adapted_parameters = copy.deepcopy(parameters)
         exceptions = []
+        posix_path_with_annotations_pattern = re.compile(rf"^{re.escape(oda_prefix)}.*_POSIXPath_")
         for input_par_name, input_par_obj in self.input_parameters.items():
-            # TODO use oda_api.ontology_helper
-            if input_par_obj['owl_type'] == f"{oda_prefix}POSIXPath":
+            if ontology.is_ontology_available:
+                parameter_hierarchy = ontology.get_parameter_hierarchy(input_par_obj['owl_type'])
+                is_posix_path = f"{oda_prefix}POSIXPath" in parameter_hierarchy
+            else:
+                is_posix_path = f"{oda_prefix}POSIXPath" == input_par_obj['owl_type'] or \
+                                posix_path_with_annotations_pattern.match(input_par_obj['owl_type']) is not None
+            if is_posix_path:
                 arg_par_value = parameters.get(input_par_name, None)
                 if arg_par_value is None:
                     arg_par_value = input_par_obj['default_value']
