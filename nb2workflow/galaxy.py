@@ -6,6 +6,7 @@ import shutil
 from textwrap import dedent
 import argparse
 import logging
+import requests
 
 import yaml
 import json
@@ -16,7 +17,6 @@ from nb2workflow.nbadapter import NotebookAdapter, find_notebooks
 import nbformat
 from nbconvert.exporters import ScriptExporter
 
-from ensureconda.api import ensureconda
 import subprocess as sp
 
 import bibtexparser as bib
@@ -476,13 +476,25 @@ class Requirements:
         return reqs_str_list
 
     @staticmethod
-    def _get_micromamba_binary(): 
-        mamba_bin = ensureconda(no_install=False, 
-                                micromamba=True, 
-                                mamba=False, 
-                                conda=False, 
-                                conda_exe=False)
-        return mamba_bin
+    def _get_micromamba_binary():
+        micromamba_dir = os.path.join(
+            os.environ.get('HOME', os.getcwd()),
+            '.local',
+            'bin'
+            )
+        os.makedirs(micromamba_dir, exist_ok=True)
+        mambapath = os.path.join(micromamba_dir, 'micromamba')
+
+        if not os.path.isfile(mambapath):
+            release_url="https://github.com/mamba-org/micromamba-releases/releases/download/1.5.10-0/micromamba-linux-64"
+            res = requests.get(release_url, allow_redirects=True)
+            with open(mambapath, 'wb') as fd:
+                fd.write(res.content)
+
+        if not os.access(mambapath, os.X_OK):
+            os.chmod(mambapath, 0o744)
+
+        return mambapath
 
 def _split_bibfile(filepath):
     # parse bibfile and return only entries (no preamble/comments/strings) as list of strings

@@ -69,7 +69,6 @@ setup(name='nb2workflow',
             'Jinja2'
         ],
         'galaxy':[
-            'ensureconda',
             'bibtexparser >= 2.0.0b3',
             'pypandoc_binary',
             'black',
