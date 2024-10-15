@@ -172,5 +172,7 @@ def test_service_async_repo(client):
 
     test_worker_thread.join()
 
+    logger.info("output has keys: %s", list(r.json['data']['output']))
+        
     open("output.png","wb").write(base64.b64decode(r.json['data']['output']['spectrum_png_content']))
     
