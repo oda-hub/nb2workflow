@@ -26,6 +26,7 @@ import datetime
 import tempfile
 import nbformat
 import yaml
+import traceback
 
 from io import BytesIO
 from bs4 import BeautifulSoup
@@ -153,7 +154,7 @@ class AsyncWorkflow:
         try:
             self._run()
         except Exception as e:
-            logger.error("run failed unexplicably: %s", repr(e))
+            logger.error("run failed inexplicably: %s\n%s", repr(e), traceback.format_exc())
             app.async_workflows[self.key] = dict(
                 output={}, 
                 exceptions=[serialize_workflow_exception(e)]
