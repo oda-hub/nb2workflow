@@ -269,7 +269,7 @@ class NBRepo:
                           cleanup: bool = True,
                           nb2wversion=version(print_it=False),
                           kaniko_pod_antiaffinity=True,
-                          dispatcher_app_label='oda-dispatcher',
+                          dispatcher_app_label='dispatcher',
                           frontend_app_label='frontend') -> dict:
        
         #secret should be created beforehand https://github.com/GoogleContainerTools/kaniko#pushing-to-docker-hub
