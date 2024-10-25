@@ -1093,10 +1093,11 @@ def validate_oda_dispatcher(nba: NotebookAdapter, optional=True, machine_readabl
             logger.error("dispatcher validation is not optional!")
             raise
     else:
-        nbpq = NB2WProductQuery('testname', 
-                        'testproduct', 
-                        nba.extract_parameters(),
-                        nba.extract_output_declarations())
+        nbpq = NB2WProductQuery('testname',
+                                'testproduct',
+                                nba.extract_parameters(),
+                                nba.extract_output_declarations(),
+                                oda_ontology_path)
 
         output = nba.extract_output()
 
