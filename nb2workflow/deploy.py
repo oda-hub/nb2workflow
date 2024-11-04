@@ -320,9 +320,9 @@ class NBRepo:
                 time.sleep(10)
                 job_status = check_job_status(f"kaniko-build-{suffix}", namespace)
                 if job_status is not None:
-                    if job_status[0].type == 'Complete':
+                    if 'Complete' in [x.type for x in job_status]:
                         break
-                    if job_status[0].type == 'Failed':
+                    if 'Failed' in [x.type for x in job_status]:
                         try:
                             buildlog = sp.check_output([
                                 'kubectl',
