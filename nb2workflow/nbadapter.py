@@ -1095,8 +1095,8 @@ def validate_oda_dispatcher(nba: NotebookAdapter, optional=True, machine_readabl
     else:
         nbpq = NB2WProductQuery('testname',
                                 'testproduct',
-                                nba.extract_parameters(),
-                                nba.extract_output_declarations(),
+                                json.loads(json.dumps(nba.extract_parameters(), cls=CustomJSONEncoder)),
+                                json.loads(json.dumps(nba.extract_output_declarations(), cls=CustomJSONEncoder)),
                                 oda_ontology_path)
 
         output = nba.extract_output()
