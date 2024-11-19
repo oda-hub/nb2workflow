@@ -820,14 +820,22 @@ class NotebookAdapter:
         adapted_parameters = copy.deepcopy(parameters)
         exceptions = []
         posix_path_with_annotations_pattern = re.compile(rf"^{re.escape(oda_prefix)}.*_POSIXPath_")
+        file_reference_with_annotations_pattern = re.compile(rf"^{re.escape(oda_prefix)}.*_FileReference_")
+        file_url_with_annotations_pattern = re.compile(rf"^{re.escape(oda_prefix)}.*_FileURL_")
         for input_par_name, input_par_obj in self.input_parameters.items():
             if ontology.is_ontology_available:
                 parameter_hierarchy = ontology.get_parameter_hierarchy(input_par_obj['owl_type'])
                 is_posix_path = f"{oda_prefix}POSIXPath" in parameter_hierarchy
+                is_file_reference = f"{oda_prefix}FileReference" in parameter_hierarchy
+                is_file_url = f"{oda_prefix}FileURL" in parameter_hierarchy
             else:
                 is_posix_path = f"{oda_prefix}POSIXPath" == input_par_obj['owl_type'] or \
                                 posix_path_with_annotations_pattern.match(input_par_obj['owl_type']) is not None
-            if is_posix_path:
+                is_file_reference = f"{oda_prefix}FileReference" == input_par_obj['owl_type'] or \
+                                      file_reference_with_annotations_pattern.match(input_par_obj['owl_type']) is not None
+                is_file_url = f"{oda_prefix}FileURL" == input_par_obj['owl_type'] or \
+                                file_url_with_annotations_pattern.match(input_par_obj['owl_type']) is not None
+            if is_posix_path or is_file_reference or is_file_url:
                 arg_par_value = parameters.get(input_par_name, None)
                 if arg_par_value is None:
                     arg_par_value = input_par_obj['default_value']
@@ -849,8 +857,9 @@ class NotebookAdapter:
 
                     logger.debug(f'download {arg_par_value}')
                     try:
-                        file_name = self.download_file(arg_par_value, tmpdir)
-                        adapted_parameters[input_par_name] = file_name
+                        if is_posix_path:
+                            file_name = self.download_file(arg_par_value, tmpdir)
+                            adapted_parameters[input_par_name] = file_name
                     except Exception as e:
                         exceptions.append(e)
 
