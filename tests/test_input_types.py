@@ -7,7 +7,8 @@ import time
 
 logger = logging.getLogger(__name__)
 
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse, parse_qs
+
 
 @pytest.fixture
 def app():
@@ -38,6 +39,53 @@ def test_posix_download_file_with_arg(client):
 def test_posix_download_file_extra_annotations(client):
     r = client.get('/api/v1.0/get/testposixpath_extra_annotated', query_string={'fits_file_path': 'https://fits.gsfc.nasa.gov/samples/testkeys.fits'})
     assert r.json['output']['output_file_download'] == 'file downloaded successfully'
+
+def test_mmoda_file_url(client):
+    status_callback_file = "status.json"
+    callback_url = 'file://' + status_callback_file
+    token = 'abc123'
+    query_string = dict(
+        _async_request='no',
+        _async_request_callback=callback_url,
+        _token=token)
+    r = client.get('/api/v1.0/get/testfileurl_extra_annotated', query_string=query_string)
+    assert r.status_code == 201
+
+    from nb2workflow.service import AsyncWorker
+
+    def test_worker_run():
+        AsyncWorker('test-worker').run_one()
+
+    test_worker_thread = threading.Thread(target=test_worker_run)
+    test_worker_thread.start()
+
+    while True:
+        options = client.get('/api/v1.0/options')
+        assert options.status_code == 200
+
+        r = client.get("/api/v1.0/get/testfileurl_extra_annotated",
+                       query_string=query_string)
+
+        logger.info('service returns %s %s', r, r.json)
+
+        if r.json['workflow_status'] == 'done':
+            logger.info('workflow done!')
+            break
+
+        time.sleep(0.1)
+
+    test_worker_thread.join()
+    assert 'data' in r.json
+    assert 'output' in r.json['data']
+    assert 'mmoda_url_modified' in r.json['data']['output']
+    url_parts = urlparse(r.json['data']['output']['mmoda_url_modified'])
+    url_args = parse_qs(url_parts.query)
+    assert 'token' in url_args
+
+    assert 'fits_file_url_modified' in r.json['data']['output']
+    url_parts = urlparse(r.json['data']['output']['fits_file_url_modified'])
+    url_args = parse_qs(url_parts.query)
+    assert 'token' not in url_args
 
 def test_posix_download_file_with_arg_low_download_limit(client, app_low_download_limit):
     r = client.get('/api/v1.0/get/testposixpath', query_string={'fits_file_path': 'https://fits.gsfc.nasa.gov/samples/testkeys.fits'})
