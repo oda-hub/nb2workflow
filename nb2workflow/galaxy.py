@@ -27,6 +27,7 @@ import tempfile
 import black
 import autoflake
 import isort
+import validators
 
 logger = logging.getLogger()
 
@@ -37,7 +38,7 @@ global_req = []
 
 _success_text = '*** Job finished successfully ***'
 _ontology_base = 'http://odahub.io/ontology#'
-_dataset_term = _ontology_base + 'POSIXPath'
+_dataset_term = _ontology_base + 'FileReference'
 
 class GalaxyParameter:
     def __init__(self, 
@@ -55,7 +56,10 @@ class GalaxyParameter:
         partype_lookup = {str: 'text', 
                     bool: 'boolean',
                     float: 'float',
-                    int: 'integer'} 
+                    int: 'integer',
+                    dict: 'data',
+                    list: 'data'} 
+        
         partype = partype_lookup[python_type]
         
         if allowed_values is not None:
@@ -68,6 +72,12 @@ class GalaxyParameter:
             self.data_format = 'data'
             default_value = None
         
+        if python_type in [dict, list]:
+            self.data_format = 'expression.json'
+            self.test_data_path = default_value
+            default_value = None
+
+
         self.name = name
         self.partype = partype
         self.description=description
@@ -352,7 +362,7 @@ class Requirements:
                 if self.env_dict.get('channels'):
                     extra_channels = set(self.env_dict['channels']) - set(available_channels)
                     if extra_channels:
-                        raise ValueError('Conda channels %s are not supported by galaxy instance', extra_channels)
+                        raise ValueError(f'Conda channels {extra_channels} are not supported by galaxy instance')
                 else:
                     logger.warning('Conda channels are not defined in evironment file.')
                 self.env_dict['channels'] = available_channels
@@ -550,20 +560,42 @@ def _read_help_file(filepath):
         NotImplementedError('Unknown help file extension.')
     return help_text
 
-def _test_data_location(repo_dir, tool_dir, default_value, base_url=None):
-    # assume default_value is always a relative path (the case in MMODA)
+def _test_data_location(repo_dir, tool_dir, default_value, base_url=None, name=None):
+    # assumes default_value is always a relative path (the case in MMODA)
+    
     location = None
     value = None
-    if base_url is None:
-        testdata = os.path.join(tool_dir, 'test-data')
-        os.makedirs(testdata, exist_ok=True)
-        filename = os.path.basename(default_value)
-        abspath = os.path.join(repo_dir, default_value)
-        shutil.copy(abspath, os.path.join(testdata, filename))
-        value = filename
+
+    testdata = os.path.join(tool_dir, 'test-data')
+    
+    # for FileReference (or FileURL) if default is URL
+    if validators.url(default_value):
+        location = default_value
+
     else:
-        # TODO: support the case of nb not in repo root
-        location = os.path.join(base_url, default_value)
+        # check it's actually a file in repo
+        
+        try:
+            abspath = os.path.join(repo_dir, default_value)
+        except TypeError:
+            abspath = None
+
+        if abspath is not None and os.path.isfile(abspath):
+            if base_url is None:
+                filename = os.path.basename(default_value)
+                os.makedirs(testdata, exist_ok=True)
+                shutil.copy(abspath, os.path.join(testdata, filename))
+                value = filename
+            else:
+                # TODO: support the case of nb not in repo root
+                location = os.path.join(base_url, default_value)
+        else:
+            # it's a json value
+            os.makedirs(testdata, exist_ok=True)
+            filename = f'{name}.json'
+            with open(os.path.join(testdata, filename), 'w') as fd:
+                json.dump(default_value, fd)
+
     return value, location
 
 def to_galaxy(input_path, 
@@ -653,7 +685,8 @@ def to_galaxy(input_path,
                 value, location = _test_data_location(repo_dir, 
                                                       out_dir, 
                                                       galaxy_par.test_data_path,
-                                                      test_data_baseurl)
+                                                      test_data_baseurl,
+                                                      name=galaxy_par.name)
                 if value:
                     test_par_root.append(ET.Element('param', name=galaxy_par.name, value=value))
                 else:
