@@ -40,7 +40,8 @@ def test_posix_download_file_extra_annotations(client):
     r = client.get('/api/v1.0/get/testposixpath_extra_annotated', query_string={'fits_file_path': 'https://fits.gsfc.nasa.gov/samples/testkeys.fits'})
     assert r.json['output']['output_file_download'] == 'file downloaded successfully'
 
-def test_mmoda_file_url(client):
+@pytest.mark.parametrize("workflow", ["testfileurl_extra_annotated", "testfilereference_extra_annotated"])
+def test_mmoda_file_url(client, workflow):
     status_callback_file = "status.json"
     callback_url = 'file://' + status_callback_file
     token = 'abc123'
@@ -48,7 +49,7 @@ def test_mmoda_file_url(client):
         _async_request='no',
         _async_request_callback=callback_url,
         _token=token)
-    r = client.get('/api/v1.0/get/testfileurl_extra_annotated', query_string=query_string)
+    r = client.get(f'/api/v1.0/get/{workflow}', query_string=query_string)
     assert r.status_code == 201
 
     from nb2workflow.service import AsyncWorker
@@ -63,7 +64,7 @@ def test_mmoda_file_url(client):
         options = client.get('/api/v1.0/options')
         assert options.status_code == 200
 
-        r = client.get("/api/v1.0/get/testfileurl_extra_annotated",
+        r = client.get(f'/api/v1.0/get/{workflow}',
                        query_string=query_string)
 
         logger.info('service returns %s %s', r, r.json)
