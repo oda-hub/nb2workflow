@@ -582,18 +582,17 @@ def _test_data_location(repo_dir, tool_dir, default_value, base_url=None, name=N
 
         if abspath is not None and os.path.isfile(abspath):
             if base_url is None:
-                filename = os.path.basename(default_value)
+                value = os.path.basename(default_value)
                 os.makedirs(testdata, exist_ok=True)
-                shutil.copy(abspath, os.path.join(testdata, filename))
-                value = filename
+                shutil.copy(abspath, os.path.join(testdata, value))
             else:
                 # TODO: support the case of nb not in repo root
                 location = os.path.join(base_url, default_value)
         else:
             # it's a json value
             os.makedirs(testdata, exist_ok=True)
-            filename = f'{name}.json'
-            with open(os.path.join(testdata, filename), 'w') as fd:
+            value = f'{name}.json'
+            with open(os.path.join(testdata, value), 'w') as fd:
                 json.dump(default_value, fd)
 
     return value, location
