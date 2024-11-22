@@ -178,7 +178,7 @@ class GalaxyOutput:
         if outp_details['extra_ttl'] is not None:
             onto.parse_extra_triples(outp_details['extra_ttl'])
         
-        if onto.is_data_product(owl_uri, include_parameter_products=False):
+        if owl_uri is not None and onto.is_data_product(owl_uri, include_parameter_products=False):
             is_oda = True
         else:
             is_oda = False
