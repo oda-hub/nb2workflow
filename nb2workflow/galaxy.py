@@ -44,7 +44,7 @@ class GalaxyParameter:
     def __init__(self, 
                  name, 
                  python_type,
-                 ontology_parameter_hierarchy,
+                 ontology_parameter_hierarchy=[],
                  description=None,
                  default_value=None, 
                  min_value=None, 
@@ -89,19 +89,28 @@ class GalaxyParameter:
                 
     
     @classmethod
-    def from_inspect(cls, par_details, ontology_path):
-        onto = Ontology(ontology_path)
+    def from_inspect(cls, par_details, ontology_path=None):
+        label = None
+        par_format = None
+        par_unit = None
+        par_hierarchy = []
+        min_value = None
+        max_value = None
+        allowed_values = None
 
-        owl_uri = par_details['owl_type']
-        
-        if par_details.get('extra_ttl') is not None:
-            onto.parse_extra_triples(par_details['extra_ttl'])
-        par_hierarchy = onto.get_parameter_hierarchy(owl_uri)
-        par_format = onto.get_parameter_format(owl_uri)
-        par_unit = onto.get_parameter_unit(owl_uri)
-        min_value, max_value = onto.get_limits(owl_uri)
-        allowed_values = onto.get_allowed_values(owl_uri)
-        label = onto.get_oda_label(owl_uri)
+        if ontology_path is not None:
+            onto = Ontology(ontology_path)
+
+            owl_uri = par_details['owl_type']
+            
+            if par_details.get('extra_ttl') is not None:
+                onto.parse_extra_triples(par_details['extra_ttl'])
+            par_hierarchy = onto.get_parameter_hierarchy(owl_uri)
+            par_format = onto.get_parameter_format(owl_uri)
+            par_unit = onto.get_parameter_unit(owl_uri)
+            min_value, max_value = onto.get_limits(owl_uri)
+            allowed_values = onto.get_allowed_values(owl_uri)
+            label = onto.get_oda_label(owl_uri)
         
         description = label if label is not None else par_details['name']
         if par_format is not None:
@@ -171,17 +180,18 @@ class GalaxyOutput:
         self.outfile_name = f"{name}_galaxy.output"
     
     @classmethod
-    def from_inspect(cls, outp_details, ontology_path, dprod=None):
-        onto = Ontology(ontology_path)
+    def from_inspect(cls, outp_details, ontology_path=None, dprod=None):
+        owl_uri = outp_details['owl_type']        
+        is_oda = False 
 
-        owl_uri = outp_details['owl_type']
-        if outp_details['extra_ttl'] is not None:
-            onto.parse_extra_triples(outp_details['extra_ttl'])
+        if ontology_path is not None:
+            onto = Ontology(ontology_path)
+
+            if outp_details['extra_ttl'] is not None:
+                onto.parse_extra_triples(outp_details['extra_ttl'])
         
-        if owl_uri is not None and onto.is_data_product(owl_uri, include_parameter_products=False):
-            is_oda = True
-        else:
-            is_oda = False
+            if owl_uri is not None and onto.is_data_product(owl_uri, include_parameter_products=False):
+                is_oda = True
         
         return cls(outp_details['name'], is_oda, dprod)
 
