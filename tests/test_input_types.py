@@ -50,10 +50,13 @@ def test_file_reference(client, query_string_fits_file_path):
         _async_request_callback=callback_url,
         _token=token)
 
-    if query_string_fits_file_path == "mmoda_url":
-        query_string['fits_file_path'] = "https://www.astro.unige.ch/mmoda/dispatch-data/test.fits"
-    elif query_string_fits_file_path == "generic_url":
-        query_string['fits_file_path'] = "https://fits.gsfc.nasa.gov/samples/testkeys.fits"
+    fits_file_path_value = None
+    if query_string_fits_file_path == "generic_url":
+        fits_file_path_value = "https://fits.gsfc.nasa.gov/samples/testkeys.fits"
+    elif query_string_fits_file_path == "mmoda_url":
+        fits_file_path_value = "https://www.astro.unige.ch/mmoda/dispatch-data/test.fits"
+
+    query_string['fits_file_path'] = fits_file_path_value
 
     r = client.get(f'/api/v1.0/get/testfilereference_extra_annotated', query_string=query_string)
     assert r.status_code == 201
@@ -97,7 +100,7 @@ def test_file_reference(client, query_string_fits_file_path):
         url_args = parse_qs(url_parts.query)
         assert 'token' not in url_args
 
-@pytest.mark.parametrize("query_string_fits_file_url", ["generic_url", "file_path", None])
+@pytest.mark.parametrize("query_string_fits_file_url", ["generic_url", "file_path", "numeric", None])
 def test_mmoda_file_url(client, query_string_fits_file_url):
     status_callback_file = "status.json"
     callback_url = 'file://' + status_callback_file
@@ -107,10 +110,15 @@ def test_mmoda_file_url(client, query_string_fits_file_url):
         _async_request_callback=callback_url,
         _token=token)
 
+    fits_file_url_value = None
     if query_string_fits_file_url == "generic_url":
-        query_string['fits_file_url'] = "https://fits.gsfc.nasa.gov/samples/testkeys.fits"
+        fits_file_url_value = "https://fits.gsfc.nasa.gov/samples/testkeys.fits"
     elif query_string_fits_file_url == "file_path":
-        query_string['fits_file_url'] = "/home/local/test.fits"
+        fits_file_url_value = "/home/local/test.fits"
+    elif query_string_fits_file_url == "numeric":
+        fits_file_url_value = 123456
+
+    query_string['fits_file_url'] = fits_file_url_value
 
     r = client.get(f'/api/v1.0/get/testfileurl_extra_annotated', query_string=query_string)
 
@@ -142,7 +150,7 @@ def test_mmoda_file_url(client, query_string_fits_file_url):
     test_worker_thread.join()
     assert 'data' in r.json
     assert 'output' in r.json['data']
-    if query_string_fits_file_url != "file_path":
+    if query_string_fits_file_url != "file_path" and query_string_fits_file_url != "numeric":
         assert 'mmoda_url_modified' in r.json['data']['output']
         url_parts = urlparse(r.json['data']['output']['mmoda_url_modified'])
         url_args = parse_qs(url_parts.query)
@@ -155,7 +163,7 @@ def test_mmoda_file_url(client, query_string_fits_file_url):
 
     else:
         assert r.json['data']['output'] == 'incomplete'
-        assert r.json['data']['exceptions'][0]['edump'] == "ValueError('Parameter fits_file_url value \"/home/local/test.fits\" can not be interpreted as FileURL.')"
+        assert r.json['data']['exceptions'][0]['edump'] == f"ValueError('Parameter fits_file_url value \"{fits_file_url_value}\" can not be interpreted as FileURL.')"
 
 def test_posix_download_file_with_arg_low_download_limit(client, app_low_download_limit):
     r = client.get('/api/v1.0/get/testposixpath', query_string={'fits_file_path': 'https://fits.gsfc.nasa.gov/samples/testkeys.fits'})
