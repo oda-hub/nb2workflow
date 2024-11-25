@@ -122,21 +122,6 @@ def cast_parameter(x,par):
             return None
         else:
             raise ValueError(f'Non-optional parameter is set to None')
-    # file_url_with_annotations_pattern = re.compile(rf"^{re.escape(oda_prefix)}.*_FileURL_")
-    # if ontology.is_ontology_available:
-    #     parameter_hierarchy = ontology.get_parameter_hierarchy(par['owl_type'])
-    #     is_file_url = f"{oda_prefix}FileURL" in parameter_hierarchy
-    # else:
-    #     is_file_url = f"{oda_prefix}FileURL" == par['owl_type'] or \
-    #                   file_url_with_annotations_pattern.match(par['owl_type']) is not None
-    #
-    # if is_file_url:
-    #     # arg_par_value = parameters.get(input_par_name, None)
-    #     # if arg_par_value is None:
-    #     #     arg_par_value = par['default_value']
-    #     if not validators.url(x, simple_host=True):
-    #         raise ValueError(
-    #             f'Parameter {par["name"]} value "{x}" can not be interpreted as FileURL.')
     return par['python_type'](x)
 
 
