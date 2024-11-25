@@ -97,7 +97,8 @@ def test_file_reference(client, query_string_fits_file_path):
         url_args = parse_qs(url_parts.query)
         assert 'token' not in url_args
 
-def test_mmoda_file_url(client):
+@pytest.mark.parametrize("query_string_fits_file_url", ["generic_url", "file_path", None])
+def test_mmoda_file_url(client, query_string_fits_file_url):
     status_callback_file = "status.json"
     callback_url = 'file://' + status_callback_file
     token = 'abc123'
@@ -105,7 +106,14 @@ def test_mmoda_file_url(client):
         _async_request='no',
         _async_request_callback=callback_url,
         _token=token)
+
+    if query_string_fits_file_url == "generic_url":
+        query_string['fits_file_url'] = "https://fits.gsfc.nasa.gov/samples/testkeys.fits"
+    elif query_string_fits_file_url == "file_path":
+        query_string['fits_file_url'] = "/home/local/test.fits"
+
     r = client.get(f'/api/v1.0/get/testfileurl_extra_annotated', query_string=query_string)
+
     assert r.status_code == 201
 
     from nb2workflow.service import AsyncWorker
@@ -134,15 +142,20 @@ def test_mmoda_file_url(client):
     test_worker_thread.join()
     assert 'data' in r.json
     assert 'output' in r.json['data']
-    assert 'mmoda_url_modified' in r.json['data']['output']
-    url_parts = urlparse(r.json['data']['output']['mmoda_url_modified'])
-    url_args = parse_qs(url_parts.query)
-    assert 'token' in url_args
+    if query_string_fits_file_url != "file_path":
+        assert 'mmoda_url_modified' in r.json['data']['output']
+        url_parts = urlparse(r.json['data']['output']['mmoda_url_modified'])
+        url_args = parse_qs(url_parts.query)
+        assert 'token' in url_args
 
-    assert 'fits_file_url_modified' in r.json['data']['output']
-    url_parts = urlparse(r.json['data']['output']['fits_file_url_modified'])
-    url_args = parse_qs(url_parts.query)
-    assert 'token' not in url_args
+        assert 'fits_file_url_modified' in r.json['data']['output']
+        url_parts = urlparse(r.json['data']['output']['fits_file_url_modified'])
+        url_args = parse_qs(url_parts.query)
+        assert 'token' not in url_args
+
+    else:
+        assert r.json['data']['output'] == 'incomplete'
+        assert r.json['data']['exceptions'][0]['edump'] == "ValueError('Parameter fits_file_url value \"/home/local/test.fits\" can not be interpreted as FileURL.')"
 
 def test_posix_download_file_with_arg_low_download_limit(client, app_low_download_limit):
     r = client.get('/api/v1.0/get/testposixpath', query_string={'fits_file_path': 'https://fits.gsfc.nasa.gov/samples/testkeys.fits'})
