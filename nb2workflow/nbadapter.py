@@ -79,6 +79,27 @@ class ModOntology(Ontology):
     def is_ontology_available(self):
         # TODO will be developed properly in the ontology_helper
         return self._is_ontology_available
+    
+    def is_optional(self, uri):
+        self.lock.acquire()
+        res = super().is_optional(uri)
+        self.lock.release()
+        return res
+    
+    def parse_extra_triples(self, extra_triples, format='n3', parse_oda_annotations = True):
+        self.lock.acquire()
+        super().parse_extra_triples(
+            extra_triples,
+            format=format,
+            parse_oda_annotations=parse_oda_annotations)
+        self.lock.release()
+
+    def get_parameter_hierarchy(self, param_uri):
+        self.lock.acquire()
+        res = super().get_parameter_hierarchy(param_uri)
+        self.lock.release()
+        return res
+    
 
 ontology = ModOntology(oda_ontology_path)
 oda_prefix = str([x[1] for x in ontology.g.namespaces() if x[0] == 'oda'][0])
