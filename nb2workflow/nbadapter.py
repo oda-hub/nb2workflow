@@ -1116,8 +1116,8 @@ def validate_oda_dispatcher(nba: NotebookAdapter, optional=True, machine_readabl
     else:
         nbpq = NB2WProductQuery('testname',
                                 'testproduct',
-                                nba.extract_parameters(),
-                                nba.extract_output_declarations(),
+                                json.loads(json.dumps(nba.extract_parameters(), cls=CustomJSONEncoder)),
+                                json.loads(json.dumps(nba.extract_output_declarations(), cls=CustomJSONEncoder)),
                                 oda_ontology_path)
 
         output = nba.extract_output()
@@ -1125,6 +1125,8 @@ def validate_oda_dispatcher(nba: NotebookAdapter, optional=True, machine_readabl
         logger.debug(json.dumps(output, indent=4))
 
         class MockRes:
+            headers={'content-type': 'application/json'}
+
             @staticmethod
             def json():
                 return {
@@ -1133,17 +1135,19 @@ def validate_oda_dispatcher(nba: NotebookAdapter, optional=True, machine_readabl
                     }
                 }
 
-        logger.debug("parameters as interpreted by dispatcher: %s", json.dumps(json.loads(nbpq.get_parameters_list_as_json()), indent=4))
+        logger.debug("parameters as interpreted by dispatcher: %s", json.dumps(nbpq.get_parameters_list_jsonifiable(), indent=4))
 
-        dispatcher_parameters = json.loads(nbpq.get_parameters_list_as_json())
+        dispatcher_parameters = nbpq.get_parameters_list_jsonifiable()
 
         for parameter in dispatcher_parameters:
-            logger.info("\033[32mODA dispatcher parameter \033[0m: %s", parameter)
+            if 'query_name' not in parameter.keys() and 'product_name' not in parameter.keys():
+                logger.info("\033[32mODA dispatcher parameter \033[0m: %s", parameter)
 
         prod_list = nbpq.build_product_list(instrument=None, res=MockRes, out_dir=None)
 
         for prod in prod_list:
-            logger.info("\033[33mworkflow the output produces ODA product \033[0m: \033[31m%s\033[0m (%s) %s", prod.name, prod.type_key, prod)
+            logger.info("\033[33mworkflow the output produces ODA product \033[0m: \033[31m%s\033[0m (%s) %s", 
+                        prod.name, prod.type_key, prod)
 
         if machine_readable:
             print("WORKFLOW-DISPATCHER-SIGNATURE:", json.dumps([
