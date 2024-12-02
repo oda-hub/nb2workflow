@@ -841,14 +841,22 @@ class NotebookAdapter:
         adapted_parameters = copy.deepcopy(parameters)
         exceptions = []
         posix_path_with_annotations_pattern = re.compile(rf"^{re.escape(oda_prefix)}.*_POSIXPath_")
+        file_url_with_annotations_pattern = re.compile(rf"^{re.escape(oda_prefix)}.*_FileURL_")
+        file_reference_with_annotations_pattern = re.compile(rf"^{re.escape(oda_prefix)}.*_FileReference_")
         for input_par_name, input_par_obj in self.input_parameters.items():
             if ontology.is_ontology_available:
                 parameter_hierarchy = ontology.get_parameter_hierarchy(input_par_obj['owl_type'])
                 is_posix_path = f"{oda_prefix}POSIXPath" in parameter_hierarchy
+                is_file_url = f"{oda_prefix}FileURL" in parameter_hierarchy
+                is_file_reference = f"{oda_prefix}FileReference" in parameter_hierarchy
             else:
                 is_posix_path = f"{oda_prefix}POSIXPath" == input_par_obj['owl_type'] or \
                                 posix_path_with_annotations_pattern.match(input_par_obj['owl_type']) is not None
-            if is_posix_path:
+                is_file_url = f"{oda_prefix}FileURL" == input_par_obj['owl_type'] or \
+                                file_url_with_annotations_pattern.match(input_par_obj['owl_type']) is not None
+                is_file_reference = f"{oda_prefix}FileReference" == input_par_obj['owl_type'] or \
+                                    file_reference_with_annotations_pattern.match(input_par_obj['owl_type']) is not None
+            if is_posix_path or is_file_url or is_file_reference:
                 arg_par_value = parameters.get(input_par_name, None)
                 if arg_par_value is None:
                     arg_par_value = input_par_obj['default_value']
@@ -859,21 +867,26 @@ class NotebookAdapter:
                         token = context.get('token', None)
                         if token is not None:
                             logger.debug(f'adding token to the url: {arg_par_value}')
-                            url_parts = urlparse(adapted_parameters[input_par_name])
+                            url_to_adapt = adapted_parameters.get(input_par_name, arg_par_value)
+                            url_parts = urlparse(url_to_adapt)
                             url_args = parse_qs(url_parts.query)
-                            url_args['token'] = [token] # the values in the dictionary need to be lists
-                            new_url_parts = url_parts._replace(query=urlencode(url_args, doseq=True))
-                            adapted_parameters[input_par_name] = urlunparse(new_url_parts)
-                            logger.debug(f"updated url: {adapted_parameters[input_par_name]}")
-                            arg_par_value = adapted_parameters[input_par_name]
+                            if token not in url_args:
+                                url_args['token'] = [token] # the values in the dictionary need to be lists
+                                new_url_parts = url_parts._replace(query=urlencode(url_args, doseq=True))
+                                adapted_parameters[input_par_name] = urlunparse(new_url_parts)
+                                logger.debug(f"updated url: {adapted_parameters[input_par_name]}")
+                                arg_par_value = adapted_parameters[input_par_name]
 
                     logger.debug(f'download {arg_par_value}')
                     try:
-                        file_name = self.download_file(arg_par_value, tmpdir)
-                        adapted_parameters[input_par_name] = file_name
+                        if is_posix_path:
+                            file_name = self.download_file(arg_par_value, tmpdir)
+                            adapted_parameters[input_par_name] = file_name
                     except Exception as e:
                         exceptions.append(e)
-
+                elif is_file_url:
+                    exceptions.append(ValueError(
+                        f'Parameter {input_par_name} value "{arg_par_value}" can not be interpreted as FileURL.'))
         return dict(
             adapted_parameters=adapted_parameters,
             exceptions=exceptions
