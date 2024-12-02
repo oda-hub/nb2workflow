@@ -469,7 +469,7 @@ class NotebookAdapter:
             
         # now parse full-line comments
         for comment in comments:
-            cstring = comment.strip('# ')
+            cstring = comment.string.strip('# ')
             result['standalone'].append(cstring)        
         
         return result
