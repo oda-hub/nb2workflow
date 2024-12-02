@@ -411,7 +411,7 @@ class NotebookAdapter:
         for i, x in enumerate(comment_tokens):
             if x.start[0]==l:
                 res = comment_tokens.pop(i)
-                return res.string[1:]
+                return res.string.strip(' #')
         return ''
     
     def parse_source_multiline(self, source: str) -> dict[str, list[dict]]:
@@ -469,7 +469,7 @@ class NotebookAdapter:
             
         # now parse full-line comments
         for comment in comments:
-            cstring = comment.string[1:]
+            cstring = comment.strip('# ')
             result['standalone'].append(cstring)        
         
         return result
