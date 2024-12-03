@@ -8,12 +8,14 @@ from textwrap import dedent
 import argparse
 import logging
 import requests
+from typing import TypeAlias
 
 import yaml
 import json
 
 from oda_api.ontology_helper import Ontology
-from nb2workflow.nbadapter import NotebookAdapter, find_notebooks
+from nb2workflow.nbadapter import NotebookAdapter, find_notebooks, oda_ontology_path
+from nb2workflow.nbadapter import ontology as nba_ontology_global_var
 
 import nbformat
 from nbconvert.exporters import ScriptExporter
@@ -32,19 +34,17 @@ import validators
 logger = logging.getLogger()
 
 
-default_ontology_path = 'http://odahub.io/ontology/ontology.ttl'
-
 global_req = []
 
 _success_text = '*** Job finished successfully ***'
-_ontology_base = 'http://odahub.io/ontology#'
-_dataset_term = _ontology_base + 'FileReference'
+
+OntoPathOrObj: TypeAlias = str | os.PathLike | Ontology | None
 
 class GalaxyParameter:
     def __init__(self, 
                  name, 
                  python_type,
-                 ontology_parameter_hierarchy=[],
+                 is_dataset=False,
                  description=None,
                  default_value=None, 
                  min_value=None, 
@@ -65,7 +65,7 @@ class GalaxyParameter:
         if allowed_values is not None:
             partype = 'select'
         
-        if _dataset_term in ontology_parameter_hierarchy:
+        if is_dataset:
             partype = 'data'
             self.test_data_path = default_value
             # TODO: actual formats after implementing in ontology
@@ -89,29 +89,40 @@ class GalaxyParameter:
                 
     
     @classmethod
-    def from_inspect(cls, par_details, ontology_path=None):
+    def from_inspect(cls, par_details, ontology: OntoPathOrObj = None):
         label = None
         par_format = None
         par_unit = None
-        par_hierarchy = []
         min_value = None
         max_value = None
         allowed_values = None
+        is_dataset = False
+        
+        owl_uri = par_details['owl_type']
 
-        if ontology_path is not None:
-            onto = Ontology(ontology_path)
-
-            owl_uri = par_details['owl_type']
+        is_posix_path, is_file_url, is_file_ref = NotebookAdapter.check_is_file_input(owl_uri).values()
+        if is_posix_path or (is_file_ref and not is_file_url):
+            is_dataset = True
             
+        if ontology is not None:
+            # NOTE: explicit here while Ontology.is_ontology_available 
+            #       and empty Ontology aren't really implemented
+            #       but want to allow None for basic for non-mmoda conversions
+            #       (default ontology is still used in nbadapter in fact)
+
+            onto = ontology if isinstance(ontology, Ontology) else Ontology(ontology)
+                        
             if par_details.get('extra_ttl') is not None:
                 onto.parse_extra_triples(par_details['extra_ttl'])
-            par_hierarchy = onto.get_parameter_hierarchy(owl_uri)
-            par_format = onto.get_parameter_format(owl_uri)
-            par_unit = onto.get_parameter_unit(owl_uri)
-            min_value, max_value = onto.get_limits(owl_uri)
-            allowed_values = onto.get_allowed_values(owl_uri)
-            label = onto.get_oda_label(owl_uri)
-        
+            
+            label = onto.get_oda_label(owl_uri) # TODO: there are both label and description
+            
+            if not is_dataset:
+                par_format = onto.get_parameter_format(owl_uri)
+                par_unit = onto.get_parameter_unit(owl_uri)
+                min_value, max_value = onto.get_limits(owl_uri)
+                allowed_values = onto.get_allowed_values(owl_uri)
+                
         description = label if label is not None else par_details['name']
         if par_format is not None:
             description += f" (format: {par_format})"
@@ -120,7 +131,7 @@ class GalaxyParameter:
         
         return cls(par_details['name'], 
                    par_details['python_type'], 
-                   par_hierarchy,
+                   is_dataset=is_dataset,
                    description=description,
                    default_value=par_details['default_value'], 
                    min_value=min_value,
@@ -180,12 +191,12 @@ class GalaxyOutput:
         self.outfile_name = f"{name}_galaxy.output"
     
     @classmethod
-    def from_inspect(cls, outp_details, ontology_path=None, dprod=None):
+    def from_inspect(cls, outp_details, ontology: OntoPathOrObj = None, dprod=None):
         owl_uri = outp_details['owl_type']        
         is_oda = False 
 
-        if ontology_path is not None:
-            onto = Ontology(ontology_path)
+        if ontology is not None:
+            onto = ontology if isinstance(ontology, Ontology) else Ontology(ontology)
 
             if outp_details['extra_ttl'] is not None:
                 onto.parse_extra_triples(outp_details['extra_ttl'])
@@ -212,7 +223,7 @@ class GalaxyOutput:
         return element
 
 
-def _nb2script(nba, ontology_path):
+def _nb2script(nba, ontology: OntoPathOrObj):
     input_nb = nba.notebook_fn
     mynb = nbformat.read(input_nb, as_version=4)
     outputs = nba.extract_output_declarations()
@@ -220,7 +231,7 @@ def _nb2script(nba, ontology_path):
     oda_outp_code = ''
     simple_outp_code = ''
     for vn, vv in outputs.items():
-        outp = GalaxyOutput.from_inspect(vv, ontology_path=ontology_path, dprod=nba.name)
+        outp = GalaxyOutput.from_inspect(vv, ontology=ontology, dprod=nba.name)
         if outp.is_oda:
             oda_outp_code += f"_oda_outs.append(('{outp.dataname}', '{outp.outfile_name}', {vn}))\n"
         else:
@@ -617,10 +628,11 @@ def to_galaxy(input_path,
               citations_bibfile = None,
               help_file = None,
               available_channels = ['default', 'conda-forge'],
-              ontology_path = default_ontology_path,
+              ontology_path = oda_ontology_path,
               test_data_baseurl = None
               ):
-    
+    ontology = Ontology(ontology_path) if ontology_path != oda_ontology_path else nba_ontology_global_var
+
     os.makedirs(out_dir, exist_ok=True)
     
     nbas = find_notebooks(input_path)
@@ -675,7 +687,7 @@ def to_galaxy(input_path,
             when = inps
             test_par_root = default_test
 
-        script_str = _nb2script(nba, ontology_path)
+        script_str = _nb2script(nba, ontology)
         if 'get_ipython()' in script_str or re.search(r'^\s*display\(', script_str):
             python_binary = 'ipython'
             if 'ipython' not in extra_req:
@@ -685,7 +697,7 @@ def to_galaxy(input_path,
             fd.write(script_str)
 
         for pv in inputs.values():
-            galaxy_par = GalaxyParameter.from_inspect(pv, ontology_path=ontology_path)
+            galaxy_par = GalaxyParameter.from_inspect(pv, ontology=ontology)
             when.append(galaxy_par.to_xml_tree())
             if galaxy_par.partype != 'data':
                 test_par_root.append(ET.Element('param', name=galaxy_par.name, value=str(galaxy_par.default_value)))
@@ -705,7 +717,7 @@ def to_galaxy(input_path,
                 #       as long as remote test data have some drawbacks (maybe not really?)
                 
         for outv in outputs.values():
-            outp = GalaxyOutput.from_inspect(outv, ontology_path=ontology_path, dprod=nb_name)
+            outp = GalaxyOutput.from_inspect(outv, ontology=ontology, dprod=nb_name)
             outp_tree = outp.to_xml_tree()
             if len(nbas) > 1:
                 fltr = ET.SubElement(outp_tree, 'filter')
@@ -768,8 +780,7 @@ def main():
     environment_yml = args.environment_yml
     tool_version = args.tool_version
     ontology_path = args.ontology_path
-    if ontology_path is None:
-        ontology_path = default_ontology_path
+    ontology_path = oda_ontology_path
     bibfile = args.citations_bibfile
     help_file = args.help_file
     test_data_baseurl = args.test_data_baseurl

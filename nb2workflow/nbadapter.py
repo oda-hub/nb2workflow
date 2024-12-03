@@ -307,7 +307,6 @@ class InputParameter:
 class NotebookAdapter:
     limit_output_attachment_file = None
 
-
     def __init__(self, notebook_fn, tempdir_cache=None, n_download_max_tries=10, download_retry_sleep_s=.5, max_download_size=500e6):
         self.notebook_fn = os.path.abspath(notebook_fn)
         self.name = notebook_short_name(notebook_fn)
@@ -837,25 +836,36 @@ class NotebookAdapter:
 
         return file_name
 
-    def handle_url_params(self, parameters, tmpdir, context={}):
-        adapted_parameters = copy.deepcopy(parameters)
-        exceptions = []
+    @staticmethod
+    def check_is_file_input(owl_type: str) -> dict[str, bool]:
         posix_path_with_annotations_pattern = re.compile(rf"^{re.escape(oda_prefix)}.*_POSIXPath_")
         file_url_with_annotations_pattern = re.compile(rf"^{re.escape(oda_prefix)}.*_FileURL_")
         file_reference_with_annotations_pattern = re.compile(rf"^{re.escape(oda_prefix)}.*_FileReference_")
+
+        if ontology.is_ontology_available:
+            parameter_hierarchy = ontology.get_parameter_hierarchy(owl_type)
+            is_posix_path = f"{oda_prefix}POSIXPath" in parameter_hierarchy
+            is_file_url = f"{oda_prefix}FileURL" in parameter_hierarchy
+            is_file_reference = f"{oda_prefix}FileReference" in parameter_hierarchy
+        else:
+            is_posix_path = f"{oda_prefix}POSIXPath" == owl_type or \
+                            posix_path_with_annotations_pattern.match(owl_type) is not None
+            is_file_url = f"{oda_prefix}FileURL" == owl_type or \
+                            file_url_with_annotations_pattern.match(owl_type) is not None
+            is_file_reference = f"{oda_prefix}FileReference" == owl_type or \
+                                file_reference_with_annotations_pattern.match(owl_type) is not None
+        return {
+            'is_posix_path': is_posix_path,
+            'is_file_url': is_file_url,
+            'is_file_reference': is_file_reference
+        }
+
+    def handle_url_params(self, parameters, tmpdir, context={}):
+        adapted_parameters = copy.deepcopy(parameters)
+        exceptions = []
         for input_par_name, input_par_obj in self.input_parameters.items():
-            if ontology.is_ontology_available:
-                parameter_hierarchy = ontology.get_parameter_hierarchy(input_par_obj['owl_type'])
-                is_posix_path = f"{oda_prefix}POSIXPath" in parameter_hierarchy
-                is_file_url = f"{oda_prefix}FileURL" in parameter_hierarchy
-                is_file_reference = f"{oda_prefix}FileReference" in parameter_hierarchy
-            else:
-                is_posix_path = f"{oda_prefix}POSIXPath" == input_par_obj['owl_type'] or \
-                                posix_path_with_annotations_pattern.match(input_par_obj['owl_type']) is not None
-                is_file_url = f"{oda_prefix}FileURL" == input_par_obj['owl_type'] or \
-                                file_url_with_annotations_pattern.match(input_par_obj['owl_type']) is not None
-                is_file_reference = f"{oda_prefix}FileReference" == input_par_obj['owl_type'] or \
-                                    file_reference_with_annotations_pattern.match(input_par_obj['owl_type']) is not None
+            is_posix_path, is_file_url, is_file_reference = self.check_is_file_input(input_par_obj['owl_type']).values()
+
             if is_posix_path or is_file_url or is_file_reference:
                 arg_par_value = parameters.get(input_par_name, None)
                 if arg_par_value is None:
