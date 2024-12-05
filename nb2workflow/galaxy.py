@@ -8,12 +8,14 @@ from textwrap import dedent
 import argparse
 import logging
 import requests
+from typing import TypeAlias
 
 import yaml
 import json
 
 from oda_api.ontology_helper import Ontology
-from nb2workflow.nbadapter import NotebookAdapter, find_notebooks
+from nb2workflow.nbadapter import NotebookAdapter, find_notebooks, oda_ontology_path
+from nb2workflow.nbadapter import ontology as nba_ontology_global_var
 
 import nbformat
 from nbconvert.exporters import ScriptExporter
@@ -27,23 +29,22 @@ import tempfile
 import black
 import autoflake
 import isort
+import validators
 
 logger = logging.getLogger()
 
 
-default_ontology_path = 'http://odahub.io/ontology/ontology.ttl'
-
 global_req = []
 
 _success_text = '*** Job finished successfully ***'
-_ontology_base = 'http://odahub.io/ontology#'
-_dataset_term = _ontology_base + 'POSIXPath'
+
+OntoPathOrObj: TypeAlias = str | os.PathLike | Ontology | None
 
 class GalaxyParameter:
     def __init__(self, 
                  name, 
                  python_type,
-                 ontology_parameter_hierarchy,
+                 is_dataset=False,
                  description=None,
                  default_value=None, 
                  min_value=None, 
@@ -55,19 +56,31 @@ class GalaxyParameter:
         partype_lookup = {str: 'text', 
                     bool: 'boolean',
                     float: 'float',
-                    int: 'integer'} 
+                    int: 'integer',
+                    dict: 'data',
+                    list: 'data'} 
+        
         partype = partype_lookup[python_type]
         
+        is_json_input = False
+
         if allowed_values is not None:
             partype = 'select'
         
-        if _dataset_term in ontology_parameter_hierarchy:
+        if is_dataset:
             partype = 'data'
-            self.test_data_path = default_value
+            self.original_value = default_value
             # TODO: actual formats after implementing in ontology
             self.data_format = 'data'
             default_value = None
         
+        if python_type in [dict, list]:
+            self.data_format = 'json'
+            self.original_value = default_value
+            default_value = None
+            is_json_input = True
+
+
         self.name = name
         self.partype = partype
         self.description=description
@@ -76,23 +89,44 @@ class GalaxyParameter:
         self.max_value = max_value
         self.allowed_values = allowed_values
         self.additional_attrs = additional_attrs
+        self.is_json_input = is_json_input
                 
     
     @classmethod
-    def from_inspect(cls, par_details, ontology_path):
-        onto = Ontology(ontology_path)
-
+    def from_inspect(cls, par_details, ontology: OntoPathOrObj = None):
+        label = None
+        par_format = None
+        par_unit = None
+        min_value = None
+        max_value = None
+        allowed_values = None
+        is_dataset = False
+        
         owl_uri = par_details['owl_type']
-        
-        if par_details.get('extra_ttl') is not None:
-            onto.parse_extra_triples(par_details['extra_ttl'])
-        par_hierarchy = onto.get_parameter_hierarchy(owl_uri)
-        par_format = onto.get_parameter_format(owl_uri)
-        par_unit = onto.get_parameter_unit(owl_uri)
-        min_value, max_value = onto.get_limits(owl_uri)
-        allowed_values = onto.get_allowed_values(owl_uri)
-        label = onto.get_oda_label(owl_uri)
-        
+
+        is_posix_path, is_file_url, is_file_ref = NotebookAdapter.check_is_file_input(owl_uri).values()
+        if is_posix_path or (is_file_ref and not is_file_url):
+            is_dataset = True
+            
+        if ontology is not None:
+            # NOTE: explicit here while Ontology.is_ontology_available 
+            #       and empty Ontology aren't really implemented
+            #       but want to allow None for basic for non-mmoda conversions
+            #       (default ontology is still used in nbadapter in fact)
+
+            onto = ontology if isinstance(ontology, Ontology) else Ontology(ontology)
+                        
+            if par_details.get('extra_ttl') is not None:
+                onto.parse_extra_triples(par_details['extra_ttl'])
+            
+            label = onto.get_oda_label(owl_uri) # TODO: there are both label and description, also groups
+            
+            if not is_dataset:
+                par_format = onto.get_parameter_format(owl_uri)
+                par_unit = onto.get_parameter_unit(owl_uri)
+                min_value, max_value = onto.get_limits(owl_uri)
+                allowed_values = onto.get_allowed_values(owl_uri)
+                
         description = label if label is not None else par_details['name']
         if par_format is not None:
             description += f" (format: {par_format})"
@@ -101,7 +135,7 @@ class GalaxyParameter:
         
         return cls(par_details['name'], 
                    par_details['python_type'], 
-                   par_hierarchy,
+                   is_dataset=is_dataset,
                    description=description,
                    default_value=par_details['default_value'], 
                    min_value=min_value,
@@ -141,7 +175,7 @@ class GalaxyParameter:
                 attrs = {'value': str(val)}
                 if val == self.default_value:
                     attrs['selected'] = 'true'
-                option = ET.SubElement(element, 'option', **attrs)
+                option = ET.SubElement(element, 'option', attrib=attrs)
                 option.text = str(val)
         # TODO: do we need additional validation?
         
@@ -161,17 +195,18 @@ class GalaxyOutput:
         self.outfile_name = f"{name}_galaxy.output"
     
     @classmethod
-    def from_inspect(cls, outp_details, ontology_path, dprod=None):
-        onto = Ontology(ontology_path)
+    def from_inspect(cls, outp_details, ontology: OntoPathOrObj = None, dprod=None):
+        owl_uri = outp_details['owl_type']        
+        is_oda = False 
 
-        owl_uri = outp_details['owl_type']
-        if outp_details['extra_ttl'] is not None:
-            onto.parse_extra_triples(outp_details['extra_ttl'])
+        if ontology is not None:
+            onto = ontology if isinstance(ontology, Ontology) else Ontology(ontology)
+
+            if outp_details['extra_ttl'] is not None:
+                onto.parse_extra_triples(outp_details['extra_ttl'])
         
-        if onto.is_data_product(owl_uri, include_parameter_products=False):
-            is_oda = True
-        else:
-            is_oda = False
+            if owl_uri is not None and onto.is_data_product(owl_uri, include_parameter_products=False):
+                is_oda = True
         
         return cls(outp_details['name'], is_oda, dprod)
 
@@ -187,24 +222,22 @@ class GalaxyOutput:
                  'format': 'auto',
                  'from_work_dir': self.outfile_name}
         
-        element = ET.Element('data', **attrs)
+        element = ET.Element('data', attrib=attrs)
 
         return element
 
 
-def _nb2script(nba, ontology_path):
+def _nb2script(nba, inputs: list[GalaxyParameter], outputs: list[GalaxyOutput]):
     input_nb = nba.notebook_fn
     mynb = nbformat.read(input_nb, as_version=4)
-    outputs = nba.extract_output_declarations()
 
     oda_outp_code = ''
     simple_outp_code = ''
-    for vn, vv in outputs.items():
-        outp = GalaxyOutput.from_inspect(vv, ontology_path=ontology_path, dprod=nba.name)
+    for outp in outputs:
         if outp.is_oda:
-            oda_outp_code += f"_oda_outs.append(('{outp.dataname}', '{outp.outfile_name}', {vn}))\n"
+            oda_outp_code += f"_oda_outs.append(('{outp.dataname}', '{outp.outfile_name}', {outp.name}))\n"
         else:
-            simple_outp_code += f"_simple_outs.append(('{outp.dataname}', '{outp.outfile_name}', {vn}))\n"
+            simple_outp_code += f"_simple_outs.append(('{outp.dataname}', '{outp.outfile_name}', {outp.name}))\n"
     
     import_code = dedent( """
                 # flake8: noqa         
@@ -226,21 +259,38 @@ def _nb2script(nba, ontology_path):
             inject_pos = pos + 1
             break
     # NOTE: validation of args is external
-    inject_read = nbformat.v4.new_code_cell(
-        dedent("""
-            _galaxy_wd = os.getcwd()
 
-            with open('inputs.json', 'r') as fd:
-                inp_dic = json.load(fd)
-            if '_data_product' in inp_dic.keys():
-                inp_pdic = inp_dic['_data_product']
-            else:
-                inp_pdic = inp_dic
-                
-            for vn, vv in inp_pdic.items():
-                if vn != '_selector':
-                    globals()[vn] = type(globals()[vn])(vv)
-            """))
+
+    input_code = dedent("""
+        _galaxy_wd = os.getcwd()
+
+        with open('inputs.json', 'r') as fd:
+            inp_dic = json.load(fd)
+        if '_data_product' in inp_dic.keys():
+            inp_pdic = inp_dic['_data_product']
+        else:
+            inp_pdic = inp_dic
+        """)
+
+    simple_par_names = [x.name for x in inputs if not x.is_json_input]
+    struct_par_names = [x.name for x in inputs if x.is_json_input]
+
+    if len(simple_par_names)>0:
+        input_code += dedent(f"""
+            for _vn in {simple_par_names}:
+                globals()[_vn] = type(globals()[_vn])(inp_pdic[_vn])
+        """)
+    
+    if len(struct_par_names)>0:
+        input_code += dedent(f"""
+            for _vn in {struct_par_names}:
+                with open(inp_pdic[_vn], 'r') as _this_fd:
+                    _vv = json.load(_this_fd)
+                    globals()[_vn] = _vv
+        """)
+
+    inject_read = nbformat.v4.new_code_cell(input_code)
+
     inject_read.metadata['tags'] = ['injected-input']
     mynb.cells.insert(inject_pos, inject_read)
  
@@ -318,10 +368,10 @@ def _nb2script(nba, ontology_path):
     
     script = isort.api.sort_code_string(script, config=isort.Config(profile="black"))
         
-    BLACK_MODE = black.Mode(target_versions={black.TargetVersion.PY37}, line_length=79)
+    BLACK_MODE = black.Mode(target_versions={black.TargetVersion.PY39}, line_length=79) # type: ignore
     try:
         script = black.format_file_contents(script, fast=False, mode=BLACK_MODE)
-    except black.NothingChanged:
+    except black.NothingChanged: # type: ignore
         pass
     finally:
         if script[-1] != "\n":
@@ -352,7 +402,7 @@ class Requirements:
                 if self.env_dict.get('channels'):
                     extra_channels = set(self.env_dict['channels']) - set(available_channels)
                     if extra_channels:
-                        raise ValueError('Conda channels %s are not supported by galaxy instance', extra_channels)
+                        raise ValueError(f'Conda channels {extra_channels} are not supported by galaxy instance')
                 else:
                     logger.warning('Conda channels are not defined in evironment file.')
                 self.env_dict['channels'] = available_channels
@@ -374,9 +424,13 @@ class Requirements:
                     if parsed is not None:
                         pip_reqs.append(parsed)
                 pip_dep_idx = i
-            else:                        
+            elif isinstance(dep, str):
                 m = match_spec.match(dep)
+                if m is None:
+                    raise RuntimeError(f"Unable to parse conda dependency: {dep}")
                 self._direct_dependencies.append((m.group('pac'), '', 0, ''))
+            else:
+                raise RuntimeError(f"Uexpected item in dependencies: {dep}")
 
         if pip_dep_idx is not None:
             del self.env_dict['dependencies'][pip_dep_idx]
@@ -547,23 +601,49 @@ def _read_help_file(filepath):
         # TODO: test and adapt formatting arguments
         help_text = pypandoc.convert_file(filepath, 'rst')
     else:
-        NotImplementedError('Unknown help file extension.')
+        raise NotImplementedError('Unknown help file extension.')
     return help_text
 
-def _test_data_location(repo_dir, tool_dir, default_value, base_url=None):
-    # assume default_value is always a relative path (the case in MMODA)
+def _test_data_location(
+        repo_dir: str | os.PathLike, 
+        tool_dir: str | os.PathLike, 
+        par_value, 
+        base_url=None, 
+        name=None) -> tuple[str | None, str|None]:
+    # assumes default_value is always a relative path (the case in MMODA)
+    
     location = None
     value = None
-    if base_url is None:
-        testdata = os.path.join(tool_dir, 'test-data')
-        os.makedirs(testdata, exist_ok=True)
-        filename = os.path.basename(default_value)
-        abspath = os.path.join(repo_dir, default_value)
-        shutil.copy(abspath, os.path.join(testdata, filename))
-        value = filename
+
+    testdata = os.path.join(tool_dir, 'test-data')
+    
+    # for FileReference if default is URL
+    if validators.url(par_value):
+        location = par_value
+
     else:
-        # TODO: support the case of nb not in repo root
-        location = os.path.join(base_url, default_value)
+        # check it's actually a file in repo
+        
+        try:
+            abspath = os.path.join(repo_dir, par_value) # type: ignore
+        except TypeError:
+            abspath = None
+
+        if abspath is not None and os.path.isfile(abspath):
+            if base_url is None:
+                value = os.path.basename(par_value) # type: ignore
+                os.makedirs(testdata, exist_ok=True)
+                shutil.copy(abspath, os.path.join(testdata, value))
+            else:
+                # TODO: support the case of nb not in repo root
+                location = os.path.join(base_url, par_value) # type: ignore
+        else:
+            # it's a json value
+            os.makedirs(testdata, exist_ok=True)
+            value = f'{name}.json'
+            with open(os.path.join(testdata, value), 'w') as fd:
+                json.dump(par_value, fd)
+
     return value, location
 
 def to_galaxy(input_path, 
@@ -576,10 +656,11 @@ def to_galaxy(input_path,
               citations_bibfile = None,
               help_file = None,
               available_channels = ['default', 'conda-forge'],
-              ontology_path = default_ontology_path,
+              ontology_path = oda_ontology_path,
               test_data_baseurl = None
               ):
-    
+    ontology = Ontology(ontology_path) if ontology_path != oda_ontology_path else nba_ontology_global_var
+
     os.makedirs(out_dir, exist_ok=True)
     
     nbas = find_notebooks(input_path)
@@ -623,18 +704,53 @@ def to_galaxy(input_path,
     for nb_name, nba in nbas.items():
         inputs = nba.input_parameters
         outputs = nba.extract_output_declarations()
+
+        galaxy_pars = []
+        galaxy_otps = []
         
         default_test = ET.SubElement(tests, 'test', expect_num_outputs=str(len(outputs)))
         
         if len(nbas) > 1:
-            when = ET.SubElement(dprod_cond, 'when', value=nb_name)
+            when = ET.SubElement(dprod_cond, 'when', value=nb_name) # type: ignore
             test_par_root = ET.SubElement(default_test, 'conditional', name='_data_product')
             test_par_root.append(ET.Element('param', name='_selector', value=nb_name))
         else:
             when = inps
             test_par_root = default_test
 
-        script_str = _nb2script(nba, ontology_path)
+        for pv in inputs.values():
+            galaxy_par = GalaxyParameter.from_inspect(pv, ontology=ontology)
+            galaxy_pars.append(galaxy_par)
+            when.append(galaxy_par.to_xml_tree())
+            if galaxy_par.partype != 'data':
+                test_par_root.append(ET.Element('param', name=galaxy_par.name, value=str(galaxy_par.default_value)))
+            else:
+                repo_dir = input_path if os.path.isdir(input_path) else os.path.dirname(os.path.realpath(input_path))
+                value, location = _test_data_location(repo_dir, 
+                                                      out_dir, 
+                                                      galaxy_par.original_value,
+                                                      test_data_baseurl,
+                                                      name=galaxy_par.name)
+                if value:
+                    test_par_root.append(ET.Element('param', name=galaxy_par.name, value=value))
+                elif location:
+                    test_par_root.append(ET.Element('param', name=galaxy_par.name, location=location))
+                else:
+                    raise RuntimeError(f"Unable to build test data location for parameter '{galaxy_par.name}'")
+                # TODO: following discussion with Bjorn, probably good to adopt the logic: 
+                #       if test data is small <1MB we can always put it in the tool-data dir
+                #       as long as remote test data have some drawbacks (maybe not really?)
+                
+        for outv in outputs.values():
+            outp = GalaxyOutput.from_inspect(outv, ontology=ontology, dprod=nb_name)
+            galaxy_otps.append(outp)
+            outp_tree = outp.to_xml_tree()
+            if len(nbas) > 1:
+                fltr = ET.SubElement(outp_tree, 'filter')
+                fltr.text = f"_data_product['_selector'] == '{nb_name}'"
+            outps.append(outp_tree)
+
+        script_str = _nb2script(nba, inputs=galaxy_pars, outputs=galaxy_otps)
         if 'get_ipython()' in script_str or re.search(r'^\s*display\(', script_str):
             python_binary = 'ipython'
             if 'ipython' not in extra_req:
@@ -643,33 +759,6 @@ def to_galaxy(input_path,
         with open(os.path.join(out_dir, f'{nb_name}.py'), 'w') as fd:
             fd.write(script_str)
 
-        for pv in inputs.values():
-            galaxy_par = GalaxyParameter.from_inspect(pv, ontology_path=ontology_path)
-            when.append(galaxy_par.to_xml_tree())
-            if galaxy_par.partype != 'data':
-                test_par_root.append(ET.Element('param', name=galaxy_par.name, value=str(galaxy_par.default_value)))
-            else:
-                repo_dir = input_path if os.path.isdir(input_path) else os.path.dirname(os.path.realpath(input_path))
-                value, location = _test_data_location(repo_dir, 
-                                                      out_dir, 
-                                                      galaxy_par.test_data_path,
-                                                      test_data_baseurl)
-                if value:
-                    test_par_root.append(ET.Element('param', name=galaxy_par.name, value=value))
-                else:
-                    test_par_root.append(ET.Element('param', name=galaxy_par.name, location=location))
-                # TODO: following discussion with Bjorn, probably good to adopt the logic: 
-                #       if test data is small <1MB we can always put it in the tool-data dir
-                #       as long as remote test data have some drawbacks (maybe not really?)
-                
-        for outv in outputs.values():
-            outp = GalaxyOutput.from_inspect(outv, ontology_path=ontology_path, dprod=nb_name)
-            outp_tree = outp.to_xml_tree()
-            if len(nbas) > 1:
-                fltr = ET.SubElement(outp_tree, 'filter')
-                fltr.text = f"_data_product['_selector'] == '{nb_name}'"
-            outps.append(outp_tree)
-            
         assert_stdout = ET.SubElement(default_test, 'assert_stdout')
         assert_stdout.append(ET.Element('has_text', text=_success_text))
 
@@ -682,7 +771,13 @@ def to_galaxy(input_path,
     else:
         comm.text = f"{python_binary} '$__tool_directory__/{list(nbas.keys())[0]}.py'"
     # NOTE: CDATA if needed https://gist.github.com/zlalanne/5711847
-        
+
+    env = ET.SubElement(tool_root, 'environment_variables')
+    bd_env_v = ET.SubElement(env, 'environment_variable', attrib={'name': 'BASEDIR'})
+    bd_env_v.text = "$__tool_directory__"
+    td_env_v = ET.SubElement(env, 'environment_variable', attrib={'name': 'GALAXY_TOOL_DIR'})
+    td_env_v.text = "$__tool_directory__"
+
     if help_file is not None:    
         help_block = ET.SubElement(tool_root, 'help')
         help_text = _read_help_file(help_file)
@@ -726,8 +821,7 @@ def main():
     environment_yml = args.environment_yml
     tool_version = args.tool_version
     ontology_path = args.ontology_path
-    if ontology_path is None:
-        ontology_path = default_ontology_path
+    ontology_path = oda_ontology_path
     bibfile = args.citations_bibfile
     help_file = args.help_file
     test_data_baseurl = args.test_data_baseurl
