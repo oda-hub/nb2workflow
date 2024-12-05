@@ -75,7 +75,7 @@ class GalaxyParameter:
             default_value = None
         
         if python_type in [dict, list]:
-            self.data_format = 'expression.json'
+            self.data_format = 'json'
             self.original_value = default_value
             default_value = None
             is_json_input = True
