@@ -691,7 +691,10 @@ class NotebookAdapter:
                     logger.info(e)
                     logger.info(e.args)
 
-                    if getattr(e, 'ename', None) == "WorkflowIncomplete":
+                    if isinstance(e, DeadKernelError):
+                        sentry.capture_exception(e)
+                        
+                    elif e.ename == "WorkflowIncomplete":
                         logger.info("detected incomplete workflow")
                         self.update_summary(state="incomplete dependency", dependency=repr(e))
                         raise  PapermillWorkflowIncomplete()
