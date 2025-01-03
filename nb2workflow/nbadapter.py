@@ -53,6 +53,9 @@ from git import Repo, InvalidGitRepositoryError, GitCommandError
 import logging
 from threading import Lock
 
+from nbclient.exceptions import DeadKernelError
+
+
 logger=logging.getLogger(__name__)
 
 logstasher = logstash.LogStasher()
@@ -683,22 +686,29 @@ class NotebookAdapter:
                        log_output = True,
                        cwd = tmpdir,
                     )
-                except pm.PapermillExecutionError as e:
+                except (pm.PapermillExecutionError, DeadKernelError) as e:
                     exceptions.append([e,e.args])
                     logger.info(e)
                     logger.info(e.args)
 
-                    if e.ename == "WorkflowIncomplete":
+                    if isinstance(e, DeadKernelError):
+                        sentry.capture_exception(e)
+                        
+                    elif e.ename == "WorkflowIncomplete":
                         logger.info("detected incomplete workflow")
                         self.update_summary(state="incomplete dependency", dependency=repr(e))
                         raise  PapermillWorkflowIncomplete()
-
+                
                 except nbformat.reader.NotJSONError:
                     ntries -= 1
                     logger.info("retrying... %s", ntries)
                     time.sleep(2)
                     continue
-
+                
+                except Exception as e:
+                    logger.error('Unexpected exception %s', e)
+                    sentry.capture_exception(e)
+                    
                 break
 
         if len(exceptions) == 0:
