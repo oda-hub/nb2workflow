@@ -686,7 +686,13 @@ def to_galaxy(input_path,
     
     conf = ET.SubElement(tool_root, 'configfiles')
     conf.append(ET.Element('inputs', name='inputs', filename='inputs.json', data_style='paths'))
-    
+
+    env = ET.SubElement(tool_root, 'environment_variables')
+    bd_env_v = ET.SubElement(env, 'environment_variable', attrib={'name': 'BASEDIR'})
+    bd_env_v.text = "$__tool_directory__"
+    td_env_v = ET.SubElement(env, 'environment_variable', attrib={'name': 'GALAXY_TOOL_DIR'})
+    td_env_v.text = "$__tool_directory__"
+
     inps = ET.SubElement(tool_root, 'inputs')
     outps = ET.SubElement(tool_root, 'outputs')
     tests = ET.SubElement(tool_root, 'tests')
@@ -771,12 +777,6 @@ def to_galaxy(input_path,
     else:
         comm.text = f"{python_binary} '$__tool_directory__/{list(nbas.keys())[0]}.py'"
     # NOTE: CDATA if needed https://gist.github.com/zlalanne/5711847
-
-    env = ET.SubElement(tool_root, 'environment_variables')
-    bd_env_v = ET.SubElement(env, 'environment_variable', attrib={'name': 'BASEDIR'})
-    bd_env_v.text = "$__tool_directory__"
-    td_env_v = ET.SubElement(env, 'environment_variable', attrib={'name': 'GALAXY_TOOL_DIR'})
-    td_env_v.text = "$__tool_directory__"
 
     if help_file is not None:    
         help_block = ET.SubElement(tool_root, 'help')
