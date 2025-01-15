@@ -2,6 +2,8 @@ import os
 import json
 import logging
 import pytest
+from nb2workflow.nbadapter import denumpyfy
+from nb2workflow.json import CustomJSONEncoder
 
 
 # this can be also set in pytest call
