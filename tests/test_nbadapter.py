@@ -208,7 +208,11 @@ def test_denumpyfy_mosaic_fits():
     mosaic_prod = NumpyDataProduct.from_fits_file(
         os.path.join(os.path.dirname(__file__), 'test_data/clean_mosaic_sognificance.fits.gz'), name="Graphic image")
 
-    mosaic_prod_dumped = json.dumps(denumpyfy(mosaic_prod), cls=CustomJSONEncoder)
+    #mosaic_prod_dumped = json.dumps(denumpyfy(mosaic_prod), cls=CustomJSONEncoder)
+    just_encoded = mosaic_prod.encode()
+    mosaic_prod_dumped = json.dumps(mosaic_prod.encode())
+    assert json.loads(mosaic_prod_dumped) == just_encoded
+    prod_image_decoded = ImageDataProduct.decode(just_encoded)
     prod_image_decoded = ImageDataProduct.decode(mosaic_prod_dumped)
 
 
