@@ -46,7 +46,10 @@ ttl_prefix = """
 
                           ('foo', None, 'oda:WithNoTypeDefined', '', str, False),
                           ({'foo': ['bar', 'baz']}, None, 'oda:WithNoTypeDefined', '', dict, False),
+
+                          ('', None, 'oda:POSIXPath', '', str, False)
                           ]
+                         # 'value,type_annotation,owl_type,extra_ttl,expected_type,expected_optional'
                          )
 def test_reconcile_python_type(value,type_annotation,owl_type,extra_ttl,expected_type,expected_optional):
     assert reconcile_python_type(value=value, 
