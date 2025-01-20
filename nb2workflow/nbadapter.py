@@ -879,10 +879,7 @@ class NotebookAdapter:
             if is_posix_path or is_file_url or is_file_reference:
                 arg_par_value = parameters.get(input_par_name, None)
                 if arg_par_value is None:
-                    if is_posix_path:
-                        arg_par_value = ''
-                    else:
-                        arg_par_value = input_par_obj['default_value']
+                    arg_par_value = input_par_obj['default_value']
                 if validators.url(arg_par_value, simple_host=True):
                     logger.info(f"checking url: {arg_par_value}")
                     if is_mmoda_url(arg_par_value):
