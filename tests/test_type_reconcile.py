@@ -47,7 +47,13 @@ ttl_prefix = """
                           ('foo', None, 'oda:WithNoTypeDefined', '', str, False),
                           ({'foo': ['bar', 'baz']}, None, 'oda:WithNoTypeDefined', '', dict, False),
 
-                          ('', None, 'oda:POSIXPath', '', str, False)
+                          ('file-name.fits', None, 'oda:POSIXPath', '', str, False),
+                          ('file-name.fits', None, 'oda:OptPPath', 'oda:OptPPath rdfs:subClassOf oda:String, oda:optional .', str, True),
+                          ('', None, 'oda:OptPPath', 'oda:OptPPath rdfs:subClassOf oda:String, oda:optional .', str, True),
+                          (None, None, 'oda:OptPPath', 'oda:OptPPath rdfs:subClassOf oda:String, oda:optional .', str, True),
+                          ('file-name.fits', 'str | None', 'oda:POSIXPath', '', str, True),
+                          ('', 'str | None', 'oda:POSIXPath', '', str, True),
+                          (None, 'str | None', 'oda:POSIXPath', '', str, True),
                           ]
                          # 'value,type_annotation,owl_type,extra_ttl,expected_type,expected_optional'
                          )
@@ -79,6 +85,9 @@ def test_reconcile_python_type(value,type_annotation,owl_type,extra_ttl,expected
                           (5.0, 'str', 'oda:Float'),
 
                           (None, None, 'oda:optional'), # optional have undefined type
+
+                          (None, None, 'oda:POSIXPath'),
+                          ('', None, 'oda:POSIXPath'),
                           ]
                          )
 def test_reconcile_python_type_failing(value,type_annotation,owl_type):
