@@ -664,12 +664,10 @@ class NotebookAdapter:
             tmpdir =os.path.dirname(os.path.realpath(self.notebook_fn))
             logger.info("executing inplace, no tmpdir is input dir: %s", tmpdir)
 
-        try:
-            r = self.handle_url_params(parameters, tmpdir, context=context)
+        r = self.handle_url_params(parameters, tmpdir, context=context)
 
-        except Exception as e:
-            exceptions.append(e)
-
+        if len(r['exceptions'])>0:
+            exceptions.extend(r['exceptions'])
         else:
             if len(context) > 0:
                 self._pass_context(tmpdir, context)
@@ -888,7 +886,7 @@ class NotebookAdapter:
                 
                 # would have been better in cast_parameter, but is_posix_path is unavailable there
                 if is_posix_path and arg_par_value == '' and not input_par_obj['is_optional']:
-                    raise ValueError(f"Non-optional POSIXPath parameter can't be empty")
+                    exceptions.append(ValueError(f"Non-optional POSIXPath parameter can't be empty"))
                 
                 if arg_par_value is None:
                     arg_par_value = input_par_obj['default_value']
