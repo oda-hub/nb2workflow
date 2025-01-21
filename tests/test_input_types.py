@@ -41,7 +41,7 @@ def test_posix_download_file_default_value_with_arg(client):
     #assert r.json['output']['output_file_download'] == 'file not downloaded'
     assert r.status_code >= 400
     assert len(r.json['exceptions']) > 0
-    assert 'Non-optional POSIXPath' r.json['exceptions']
+    assert 'Non-optional POSIXPath' in r.json['exceptions'][0]
 
 def test_posix_download_file_extra_annotations(client):
     r = client.get('/api/v1.0/get/testposixpath_extra_annotated', query_string={'fits_file_path': 'https://fits.gsfc.nasa.gov/samples/testkeys.fits'})
