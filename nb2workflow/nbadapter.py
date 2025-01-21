@@ -668,7 +668,8 @@ class NotebookAdapter:
 
         if len(r['exceptions'])>0:
             exceptions.extend(r['exceptions'])
-        else:
+        
+        if len(exceptions) == 0:
             if len(context) > 0:
                 self._pass_context(tmpdir, context)
 
