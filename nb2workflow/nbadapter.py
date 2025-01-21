@@ -209,6 +209,8 @@ def reconcile_python_type(value: Any,
     We expect ~json here, so basically int, float, str, list, dict or None
     Respects duck typing: if default is int and float is allowed, returns float
     '''
+    
+    original_value = value
 
     if type_annotation is None and owl_type is None:
         if value is not None:
@@ -226,6 +228,10 @@ def reconcile_python_type(value: Any,
         if xsd_dt:
             owl_dt = xsd_type_to_python_type(xsd_dt)
         is_optional_owl = ontology.is_optional(owl_type)
+
+        if 'http://odahub.io/ontology#POSIXPath' in ontology.get_parameter_hierarchy(owl_type) and value == '':
+            value = None # just insude the function, so reconciliation fail if non-optional
+
 
     is_optional_hint = False
     hint_fref = None
@@ -253,7 +259,8 @@ def reconcile_python_type(value: Any,
     # So other will fail checking value, but it's OK.
     if value is None:
         if not is_optional_owl and not is_optional_hint:
-            raise TypeCheckError(f"Required parameter {name} shouldn't be None.")
+            raise TypeCheckError(f"Non-optional parameter {name} shouldn't be " 
+                                 f"{'empty string' if original_value == '' else None}.")
         elif owl_dt is None and hint_fref is None:
             raise TypeCheckError(f"Default value of the parameter {name} can't be defined.")
         else:
