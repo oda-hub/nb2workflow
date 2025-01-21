@@ -52,7 +52,7 @@ ttl_prefix = """
                           ('', None, 'oda:OptPPath', 'oda:OptPPath rdfs:subClassOf oda:String, oda:optional .', str, True),
                           (None, None, 'oda:OptPPath', 'oda:OptPPath rdfs:subClassOf oda:String, oda:optional .', str, True),
                           ('file-name.fits', 'str | None', 'oda:POSIXPath', '', str, True),
-                          ('', 'str | None', 'oda:POSIXPath', '', str, True),
+                          #('', 'str | None', 'oda:POSIXPath', '', str, True),
                           (None, 'str | None', 'oda:POSIXPath', '', str, True),
                           ]
                          # 'value,type_annotation,owl_type,extra_ttl,expected_type,expected_optional'
@@ -88,6 +88,7 @@ def test_reconcile_python_type(value,type_annotation,owl_type,extra_ttl,expected
 
                           (None, None, 'oda:POSIXPath'),
                           ('', None, 'oda:POSIXPath'),
+                          ('', 'str | None', 'oda:POSIXPath'),
                           ]
                          )
 def test_reconcile_python_type_failing(value,type_annotation,owl_type):

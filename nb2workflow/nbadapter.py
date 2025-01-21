@@ -210,8 +210,6 @@ def reconcile_python_type(value: Any,
     Respects duck typing: if default is int and float is allowed, returns float
     '''
     
-    original_value = value
-
     if type_annotation is None and owl_type is None:
         if value is not None:
             return type(value), False
@@ -229,8 +227,9 @@ def reconcile_python_type(value: Any,
             owl_dt = xsd_type_to_python_type(xsd_dt)
         is_optional_owl = ontology.is_optional(owl_type)
 
-        if 'http://odahub.io/ontology#POSIXPath' in ontology.get_parameter_hierarchy(owl_type) and value == '':
-            value = None # just insude the function, so reconciliation fail if non-optional
+        if 'http://odahub.io/ontology#POSIXPath' in ontology.get_parameter_hierarchy(owl_type) and value == '' and not is_optional_owl:
+            # we check against is_optional_owl only because e.g. 'str | None' doesn't make sense in allowing empty string
+            raise TypeCheckError(f"Non-optional POSIXPath parameter {name} can't be empty.")
 
 
     is_optional_hint = False
@@ -259,8 +258,7 @@ def reconcile_python_type(value: Any,
     # So other will fail checking value, but it's OK.
     if value is None:
         if not is_optional_owl and not is_optional_hint:
-            raise TypeCheckError(f"Non-optional parameter {name} shouldn't be " 
-                                 f"{'empty string' if original_value == '' else None}.")
+            raise TypeCheckError(f"Non-optional parameter {name} can't be None.")
         elif owl_dt is None and hint_fref is None:
             raise TypeCheckError(f"Default value of the parameter {name} can't be defined.")
         else:
@@ -641,6 +639,7 @@ class NotebookAdapter:
         return exceptions
 
     def _execute(self, parameters, progress_bar=True, log_output=True, inplace=False, context={}, tmpdir_key=None):
+        exceptions = []
 
         if not inplace :
             tmpdir = self.new_tmpdir(tmpdir_key)
@@ -658,26 +657,27 @@ class NotebookAdapter:
                 if 'git-lfs' in str(e):
                     # this error may occur if the repo was originally cloned by the different version of git utility
                     # e.g. when repo is mounted with docker run -v
-                    raise Exception("We got some problem cloning the repository, the problem seems to be related to git-lfs. You might want to try reinitializing git-lfs with 'git-lfs install; git-lfs pull'")
+                    exceptions.append(RuntimeError("We got some problem cloning the repository, the problem seems to be related to git-lfs. You might want to try reinitializing git-lfs with 'git-lfs install; git-lfs pull'"))
                 else:
-                    raise e
+                    exceptions.append(e)
         else:
             tmpdir =os.path.dirname(os.path.realpath(self.notebook_fn))
             logger.info("executing inplace, no tmpdir is input dir: %s", tmpdir)
 
-        r = self.handle_url_params(parameters, tmpdir, context=context)
+        try:
+            r = self.handle_url_params(parameters, tmpdir, context=context)
 
-        if len(context) > 0:
-            self._pass_context(tmpdir, context)
+        except Exception as e:
+            exceptions.append(e)
 
-        self.update_summary(state="started", parameters=parameters)
-
-        self.inject_output_gathering()
-        exceptions = []
-
-        if len(r['exceptions']) > 0:
-            exceptions.extend(r['exceptions'])
         else:
+            if len(context) > 0:
+                self._pass_context(tmpdir, context)
+
+            self.update_summary(state="started", parameters=parameters)
+
+            self.inject_output_gathering()
+
             ntries = 10
             while ntries > 0:
                 try:
@@ -885,6 +885,11 @@ class NotebookAdapter:
 
             if is_posix_path or is_file_url or is_file_reference:
                 arg_par_value = parameters.get(input_par_name, None)
+                
+                # would have been better in cast_parameter, but is_posix_path is unavailable there
+                if is_posix_path and arg_par_value == '' and not input_par_obj['is_optional']:
+                    raise ValueError(f"Non-optional POSIXPath parameter can't be empty")
+                
                 if arg_par_value is None:
                     arg_par_value = input_par_obj['default_value']
                 if validators.url(arg_par_value, simple_host=True):
