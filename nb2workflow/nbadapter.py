@@ -890,11 +890,7 @@ class NotebookAdapter:
 
             if is_posix_path or is_file_url or is_file_reference:
                 arg_par_value = parameters.get(input_par_name, None)
-                
-                # # would have been better in cast_parameter, but is_posix_path is unavailable there
-                # if is_posix_path and arg_par_value == '' and not input_par_obj['is_optional']:
-                #     exceptions.append(ValueError(f"Non-optional POSIXPath parameter can't be empty"))
-                
+
                 if arg_par_value is None:
                     arg_par_value = input_par_obj['default_value']
                 if validators.url(arg_par_value, simple_host=True):
