@@ -48,11 +48,10 @@ ttl_prefix = """
                           ({'foo': ['bar', 'baz']}, None, 'oda:WithNoTypeDefined', '', dict, False),
 
                           ('file-name.fits', None, 'oda:POSIXPath', '', str, False),
-                          ('file-name.fits', None, 'oda:OptPPath', 'oda:OptPPath rdfs:subClassOf oda:String, oda:optional .', str, True),
-                          ('', None, 'oda:OptPPath', 'oda:OptPPath rdfs:subClassOf oda:String, oda:optional .', str, True),
-                          (None, None, 'oda:OptPPath', 'oda:OptPPath rdfs:subClassOf oda:String, oda:optional .', str, True),
+                          ('file-name.fits', None, 'oda:OptPPath', 'oda:OptPPath rdfs:subClassOf oda:POSIXPath, oda:optional .', str, True),
+                          (None, None, 'oda:OptPPath', 'oda:OptPPath rdfs:subClassOf oda:POSIXPath, oda:optional .', str, True),
+                          ('file-name.fits', 'str | None', 'oda:OptPPath', 'oda:OptPPath rdfs:subClassOf oda:POSIXPath, oda:optional .', str, True),
                           ('file-name.fits', 'str | None', 'oda:POSIXPath', '', str, True),
-                          #('', 'str | None', 'oda:POSIXPath', '', str, True),
                           (None, 'str | None', 'oda:POSIXPath', '', str, True),
                           ]
                          # 'value,type_annotation,owl_type,extra_ttl,expected_type,expected_optional'
@@ -63,39 +62,41 @@ def test_reconcile_python_type(value,type_annotation,owl_type,extra_ttl,expected
                                  owl_type=owl_type,
                                  extra_ttl=ttl_prefix+extra_ttl) == (expected_type, expected_optional)
     
-@pytest.mark.parametrize('value,type_annotation,owl_type',
-                         [(None, None, None),
-                          (None, None, 'oda:Float'),
-                          (None, 'float', None),
-                          (None, 'str', None),
-                          (None, 'float', 'oda:Float'),
-                          (None, 'float | None', 'oda:String'),
+@pytest.mark.parametrize('value,type_annotation,owl_type,extra_ttl',
+                         [(None, None, None, ''),
+                          (None, None, 'oda:Float', ''),
+                          (None, 'float', None, ''),
+                          (None, 'str', None, ''),
+                          (None, 'float', 'oda:Float', ''),
+                          (None, 'float | None', 'oda:String', ''),
                           
-                          (False, 'int | None', None),
-                          (1, 'bool', None),
+                          (False, 'int | None', None, ''),
+                          (1, 'bool', None, ''),
 
-                          ('foo', None, 'oda:Float'),
-                          (5.0, None, 'oda:Integer'),
-                          (5.0, None, 'oda:String'),
+                          ('foo', None, 'oda:Float', ''),
+                          (5.0, None, 'oda:Integer', ''),
+                          (5.0, None, 'oda:String', ''),
 
-                          ('foo', 'float', None),
-                          (5.0, 'int', None),
-                          (5.0, 'str', None),
+                          ('foo', 'float', None, ''),
+                          (5.0, 'int', None, ''),
+                          (5.0, 'str', None, ''),
                           
-                          (5.0, 'str', 'oda:Float'),
+                          (5.0, 'str', 'oda:Float', ''),
 
-                          (None, None, 'oda:optional'), # optional have undefined type
+                          (None, None, 'oda:optional', ''), # optional have undefined type
 
-                          (None, None, 'oda:POSIXPath'),
-                          ('', None, 'oda:POSIXPath'),
-                          ('', 'str | None', 'oda:POSIXPath'),
+                          (None, None, 'oda:POSIXPath', ''),
+                          ('', None, 'oda:POSIXPath', ''),
+                          ('', 'str | None', 'oda:POSIXPath', ''),
+                          ('', None, 'oda:OptPPath', 'oda:OptPPath rdfs:subClassOf oda:POSIXPath, oda:optional .'),
                           ]
                          )
-def test_reconcile_python_type_failing(value,type_annotation,owl_type):
+def test_reconcile_python_type_failing(value,type_annotation,owl_type,extra_ttl):
     with pytest.raises(TypeCheckError):
         reconcile_python_type(value=value, 
                               type_annotation=type_annotation,
-                              owl_type=owl_type)
+                              owl_type=owl_type,
+                              extra_ttl=ttl_prefix+extra_ttl)
 
 
 @pytest.mark.parametrize('value,expected_type', [(False, bool),

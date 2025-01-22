@@ -145,7 +145,9 @@ def cast_parameter(x,par):
         if par.get('is_optional', False):
             return None
         else:
-            raise ValueError(f'Non-optional parameter is set to None')
+            raise ValueError(f'Non-optional parameter {par["name"]} is set to None')
+    if x == '' and par.get('is_file_reference', False):
+        raise ValueError(f'Empty string is not a valid value of FileReference parameter {par["name"]}')
     return par['python_type'](x)
 
 
@@ -203,7 +205,7 @@ def reconcile_python_type(value: Any,
                           type_annotation: str | type[T] | None = None, 
                           owl_type: str | None = None, 
                           extra_ttl: str | None = None, 
-                          name: str = '') -> tuple[type, bool]:
+                          name: str = '') -> tuple[type, bool, bool]:
     '''
     Reconcile python type of the default value with type and owl annotations
     We expect ~json here, so basically int, float, str, list, dict or None
@@ -212,12 +214,13 @@ def reconcile_python_type(value: Any,
     
     if type_annotation is None and owl_type is None:
         if value is not None:
-            return type(value), False
+            return type(value), False, False
         else:
             raise TypeCheckError(f"Default value of the required parameter {name} isn't defined.")
 
     owl_dt = None
     is_optional_owl = False
+    is_file_reference = False
     if owl_type is not None:
         if extra_ttl is None: 
             extra_ttl = ''
@@ -226,10 +229,10 @@ def reconcile_python_type(value: Any,
         if xsd_dt:
             owl_dt = xsd_type_to_python_type(xsd_dt)
         is_optional_owl = ontology.is_optional(owl_type)
-
-        if 'http://odahub.io/ontology#POSIXPath' in ontology.get_parameter_hierarchy(owl_type) and value == '' and not is_optional_owl:
-            # we check against is_optional_owl only because e.g. 'str | None' doesn't make sense in allowing empty string
-            raise TypeCheckError(f"Non-optional POSIXPath parameter {name} can't be empty.")
+        is_file_reference = 'http://odahub.io/ontology#FileReference' in ontology.get_parameter_hierarchy(owl_type)
+        if is_file_reference and value == '':
+            raise TypeCheckError(f"Empty string value is not permitted for parameter {name} of type FileRefernce."
+                                  "Please use None and annotate parameter as optional instead.")
 
 
     is_optional_hint = False
@@ -269,7 +272,7 @@ def reconcile_python_type(value: Any,
                 except TypeCheckError:
                     pass
                 else:
-                    return type(ex), True
+                    return type(ex), True, is_file_reference
             raise TypeCheckError(f"No possible type is found for the parameter {name}.")
     elif isinstance(value, int) and not isinstance(value, bool):
         # be permissive if float is possible
@@ -278,10 +281,10 @@ def reconcile_python_type(value: Any,
         except TypeCheckError:
             pass
         else:
-            return float, is_optional_owl or is_optional_hint
+            return float, is_optional_owl or is_optional_hint, False
         
         check_type_both(value)
-        return int, is_optional_owl or is_optional_hint
+        return int, is_optional_owl or is_optional_hint, False
     elif isinstance(value, bool):
         check_type_both(value)
         try:
@@ -290,10 +293,10 @@ def reconcile_python_type(value: Any,
             pass
         else:
             raise TypeCheckError(f"Boolean parameter {name} is annotated as integer.")
-        return type(value), is_optional_owl or is_optional_hint
+        return type(value), is_optional_owl or is_optional_hint, False
     else:
         check_type_both(value)
-        return type(value), is_optional_owl or is_optional_hint
+        return type(value), is_optional_owl or is_optional_hint, is_file_reference
 
 
 
@@ -307,6 +310,7 @@ class InputParameter:
     owl_type: Optional[str] = None
     extra_ttl: Optional[str] = None
     is_optional: bool = False
+    is_file_reference: bool = False
 
     def as_dict(self):
         return asdict(self)
@@ -503,11 +507,12 @@ class NotebookAdapter:
             parsed_comment = understand_comment_references(par_detail['comment'],
                                                            fallback_type=fallback_type)
             
-            python_type, is_optional = reconcile_python_type(par_detail['value'],
-                                            type_annotation=par_detail['type_annotation'],
-                                            owl_type=parsed_comment.get('owl_type', None),
-                                            extra_ttl=parsed_comment.get('extra_ttl', None),
-                                            name = par_detail['varname'])
+            python_type, is_optional, is_file_reference = reconcile_python_type(
+                par_detail['value'],
+                type_annotation=par_detail['type_annotation'],
+                owl_type=parsed_comment.get('owl_type', None),
+                extra_ttl=parsed_comment.get('extra_ttl', None),
+                name = par_detail['varname'])
             
             par = InputParameter(raw_line = par_detail['raw_line'],
                                  name = par_detail['varname'],
@@ -516,7 +521,8 @@ class NotebookAdapter:
                                  comment = par_detail['comment'],
                                  owl_type = parsed_comment.get('owl_type', None),
                                  extra_ttl = parsed_comment.get('extra_ttl', None),
-                                 is_optional=is_optional)
+                                 is_optional=is_optional,
+                                 is_file_reference=is_file_reference)
             
             # This leads to some recursion, but it's not really used anywhere. 
             # TODO: integrate with ontology.function_semantic_signature
@@ -885,9 +891,9 @@ class NotebookAdapter:
             if is_posix_path or is_file_url or is_file_reference:
                 arg_par_value = parameters.get(input_par_name, None)
                 
-                # would have been better in cast_parameter, but is_posix_path is unavailable there
-                if is_posix_path and arg_par_value == '' and not input_par_obj['is_optional']:
-                    exceptions.append(ValueError(f"Non-optional POSIXPath parameter can't be empty"))
+                # # would have been better in cast_parameter, but is_posix_path is unavailable there
+                # if is_posix_path and arg_par_value == '' and not input_par_obj['is_optional']:
+                #     exceptions.append(ValueError(f"Non-optional POSIXPath parameter can't be empty"))
                 
                 if arg_par_value is None:
                     arg_par_value = input_par_obj['default_value']

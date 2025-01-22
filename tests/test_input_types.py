@@ -36,16 +36,30 @@ def test_posix_download_file_with_arg(client):
     r = client.get('/api/v1.0/get/testposixpath', query_string={'fits_file_path': 'https://fits.gsfc.nasa.gov/samples/testkeys.fits'})
     assert r.json['output']['output_file_download'] == 'file downloaded successfully'
 
-def test_posix_download_file_default_value_with_arg(client):
-    r = client.get('/api/v1.0/get/testposixpath', query_string={'fits_file_path': ''})
+@pytest.mark.parametrize('arg', ('', '\x00'))
+def test_posix_nonoptional_empty_arg(client, arg):
+    r = client.get('/api/v1.0/get/testposixpath', query_string={'fits_file_path': arg})
     #assert r.json['output']['output_file_download'] == 'file not downloaded'
     assert r.status_code >= 400
-    assert len(r.json['exceptions']) > 0
-    assert 'Non-optional POSIXPath' in r.json['exceptions'][0]
+    assert 'fits_file_path' in r.json['issues'][0]
+
+def test_posix_optional_empty_string(client):
+    r = client.get('/api/v1.0/get/testposixpath_optional', query_string={'fits_file_path': ''})
+    #assert r.json['output']['output_file_download'] == 'file not downloaded'
+    assert r.status_code >= 400
+    assert 'Empty string is not a valid value of FileReference parameter fits_file_path' in r.json['issues'][0]
+
+def test_posix_optional_none(client):
+    r = client.get('/api/v1.0/get/testposixpath_optional', query_string={'fits_file_path': '\x00'})
+    #assert r.json['output']['output_file_download'] == 'file not downloaded'
+    assert r.status_code == 200
+    assert r.json['output']['output_file_download'] == 'file path is not provided'
 
 def test_posix_download_file_extra_annotations(client):
     r = client.get('/api/v1.0/get/testposixpath_extra_annotated', query_string={'fits_file_path': 'https://fits.gsfc.nasa.gov/samples/testkeys.fits'})
     assert r.json['output']['output_file_download'] == 'file downloaded successfully'
+
+
 
 @pytest.mark.parametrize("query_string_fits_file_path", ["generic_url", "mmoda_url", None])
 def test_file_reference(client, query_string_fits_file_path):
