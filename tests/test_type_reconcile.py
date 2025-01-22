@@ -10,57 +10,57 @@ ttl_prefix = """
         
 """
 
-@pytest.mark.parametrize('value,type_annotation,owl_type,extra_ttl,expected_type,expected_optional',
-                         [('foo', None, None, '', str, False),
-                          (1, None, None, '', int, False),
-                          (1.2, None, None, '', float, False),
-                          (1.2, None, 'oda:Float', '', float, False),
-                          (True, None, 'oda:Boolean', '', bool, False),
-                          ('2017-03-06T13:26:48.0', None, 'oda:StartTimeISOT', '', str, False),
-                          (60446.5, None, 'oda:StartTimeMJD', '', float, False),
-                          (60446, None, 'oda:StartTimeMJD', '', float, False),
-                          (25.5, None, 'oda:OptFloat', 'oda:OptFloat rdfs:subClassOf oda:Float, oda:optional .', float, True),
-                          (None, None, 'oda:OptFloat', 'oda:OptFloat rdfs:subClassOf oda:Float, oda:optional .', float, True),
+@pytest.mark.parametrize(
+        'value,type_annotation,owl_type,extra_ttl,expected_type,expected_optional,expected_is_file',
+        [
+        ('foo', None, None, '', str, False, False),
+        (1, None, None, '', int, False, False),
+        (1.2, None, None, '', float, False, False),
+        (1.2, None, 'oda:Float', '', float, False, False),
+        (True, None, 'oda:Boolean', '', bool, False, False),
+        ('2017-03-06T13:26:48.0', None, 'oda:StartTimeISOT', '', str, False, False),
+        (60446.5, None, 'oda:StartTimeMJD', '', float, False, False),
+        (60446, None, 'oda:StartTimeMJD', '', float, False, False),
+        (25.5, None, 'oda:OptFloat', 'oda:OptFloat rdfs:subClassOf oda:Float, oda:optional .', float, True, False),
+        (None, None, 'oda:OptFloat', 'oda:OptFloat rdfs:subClassOf oda:Float, oda:optional .', float, True, False),
 
-                          (1.2, 'float', None, '', float, False),
-                          ('2017-03-06T13:26:48.0', 'str', None, '', str, False),
-                          (60446.5, 'float', None, '', float, False),
-                          (60446, 'float', None, '', float, False),
-                          (True, 'bool', None, '', bool, False),
-                          (25.5, 'float | None', None, '', float, True),
-                          (25.5, 'Optional[float]', None, '', float, True),
-                          (25.5, 'Union[float, None]', None, '', float, True),
-                          ({"foo": ["bar", "baz"]}, 'dict[str,list]', None, '', dict, False),
+        (1.2, 'float', None, '', float, False, False),
+        ('2017-03-06T13:26:48.0', 'str', None, '', str, False, False),
+        (60446.5, 'float', None, '', float, False, False),
+        (60446, 'float', None, '', float, False, False),
+        (True, 'bool', None, '', bool, False, False),
+        (25.5, 'float | None', None, '', float, True, False),
+        (25.5, 'Optional[float]', None, '', float, True, False),
+        (25.5, 'Union[float, None]', None, '', float, True, False),
+        ({"foo": ["bar", "baz"]}, 'dict[str,list]', None, '', dict, False, False),
 
-                          (None, 'str | None', None, '', str, True),
-                          (None, 'bool|None', None, '', bool, True),
-                          (None, 'Optional[list[int]]', None, '', list, True),
-                          (None, 'Optional[List[str]]', None, '', list, True),
+        (None, 'str | None', None, '', str, True, False),
+        (None, 'bool|None', None, '', bool, True, False),
+        (None, 'Optional[list[int]]', None, '', list, True, False),
+        (None, 'Optional[List[str]]', None, '', list, True, False),
 
-                          (None, 'float | None', 'oda:Float', '', float, True),
-                          (None, 'float', 'oda:OptFloat', 'oda:OptFloat rdfs:subClassOf oda:Float, oda:optional .', float, True),
-                          (None, 'float | None', 'oda:OptFloat', 'oda:OptFloat rdfs:subClassOf oda:Float, oda:optional .', float, True),
+        (None, 'float | None', 'oda:Float', '', float, True, False),
+        (None, 'float', 'oda:OptFloat', 'oda:OptFloat rdfs:subClassOf oda:Float, oda:optional .', float, True, False),
+        (None, 'float | None', 'oda:OptFloat', 'oda:OptFloat rdfs:subClassOf oda:Float, oda:optional .', float, True, False),
 
-                          (60446, 'int', 'oda:StartTimeMJD', '', int, False),
-                          (60446, 'float', 'oda:Integer', '', int, False),
+        (60446, 'int', 'oda:StartTimeMJD', '', int, False, False),
+        (60446, 'float', 'oda:Integer', '', int, False, False),
 
-                          ('foo', None, 'oda:WithNoTypeDefined', '', str, False),
-                          ({'foo': ['bar', 'baz']}, None, 'oda:WithNoTypeDefined', '', dict, False),
+        ('foo', None, 'oda:WithNoTypeDefined', '', str, False, False),
+        ({'foo': ['bar', 'baz']}, None, 'oda:WithNoTypeDefined', '', dict, False, False),
 
-                          ('file-name.fits', None, 'oda:POSIXPath', '', str, False),
-                          ('file-name.fits', None, 'oda:OptPPath', 'oda:OptPPath rdfs:subClassOf oda:POSIXPath, oda:optional .', str, True),
-                          (None, None, 'oda:OptPPath', 'oda:OptPPath rdfs:subClassOf oda:POSIXPath, oda:optional .', str, True),
-                          ('file-name.fits', 'str | None', 'oda:OptPPath', 'oda:OptPPath rdfs:subClassOf oda:POSIXPath, oda:optional .', str, True),
-                          ('file-name.fits', 'str | None', 'oda:POSIXPath', '', str, True),
-                          (None, 'str | None', 'oda:POSIXPath', '', str, True),
-                          ]
-                         # 'value,type_annotation,owl_type,extra_ttl,expected_type,expected_optional'
-                         )
-def test_reconcile_python_type(value,type_annotation,owl_type,extra_ttl,expected_type,expected_optional):
+        ('file-name.fits', None, 'oda:POSIXPath', '', str, False, True),
+        ('file-name.fits', None, 'oda:OptPPath', 'oda:OptPPath rdfs:subClassOf oda:POSIXPath, oda:optional .', str, True, True),
+        (None, None, 'oda:OptPPath', 'oda:OptPPath rdfs:subClassOf oda:POSIXPath, oda:optional .', str, True, True),
+        ('file-name.fits', 'str | None', 'oda:OptPPath', 'oda:OptPPath rdfs:subClassOf oda:POSIXPath, oda:optional .', str, True, True),
+        ('file-name.fits', 'str | None', 'oda:POSIXPath', '', str, True, True),
+        (None, 'str | None', 'oda:POSIXPath', '', str, True, True),
+        ])
+def test_reconcile_python_type(value,type_annotation,owl_type,extra_ttl,expected_type,expected_optional,expected_is_file):
     assert reconcile_python_type(value=value, 
                                  type_annotation=type_annotation,
                                  owl_type=owl_type,
-                                 extra_ttl=ttl_prefix+extra_ttl) == (expected_type, expected_optional)
+                                 extra_ttl=ttl_prefix+extra_ttl) == (expected_type, expected_optional,expected_is_file)
     
 @pytest.mark.parametrize('value,type_annotation,owl_type,extra_ttl',
                          [(None, None, None, ''),
