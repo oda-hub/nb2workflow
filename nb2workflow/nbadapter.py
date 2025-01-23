@@ -146,6 +146,13 @@ def cast_parameter(x,par):
             return None
         else:
             raise ValueError(f'Non-optional parameter {par["name"]} is set to None')
+    # For all parameters, empty value is represented with None value, as the empty string is distinct from None, and this approach doesn't directly cause any problems.
+    # With POSIXPath parameters, we had a problem / unintuitive behaviour due to how file parameters are passed from frontend.
+    # Both empty string and None intuitively have clear meaning of "no file" in this case.
+    # To align with the same behaviour of all the other parameters,
+    # we only support explicit None and don't allow empty string for POSIXPath at all.
+    # This will also simplify the needed adaptations in the dispatcher, otherwise it's hard to guess there what is expected to represent emptiness.
+    # It is also extended to the whole FileReference class, not only POSIXPath just for uniformness.
     if x == '' and par.get('is_file_reference', False):
         raise ValueError(f'Empty string is not a valid value of FileReference parameter {par["name"]}')
     return par['python_type'](x)
