@@ -145,7 +145,16 @@ def cast_parameter(x,par):
         if par.get('is_optional', False):
             return None
         else:
-            raise ValueError(f'Non-optional parameter is set to None')
+            raise ValueError(f'Non-optional parameter {par["name"]} is set to None')
+    # For all parameters, empty value is represented with None value, as the empty string is distinct from None, and this approach doesn't directly cause any problems.
+    # With POSIXPath parameters, we had a problem / unintuitive behaviour due to how file parameters are passed from frontend.
+    # Both empty string and None intuitively have clear meaning of "no file" in this case.
+    # To align with the same behaviour of all the other parameters,
+    # we only support explicit None and don't allow empty string for POSIXPath at all.
+    # This will also simplify the needed adaptations in the dispatcher, otherwise it's hard to guess there what is expected to represent emptiness.
+    # It is also extended to the whole FileReference class, not only POSIXPath just for uniformness.
+    if x == '' and par.get('is_file_reference', False):
+        raise ValueError(f'Empty string is not a valid value of FileReference parameter {par["name"]}')
     return par['python_type'](x)
 
 
@@ -203,21 +212,22 @@ def reconcile_python_type(value: Any,
                           type_annotation: str | type[T] | None = None, 
                           owl_type: str | None = None, 
                           extra_ttl: str | None = None, 
-                          name: str = '') -> tuple[type, bool]:
+                          name: str = '') -> tuple[type, bool, bool]:
     '''
     Reconcile python type of the default value with type and owl annotations
     We expect ~json here, so basically int, float, str, list, dict or None
     Respects duck typing: if default is int and float is allowed, returns float
     '''
-
+    
     if type_annotation is None and owl_type is None:
         if value is not None:
-            return type(value), False
+            return type(value), False, False
         else:
             raise TypeCheckError(f"Default value of the required parameter {name} isn't defined.")
 
     owl_dt = None
     is_optional_owl = False
+    is_file_reference = False
     if owl_type is not None:
         if extra_ttl is None: 
             extra_ttl = ''
@@ -226,6 +236,12 @@ def reconcile_python_type(value: Any,
         if xsd_dt:
             owl_dt = xsd_type_to_python_type(xsd_dt)
         is_optional_owl = ontology.is_optional(owl_type)
+        # refer tpo the comment in the cast_parameter function
+        is_file_reference = 'http://odahub.io/ontology#FileReference' in ontology.get_parameter_hierarchy(owl_type)
+        if is_file_reference and value == '':
+            raise TypeCheckError(f"Empty string value is not permitted for parameter {name} of type FileRefernce."
+                                  "Please use None and annotate parameter as optional instead.")
+
 
     is_optional_hint = False
     hint_fref = None
@@ -253,7 +269,7 @@ def reconcile_python_type(value: Any,
     # So other will fail checking value, but it's OK.
     if value is None:
         if not is_optional_owl and not is_optional_hint:
-            raise TypeCheckError(f"Required parameter {name} shouldn't be None.")
+            raise TypeCheckError(f"Non-optional parameter {name} can't be None.")
         elif owl_dt is None and hint_fref is None:
             raise TypeCheckError(f"Default value of the parameter {name} can't be defined.")
         else:
@@ -264,7 +280,7 @@ def reconcile_python_type(value: Any,
                 except TypeCheckError:
                     pass
                 else:
-                    return type(ex), True
+                    return type(ex), True, is_file_reference
             raise TypeCheckError(f"No possible type is found for the parameter {name}.")
     elif isinstance(value, int) and not isinstance(value, bool):
         # be permissive if float is possible
@@ -273,10 +289,10 @@ def reconcile_python_type(value: Any,
         except TypeCheckError:
             pass
         else:
-            return float, is_optional_owl or is_optional_hint
+            return float, is_optional_owl or is_optional_hint, False
         
         check_type_both(value)
-        return int, is_optional_owl or is_optional_hint
+        return int, is_optional_owl or is_optional_hint, False
     elif isinstance(value, bool):
         check_type_both(value)
         try:
@@ -285,10 +301,10 @@ def reconcile_python_type(value: Any,
             pass
         else:
             raise TypeCheckError(f"Boolean parameter {name} is annotated as integer.")
-        return type(value), is_optional_owl or is_optional_hint
+        return type(value), is_optional_owl or is_optional_hint, False
     else:
         check_type_both(value)
-        return type(value), is_optional_owl or is_optional_hint
+        return type(value), is_optional_owl or is_optional_hint, is_file_reference
 
 
 
@@ -302,6 +318,7 @@ class InputParameter:
     owl_type: Optional[str] = None
     extra_ttl: Optional[str] = None
     is_optional: bool = False
+    is_file_reference: bool = False
 
     def as_dict(self):
         return asdict(self)
@@ -498,11 +515,12 @@ class NotebookAdapter:
             parsed_comment = understand_comment_references(par_detail['comment'],
                                                            fallback_type=fallback_type)
             
-            python_type, is_optional = reconcile_python_type(par_detail['value'],
-                                            type_annotation=par_detail['type_annotation'],
-                                            owl_type=parsed_comment.get('owl_type', None),
-                                            extra_ttl=parsed_comment.get('extra_ttl', None),
-                                            name = par_detail['varname'])
+            python_type, is_optional, is_file_reference = reconcile_python_type(
+                par_detail['value'],
+                type_annotation=par_detail['type_annotation'],
+                owl_type=parsed_comment.get('owl_type', None),
+                extra_ttl=parsed_comment.get('extra_ttl', None),
+                name = par_detail['varname'])
             
             par = InputParameter(raw_line = par_detail['raw_line'],
                                  name = par_detail['varname'],
@@ -511,7 +529,8 @@ class NotebookAdapter:
                                  comment = par_detail['comment'],
                                  owl_type = parsed_comment.get('owl_type', None),
                                  extra_ttl = parsed_comment.get('extra_ttl', None),
-                                 is_optional=is_optional)
+                                 is_optional=is_optional,
+                                 is_file_reference=is_file_reference)
             
             # This leads to some recursion, but it's not really used anywhere. 
             # TODO: integrate with ontology.function_semantic_signature
@@ -634,6 +653,7 @@ class NotebookAdapter:
         return exceptions
 
     def _execute(self, parameters, progress_bar=True, log_output=True, inplace=False, context={}, tmpdir_key=None):
+        exceptions = []
 
         if not inplace :
             tmpdir = self.new_tmpdir(tmpdir_key)
@@ -651,26 +671,26 @@ class NotebookAdapter:
                 if 'git-lfs' in str(e):
                     # this error may occur if the repo was originally cloned by the different version of git utility
                     # e.g. when repo is mounted with docker run -v
-                    raise Exception("We got some problem cloning the repository, the problem seems to be related to git-lfs. You might want to try reinitializing git-lfs with 'git-lfs install; git-lfs pull'")
+                    exceptions.append(RuntimeError("We got some problem cloning the repository, the problem seems to be related to git-lfs. You might want to try reinitializing git-lfs with 'git-lfs install; git-lfs pull'"))
                 else:
-                    raise e
+                    exceptions.append(e)
         else:
             tmpdir =os.path.dirname(os.path.realpath(self.notebook_fn))
             logger.info("executing inplace, no tmpdir is input dir: %s", tmpdir)
 
         r = self.handle_url_params(parameters, tmpdir, context=context)
 
-        if len(context) > 0:
-            self._pass_context(tmpdir, context)
-
-        self.update_summary(state="started", parameters=parameters)
-
-        self.inject_output_gathering()
-        exceptions = []
-
-        if len(r['exceptions']) > 0:
+        if len(r['exceptions'])>0:
             exceptions.extend(r['exceptions'])
-        else:
+        
+        if len(exceptions) == 0:
+            if len(context) > 0:
+                self._pass_context(tmpdir, context)
+
+            self.update_summary(state="started", parameters=parameters)
+
+            self.inject_output_gathering()
+
             ntries = 10
             while ntries > 0:
                 try:
@@ -878,6 +898,7 @@ class NotebookAdapter:
 
             if is_posix_path or is_file_url or is_file_reference:
                 arg_par_value = parameters.get(input_par_name, None)
+
                 if arg_par_value is None:
                     arg_par_value = input_par_obj['default_value']
                 if validators.url(arg_par_value, simple_host=True):
