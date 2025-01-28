@@ -170,7 +170,7 @@ class NBRepo:
         inject_python_version_str = ''
       
         if not config['use_repo_base_image']:
-            inject_python_version_str = f"sed -i '/dependencies/a \ \ - python={default_python_version}' /repo/environment.yml"
+            inject_python_version_str = f"/tmp/yq -i '.dependencies += \"python={default_python_version}\"' /repo/environment.yml"
             if os.path.exists( self.local_repo_path / 'environment.yml' ):
                 with open(self.local_repo_path / 'environment.yml') as fd:
                     parsed_env = yaml.safe_load(fd)
