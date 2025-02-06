@@ -48,6 +48,6 @@ ENV ODA_WORKFLOW_LAST_AUTHOR="{{ metadata['author'] }}"
 ENV ODA_WORKFLOW_LAST_CHANGED="{{ metadata['last_change_time'] }}"
 
 RUN for nn in {{ nbpath }}/*.ipynb; do \
-    /tmp/yq -i '.metadata.kernelspec.name |= "python3"' $nn; done
+    /tmp/yq -i -p json -o json '.metadata.kernelspec.name |= "python3"' $nn; done
 
 CMD nb2service --debug --pattern '{{ filename_pattern }}' --host 0.0.0.0 --port 8000 {{ nbpath }}
