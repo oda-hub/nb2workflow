@@ -9,7 +9,10 @@ ENV MAMBA_USER=${NB_USER:-root}
 USER root
 RUN apt-get update && apt-get install -y git curl wget build-essential && \
     apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* && \
+    curl -o /tmp/yq -L https://github.com/mikefarah/yq/releases/download/v4.45.1/yq_linux_amd64 && \
+    chmod +x /tmp/yq 
+
 
 {% if source_from == 'localdir' %}
 COPY --chown=$MAMBA_USER:$MAMBA_USER nb-repo/ /repo/
@@ -44,9 +47,7 @@ ENV ODA_WORKFLOW_VERSION="{{ metadata['descr'] }}"
 ENV ODA_WORKFLOW_LAST_AUTHOR="{{ metadata['author'] }}"
 ENV ODA_WORKFLOW_LAST_CHANGED="{{ metadata['last_change_time'] }}"
 
-RUN curl -o /tmp/jq -L https://github.com/stedolan/jq/releases/download/jq-1.5/jq-linux64 && \
-    chmod +x /tmp/jq && \
-    for nn in {{ nbpath }}/*.ipynb; do mv $nn $nn-tmp; \
-    /tmp/jq '.metadata.kernelspec.name |= "python3"' $nn-tmp > $nn ; rm $nn-tmp ; done
+RUN for nn in {{ nbpath }}/*.ipynb; do \
+    /tmp/yq -i -p json -o json '.metadata.kernelspec.name |= "python3"' $nn; done
 
 CMD nb2service --debug --pattern '{{ filename_pattern }}' --host 0.0.0.0 --port 8000 {{ nbpath }}

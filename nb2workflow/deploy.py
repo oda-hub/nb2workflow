@@ -170,14 +170,15 @@ class NBRepo:
         inject_python_version_str = ''
       
         if not config['use_repo_base_image']:
-            inject_python_version_str = f"sed -i '/dependencies/a \ \ - python={default_python_version}' /repo/environment.yml"
+            inject_python_version_str = f"/tmp/yq -i '.dependencies += \"python={default_python_version}\"' /repo/environment.yml"
             if os.path.exists( self.local_repo_path / 'environment.yml' ):
                 with open(self.local_repo_path / 'environment.yml') as fd:
                     parsed_env = yaml.safe_load(fd)
-                    if 'dependencies' in parsed_env:
+                    dependencies_parsed_env = parsed_env.get('dependencies', None)
+                    if dependencies_parsed_env is not None:
                         has_conda_env = True
                         match_spec = re.compile(r'^python[~=<> ]')
-                        for dep in parsed_env['dependencies']:
+                        for dep in dependencies_parsed_env:
                             if isinstance(dep, str) and match_spec.match(dep):
                                 inject_python_version_str = f'echo "Using {dep}"'
                                 break
