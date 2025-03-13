@@ -555,7 +555,7 @@ class NotebookAdapter:
     def extract_parameters(self):
         nb = self.read()
 
-        self.input_parameters = {}
+        self._input_parameters = {}
         self.system_parameters = {}
                
         for cell in nb.cells:
@@ -569,7 +569,18 @@ class NotebookAdapter:
                     pars = {**getattr(self, attr), **pars}
                     setattr(self, attr, pars)
 
-        return self.input_parameters
+        return self._input_parameters
+
+    @property
+    def input_parameters(self):
+        try:
+            return self._input_parameters
+        except AttributeError:
+            return self.extract_parameters()
+
+    @input_parameters.setter
+    def input_parameters(self, value):
+        self._input_parameters = value
 
     @cached_property
     def token_access(self):
