@@ -133,15 +133,8 @@ class NBRepo:
                 "last_change_time": meta['last_change_time'],
                 "resources": meta["resources"]}
     
-    @lru_cache
-    def generate_dockerfile(self,
-                            source_from: str, 
-                            nb2wversion: str) -> str:
-        if source_from not in ['localdir', 'git']:
-            raise NotImplementedError('Unsupported source code location %s', source_from)
-        
-        tmpl = jenv.get_template('Dockerfile.jinja')
-            
+    @cached_property
+    def mmoda_config(self) -> dict:
         config_fn = self.local_repo_path / "mmoda.yaml"
 
         config = default_config.copy()
@@ -155,21 +148,32 @@ class NBRepo:
             logger.info("no extra config in %s", config_fn)   
         logger.info("complete config: %s", config)
 
+        return config
 
-        if config['use_repo_base_image']: 
+
+    @lru_cache
+    def generate_dockerfile(self,
+                            source_from: str, 
+                            nb2wversion: str) -> str:
+        if source_from not in ['localdir', 'git']:
+            raise NotImplementedError('Unsupported source code location %s', source_from)
+        
+        tmpl = jenv.get_template('Dockerfile.jinja')
+            
+        if self.mmoda_config['use_repo_base_image']: 
             with open(self.context_dir / "Dockerfile", "r") as fd:
                 dockerfile_base = fd.read()
         else:
             dockerfile_base = None
         
-        notebook_fullpath_in_container = pathlib.Path('/repo') / (config['notebook_path'].strip("/"))
+        notebook_fullpath_in_container = pathlib.Path('/repo') / (self.mmoda_config['notebook_path'].strip("/"))
         logger.info("using notebook_fullpath_in_container: %s", notebook_fullpath_in_container)
 
         # will be used only if not use_repo_base_image but need to define to pass into template
         has_conda_env = False
         inject_python_version_str = ''
       
-        if not config['use_repo_base_image']:
+        if not self.mmoda_config['use_repo_base_image']:
             inject_python_version_str = f"/tmp/yq -i '.dependencies += \"python={default_python_version}\"' /repo/environment.yml"
             if os.path.exists( self.local_repo_path / 'environment.yml' ):
                 with open(self.local_repo_path / 'environment.yml') as fd:
@@ -198,7 +202,7 @@ class NBRepo:
             nb2w_version_spec = nb2w_version_spec,
             metadata = self.pre_build_metadata,
             nbpath = notebook_fullpath_in_container,
-            filename_pattern = config['filename_pattern']
+            filename_pattern = self.mmoda_config['filename_pattern']
         )
         
         with open(self.context_dir / "Dockerfile", "w") as fd:
@@ -212,6 +216,9 @@ class NBRepo:
 
         search_pattern = os.path.join(self.context_dir,'**/*.ipynb')
         for nb_file in glob.glob(search_pattern, recursive=True):
+            if not re.match(self.mmoda_config['filename_pattern'], os.path.basename(nb_file)):
+                continue
+
             nba = NotebookAdapter(nb_file)
             g = nba._graph
             for r in self.ontology.get_requested_resources(g):
