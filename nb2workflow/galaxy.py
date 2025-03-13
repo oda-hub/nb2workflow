@@ -242,6 +242,10 @@ def _nb2script(nba: NotebookAdapter, inputs: list[GalaxyParameter], outputs: lis
             simple_outp_code += f"_simple_outs.append(('{outp.dataname}', '{outp.outfile_name}', {outp.name}))\n"
     
     import_code = dedent( """
+                #!/usr/bin/env python
+                
+                # This script is generated with nb2galaxy
+                         
                 # flake8: noqa         
 
                 import json
@@ -687,7 +691,7 @@ def to_galaxy(input_path,
                         id=tid,
                         name=toolname,
                         version=tool_version, 
-                        profile='23.0')
+                        profile='24.0')
 
     reqs = ET.SubElement(tool_root, 'requirements')
     extra_req = global_req
@@ -696,11 +700,11 @@ def to_galaxy(input_path,
     comm = ET.SubElement(tool_root, 'command', detect_errors='exit_code')
     python_binary = 'python'
     # the same to decide python/ipython
-    
+
+    env = ET.SubElement(tool_root, 'environment_variables')    
     conf = ET.SubElement(tool_root, 'configfiles')
     conf.append(ET.Element('inputs', name='inputs', filename='inputs.json', data_style='paths'))
 
-    env = ET.SubElement(tool_root, 'environment_variables')
     bd_env_v = ET.SubElement(env, 'environment_variable', attrib={'name': 'BASEDIR'})
     bd_env_v.text = "$__tool_directory__"
     td_env_v = ET.SubElement(env, 'environment_variable', attrib={'name': 'GALAXY_TOOL_DIR'})
