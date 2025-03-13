@@ -333,7 +333,8 @@ class NotebookAdapter:
         self.tempdir_cache = tempdir_cache
         self._graph = rdflib.Graph()
         logger.debug("notebook adapter for %s", self.notebook_fn)
-        logger.debug(self.extract_parameters())
+        if logger.level == logging.DEBUG: # to not extract_parameters without the need
+            logger.debug(self.extract_parameters())
         self.n_download_max_tries = n_download_max_tries
         self.download_retry_sleep_s = download_retry_sleep_s
         self.max_download_size = max_download_size
