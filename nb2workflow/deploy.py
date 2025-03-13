@@ -214,15 +214,14 @@ class NBRepo:
     def resource_requirements(self) -> dict[str, dict]:
         resources = {}
 
-        search_pattern = os.path.join(self.context_dir, self.mmoda_config['notebook_path'].strip(os.sep), '*.ipynb')
-        logger.info(f'Search pattern is {search_pattern}')
+        search_pattern = os.path.join(self.context_dir, 'nb-repo', self.mmoda_config['notebook_path'].strip(os.sep), '*.ipynb')
         notebooks = glob.glob(search_pattern)
-        logger.info(f'Analysing for requirements notebooks {notebooks}')
 
         for nb_file in notebooks:
             if not re.match(self.mmoda_config['filename_pattern'], os.path.basename(nb_file)):
                 logger.info(f"notebook {nb_file} doesn't match filename pattern: skipping")
                 continue
+            logger.info(f'Analysing notebook for requirements: {nb_file}')
 
             nba = NotebookAdapter(nb_file)
             g = nba._graph
