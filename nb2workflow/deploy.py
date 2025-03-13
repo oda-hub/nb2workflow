@@ -214,8 +214,8 @@ class NBRepo:
     def resource_requirements(self) -> dict[str, dict]:
         resources = {}
 
-        search_pattern = os.path.join(self.context_dir,'**/*.ipynb')
-        for nb_file in glob.glob(search_pattern, recursive=True):
+        search_pattern = os.path.join(self.context_dir, self.mmoda_config['notebook_path'].strip(os.sep), '*.ipynb')
+        for nb_file in glob.glob(search_pattern):
             if not re.match(self.mmoda_config['filename_pattern'], os.path.basename(nb_file)):
                 continue
 
