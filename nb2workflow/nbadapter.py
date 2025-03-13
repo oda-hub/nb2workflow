@@ -239,7 +239,7 @@ def reconcile_python_type(value: Any,
         # refer tpo the comment in the cast_parameter function
         is_file_reference = 'http://odahub.io/ontology#FileReference' in ontology.get_parameter_hierarchy(owl_type)
         if is_file_reference and value == '':
-            raise TypeCheckError(f"Empty string value is not permitted for parameter {name} of type FileRefernce."
+            raise TypeCheckError(f"Empty string value is not permitted for parameter {name} of type FileReference. "
                                   "Please use None and annotate parameter as optional instead.")
 
 
