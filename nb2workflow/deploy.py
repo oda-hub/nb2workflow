@@ -217,7 +217,10 @@ class NBRepo:
         search_pattern = os.path.join(self.context_dir, self.mmoda_config['notebook_path'].strip(os.sep), '*.ipynb')
         for nb_file in glob.glob(search_pattern):
             if not re.match(self.mmoda_config['filename_pattern'], os.path.basename(nb_file)):
+                logger.info(f"notebook {nb_file} doesn't match filename pattern: skipping")
                 continue
+
+            logger.info(f'Analysing resource requirements of {nb_file}')
 
             nba = NotebookAdapter(nb_file)
             g = nba._graph
