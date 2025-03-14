@@ -101,6 +101,7 @@ class GalaxyParameter:
         max_value = None
         allowed_values = None
         is_dataset = False
+        is_optional = par_details.get('is_optional', False)
         
         owl_uri = par_details['owl_type']
 
@@ -140,7 +141,8 @@ class GalaxyParameter:
                    default_value=par_details['default_value'], 
                    min_value=min_value,
                    max_value=max_value,
-                   allowed_values=allowed_values)
+                   allowed_values=allowed_values,
+                   additional_attrs={'optional': 'true' if is_optional else 'false'})
 
     def to_xml_tree(self):
         
@@ -227,7 +229,7 @@ class GalaxyOutput:
         return element
 
 
-def _nb2script(nba, inputs: list[GalaxyParameter], outputs: list[GalaxyOutput]):
+def _nb2script(nba: NotebookAdapter, inputs: list[GalaxyParameter], outputs: list[GalaxyOutput]):
     input_nb = nba.notebook_fn
     mynb = nbformat.read(input_nb, as_version=4)
 
@@ -240,6 +242,10 @@ def _nb2script(nba, inputs: list[GalaxyParameter], outputs: list[GalaxyOutput]):
             simple_outp_code += f"_simple_outs.append(('{outp.dataname}', '{outp.outfile_name}', {outp.name}))\n"
     
     import_code = dedent( """
+                #!/usr/bin/env python
+                
+                # This script is generated with nb2galaxy
+                         
                 # flake8: noqa         
 
                 import json
@@ -276,17 +282,28 @@ def _nb2script(nba, inputs: list[GalaxyParameter], outputs: list[GalaxyOutput]):
     struct_par_names = [x.name for x in inputs if x.is_json_input]
 
     if len(simple_par_names)>0:
-        input_code += dedent(f"""
-            for _vn in {simple_par_names}:
-                globals()[_vn] = type(globals()[_vn])(inp_pdic[_vn])
-        """)
-    
+        for par_name in simple_par_names:
+            if nba.input_parameters[par_name]['is_optional']:
+                input_code += dedent(f"""
+                    {par_name} = (
+                        {nba.input_parameters[par_name]['python_type'].__name__}(inp_pdic['{par_name}']) 
+                        if inp_pdic.get('{par_name}', None) is not None 
+                        else None
+                        )
+                    """)
+            else:
+                input_code += f"{par_name} = {nba.input_parameters[par_name]['python_type'].__name__}(inp_pdic['{par_name}'])"
+
+
     if len(struct_par_names)>0:
         input_code += dedent(f"""
             for _vn in {struct_par_names}:
-                with open(inp_pdic[_vn], 'r') as _this_fd:
-                    _vv = json.load(_this_fd)
-                    globals()[_vn] = _vv
+                if inp_pdic.get(_vn, None) is not None:
+                    with open(inp_pdic[_vn], 'r') as _this_fd:
+                        _vv = json.load(_this_fd)
+                        globals()[_vn] = _vv
+                else:
+                    globals()[_vn] = None
         """)
 
     inject_read = nbformat.v4.new_code_cell(input_code)
@@ -674,7 +691,7 @@ def to_galaxy(input_path,
                         id=tid,
                         name=toolname,
                         version=tool_version, 
-                        profile='23.0')
+                        profile='24.0')
 
     reqs = ET.SubElement(tool_root, 'requirements')
     extra_req = global_req
@@ -683,11 +700,11 @@ def to_galaxy(input_path,
     comm = ET.SubElement(tool_root, 'command', detect_errors='exit_code')
     python_binary = 'python'
     # the same to decide python/ipython
-    
+
+    env = ET.SubElement(tool_root, 'environment_variables')    
     conf = ET.SubElement(tool_root, 'configfiles')
     conf.append(ET.Element('inputs', name='inputs', filename='inputs.json', data_style='paths'))
 
-    env = ET.SubElement(tool_root, 'environment_variables')
     bd_env_v = ET.SubElement(env, 'environment_variable', attrib={'name': 'BASEDIR'})
     bd_env_v.text = "$__tool_directory__"
     td_env_v = ET.SubElement(env, 'environment_variable', attrib={'name': 'GALAXY_TOOL_DIR'})
