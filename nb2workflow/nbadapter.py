@@ -239,7 +239,7 @@ def reconcile_python_type(value: Any,
         # refer tpo the comment in the cast_parameter function
         is_file_reference = 'http://odahub.io/ontology#FileReference' in ontology.get_parameter_hierarchy(owl_type)
         if is_file_reference and value == '':
-            raise TypeCheckError(f"Empty string value is not permitted for parameter {name} of type FileRefernce."
+            raise TypeCheckError(f"Empty string value is not permitted for parameter {name} of type FileReference. "
                                   "Please use None and annotate parameter as optional instead.")
 
 
@@ -334,6 +334,7 @@ class NotebookAdapter:
         self._graph = rdflib.Graph()
         logger.debug("notebook adapter for %s", self.notebook_fn)
         logger.debug(self.extract_parameters())
+        logger.debug(self.extract_output_declarations())
         self.n_download_max_tries = n_download_max_tries
         self.download_retry_sleep_s = download_retry_sleep_s
         self.max_download_size = max_download_size
@@ -554,7 +555,7 @@ class NotebookAdapter:
     def extract_parameters(self):
         nb = self.read()
 
-        self.input_parameters = {}
+        self._input_parameters = {}
         self.system_parameters = {}
                
         for cell in nb.cells:
@@ -568,7 +569,18 @@ class NotebookAdapter:
                     pars = {**getattr(self, attr), **pars}
                     setattr(self, attr, pars)
 
-        return self.input_parameters
+        return self._input_parameters
+
+    @property
+    def input_parameters(self):
+        try:
+            return self._input_parameters
+        except AttributeError:
+            return self.extract_parameters()
+
+    @input_parameters.setter
+    def input_parameters(self, value):
+        self._input_parameters = value
 
     @cached_property
     def token_access(self):
