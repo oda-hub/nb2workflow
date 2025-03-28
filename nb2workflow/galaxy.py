@@ -290,9 +290,10 @@ def _nb2script(nba: NotebookAdapter, inputs: list[GalaxyParameter], outputs: lis
                         if inp_pdic.get('{par_name}', None) is not None 
                         else None
                         )
+
                     """)
             else:
-                input_code += f"{par_name} = {nba.input_parameters[par_name]['python_type'].__name__}(inp_pdic['{par_name}'])"
+                input_code += f"{par_name} = {nba.input_parameters[par_name]['python_type'].__name__}(inp_pdic['{par_name}'])\n"
 
 
     if len(struct_par_names)>0:
