@@ -272,8 +272,8 @@ def _nb2script(nba: NotebookAdapter, inputs: list[GalaxyParameter], outputs: lis
 
         with open('inputs.json', 'r') as fd:
             inp_dic = json.load(fd)
-        if '_data_product' in inp_dic.keys():
-            inp_pdic = inp_dic['_data_product']
+        if 'C_data_product_' in inp_dic.keys():
+            inp_pdic = inp_dic['C_data_product_']
         else:
             inp_pdic = inp_dic
         """)
@@ -717,8 +717,8 @@ def to_galaxy(input_path,
     
     
     if len(nbas) > 1:
-        dprod_cond = ET.SubElement(inps, 'conditional', name='_data_product')
-        dprod_sel = ET.SubElement(dprod_cond, 'param', name="_selector", type="select", label = "Data Product")
+        dprod_cond = ET.SubElement(inps, 'conditional', name='C_data_product_')
+        dprod_sel = ET.SubElement(dprod_cond, 'param', name="DPselector_", type="select", label = "Data Product")
         sflag = True
         for name in nbas.keys():
             opt = ET.SubElement(dprod_sel, 'option', value=name, selected='true' if sflag else 'false')
@@ -736,8 +736,8 @@ def to_galaxy(input_path,
         
         if len(nbas) > 1:
             when = ET.SubElement(dprod_cond, 'when', value=nb_name) # type: ignore
-            test_par_root = ET.SubElement(default_test, 'conditional', name='_data_product')
-            test_par_root.append(ET.Element('param', name='_selector', value=nb_name))
+            test_par_root = ET.SubElement(default_test, 'conditional', name='C_data_product_')
+            test_par_root.append(ET.Element('param', name='DPselector_', value=nb_name))
         else:
             when = inps
             test_par_root = default_test
@@ -771,7 +771,7 @@ def to_galaxy(input_path,
             outp_tree = outp.to_xml_tree()
             if len(nbas) > 1:
                 fltr = ET.SubElement(outp_tree, 'filter')
-                fltr.text = f"_data_product['_selector'] == '{nb_name}'"
+                fltr.text = f"C_data_product_['DPselector_'] == '{nb_name}'"
             outps.append(outp_tree)
 
         script_str = _nb2script(nba, inputs=galaxy_pars, outputs=galaxy_otps)
@@ -791,7 +791,7 @@ def to_galaxy(input_path,
                              requirements_txt=requirements_file,
                              extra_req=extra_req).to_xml_tree())
     if len(nbas) > 1:
-        comm.text = python_binary + " '$__tool_directory__/${_data_product._selector}.py'" 
+        comm.text = python_binary + " '$__tool_directory__/${C_data_product_.DPselector_}.py'" 
     else:
         comm.text = f"{python_binary} '$__tool_directory__/{list(nbas.keys())[0]}.py'"
     # NOTE: CDATA if needed https://gist.github.com/zlalanne/5711847
