@@ -21,6 +21,6 @@ requests
 pyyaml
 scrapbook
 matplotlib
-werkzeug==2.0.3
+werkzeug==3.0.6
 nbconvert>=7.0.0
 GitPython
