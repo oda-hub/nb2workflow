@@ -428,9 +428,10 @@ class NBRepo:
 
         secretenv = []
         for name, resource in use_container_meta['resources'].items():
-            verify_resource_secret(name, resource['required'], namespace=namespace)
-            for env in resource['env_vars']:
-                secretenv.append((env, name))
+            secret_is_defined = verify_resource_secret(name, resource['required'], namespace=namespace)
+            if secret_is_defined:
+                for env in resource['env_vars']:
+                    secretenv.append((env, name))
 
         os.makedirs(self.context_dir/'deploy', exist_ok=True)
 
@@ -536,6 +537,8 @@ def verify_resource_secret(name, required, namespace="oda-staging"):
         raise RuntimeError(message)
     else:
         logger.warning(message)
+    
+    return False
 
 def deploy_k8s(container_info, 
            deployment_base_name, 
