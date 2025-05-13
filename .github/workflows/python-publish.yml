@@ -10,11 +10,11 @@ on:
 jobs:
   bump-version:
     name: Bump package version
-    if: "!contains(github.event.head_commit.message, 'Bump version')"
-    runs-on: ubuntu-20.04
+    if: ${{ !contains(github.event.head_commit.message, 'Bump version') }}
+    runs-on: ubuntu-latest
     steps:
     - name: actions/checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         fetch-depth: 0
         token: ${{ secrets.ODA_BOT_SECRET }}
@@ -42,8 +42,8 @@ jobs:
       run: python -m build
 
     - name: Publish package
-      uses: pypa/gh-action-pypi-publish@27b31702a0e7fc50959f5ad993c78deac1bdfc29
+      uses: pypa/gh-action-pypi-publish@v1.12.4
       with:
         user: __token__
-        verify_metadata: false
+        verify-metadata: false
         password: ${{ secrets.PYPI_API_TOKEN }}        
