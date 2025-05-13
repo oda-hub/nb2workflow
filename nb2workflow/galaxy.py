@@ -677,6 +677,35 @@ def to_galaxy(input_path,
               ontology_path = oda_ontology_path,
               test_data_baseurl = None
               ):
+    """
+    Converts a Jupyter notebook or a directory of notebooks into a Galaxy tool.
+
+    Parameters:
+    - input_path (str): Path to the notebook file or a directory containing notebooks.
+    - toolname (str): Name of the Galaxy tool to be generated.
+    - out_dir (str): Directory where the generated Galaxy tool files will be saved.
+    - tool_id (str, optional): Unique identifier for the Galaxy tool. Defaults to a sanitized version of `toolname`.
+    - tool_version (str, optional): Version of the Galaxy tool. Defaults to '0.1.0+galaxy0'.
+    - requirements_file (str, optional): Path to a `requirements.txt` file specifying Python dependencies.
+        Default behavior: If omitted, no additional Python dependencies are included unless specified in the Conda environment file.
+    - conda_environment_file (str, optional): Path to a Conda environment YAML file specifying dependencies.
+        Default behavior: If omitted, only the default dependencies required by the notebook are included.
+    - citations_bibfile (str, optional): Path to a BibTeX file containing citations for the tool.
+        Default behavior: If omitted, no citations are included in the Galaxy tool.
+    - help_file (str, optional): Path to a help file (Markdown or reStructuredText) to include in the Galaxy tool.
+        Default behavior: If omitted, no help documentation is added to the Galaxy tool.
+    - available_channels (list[str], optional): List of Conda channels to use for resolving dependencies.
+        Default behavior: If omitted, the default channels ['default', 'conda-forge'] are used.
+    - ontology_path (str, optional): Path to an ontology file for parameter and output metadata.
+        Default behavior: If omitted, the default ontology `oda_ontology_path` is used.
+    - test_data_baseurl (str, optional): Base URL for test data, used to resolve input parameters that reference external files.
+        Default behavior: If omitted, test data is copied locally into the `test-data` directory of the Galaxy tool.
+
+    Outputs:
+    - A Galaxy tool XML file (`<toolname>.xml`) is generated in the specified `out_dir`.
+    - Python scripts corresponding to the notebook(s) are generated in the `out_dir`.
+    - Additional files, such as test data and metadata, are created as needed.
+    """
     ontology = Ontology(ontology_path) if ontology_path != oda_ontology_path else nba_ontology_global_var
 
     os.makedirs(out_dir, exist_ok=True)
@@ -817,22 +846,95 @@ def to_galaxy(input_path,
 # %%
 def main():
     parser = argparse.ArgumentParser(
-        description='Convert python notebook to galaxy tool'
+        description=(
+            'Convert a Jupyter notebook file or a directory containing notebooks into a Galaxy tool '
+            'by generating the required XML configuration, scripts, and other supporting files.'
         )
-    parser.add_argument('notebook', type=str)
-    parser.add_argument('outdir', type=str)
-    parser.add_argument('--name', type=str, default='example')
-    parser.add_argument('--tool_version', type=str, default='0.1.0+galaxy0')
-    parser.add_argument('--requirements_txt', required=False)
-    parser.add_argument('--environment_yml', required=False)
-    parser.add_argument('--ontology_path', required=False)
-    parser.add_argument('--citations_bibfile', required=False)
-    parser.add_argument('--help_file', required=False)
-    parser.add_argument('--test_data_baseurl', required=False)
-    parser.add_argument('--conda_channels', required=False, default='default,conda-forge')
+    )
+    parser.add_argument(
+        'notebook_source', 
+        type=str, 
+        help='Path to the Jupyter notebook file or a directory containing notebooks to be converted.'
+    )
+    parser.add_argument(
+        'outdir', 
+        type=str, 
+        help='Directory where the generated Galaxy tool files will be saved.'
+    )
+    parser.add_argument(
+        '--name', 
+        type=str, 
+        default='example', 
+        help='Name of the Galaxy tool.'
+    )
+    parser.add_argument(
+        '--tool_version', 
+        type=str, 
+        default='0.1.0+galaxy0', 
+        help='Version of the Galaxy tool. Defaults to "0.1.0+galaxy0".'
+    )
+    parser.add_argument(
+        '--requirements_txt', 
+        required=False, 
+        help=(
+            'Path to a requirements.txt file specifying Python dependencies. '
+            'If omitted, no additional Python dependencies are included unless specified in the Conda environment file.'
+            'If package name from this file is also resolvable by conda, it will be included to the list of tool dependencies, ' 
+            'otherwise a comment will be added to the tool xml.'
+        )
+    )
+    parser.add_argument(
+        '--environment_yml', 
+        required=False, 
+        help=(
+            'Path to a Conda environment YAML file specifying dependencies. '
+            'If omitted, no additional Python dependencies are included unless specified in the requirements file.'
+        )
+    )
+    parser.add_argument(
+        '--ontology_path', 
+        required=False, 
+        help=(
+            'Path to an ontology file for parameter and output metadata. '
+            'If omitted, the default MMODA ontology is used.'
+        )
+    )
+    parser.add_argument(
+        '--citations_bibfile', 
+        required=False, 
+        help=(
+            'Path to a BibTeX file containing citations for the tool. '
+            'If omitted, no citations are included in the Galaxy tool.'
+        )
+    )
+    parser.add_argument(
+        '--help_file', 
+        required=False, 
+        help=(
+            'Path to a help file (Markdown or reStructuredText) to include in the Galaxy tool. '
+            'If omitted, no help documentation is added to the Galaxy tool.'
+        )
+    )
+    parser.add_argument(
+        '--test_data_baseurl', 
+        required=False, 
+        help=(
+            'Base URL for test data, used to resolve input parameters that reference external files. '
+            'If omitted, test data is copied locally into the "test-data" directory of the Galaxy tool.'
+        )
+    )
+    parser.add_argument(
+        '--conda_channels', 
+        required=False, 
+        default='default,conda-forge', 
+        help=(
+            'Comma-separated list of Conda channels to use for resolving dependencies. '
+            'Defaults to "default,conda-forge".'
+        )
+    )
     args = parser.parse_args()
     
-    input_nb = args.notebook
+    input_nb = args.notebook_source
     output_dir = args.outdir
     toolname = args.name
     requirements_txt = args.requirements_txt
