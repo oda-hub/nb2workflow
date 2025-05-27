@@ -13,12 +13,12 @@ spec:
   strategy:
     type: {{ 'RollingUpdate' if rw_many else 'Recreate' }}
   template:
-    securityContext:
-      fsGroup: 57439
     metadata:
       labels:
         app: {{ deployment_name }}
     spec:
+      securityContext:
+        fsGroup: 57439
       containers:
       - image: {{ image }}
         imagePullPolicy: IfNotPresent
