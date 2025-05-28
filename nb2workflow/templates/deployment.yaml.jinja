@@ -17,6 +17,8 @@ spec:
       labels:
         app: {{ deployment_name }}
     spec:
+      securityContext:
+        fsGroup: 57439
       containers:
       - image: {{ image }}
         imagePullPolicy: IfNotPresent
