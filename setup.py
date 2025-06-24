@@ -15,7 +15,7 @@ setup(name='nb2workflow',
       package_data={'nb2workflow': ['templates/*.jinja']},
       zip_safe=False,
 
-      python_requires='>=3.9,<3.12',
+      python_requires='>=3.9,<3.14',
 
       entry_points={
           'console_scripts': [
