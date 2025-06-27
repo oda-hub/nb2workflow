@@ -776,7 +776,8 @@ def to_galaxy(input_path,
             galaxy_pars.append(galaxy_par)
             when.append(galaxy_par.to_xml_tree())
             if galaxy_par.partype != 'data':
-                test_par_root.append(ET.Element('param', name=galaxy_par.name, value=str(galaxy_par.default_value)))
+                if galaxy_par.default_value is not None:
+                    test_par_root.append(ET.Element('param', name=galaxy_par.name, value=str(galaxy_par.default_value)))
             else:
                 repo_dir = input_path if os.path.isdir(input_path) else os.path.dirname(os.path.realpath(input_path))
                 value, location = _test_data_location(repo_dir, 
