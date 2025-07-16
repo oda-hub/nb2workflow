@@ -599,8 +599,9 @@ def _split_bibfile(filepath):
     
     out = []
     for ent in biblib.entries:
-        if 'doi' in [x.key for x in ent.fields if x.value]:
-            out.append(('doi', [x.value for x in ent.fields if x.key=='doi'][0]))
+        doikey = [x.key for x in ent.fields if x.value and x.key in ['doi', 'Doi']]
+        if doikey:
+            out.append(('doi', [x.value for x in ent.fields if x.key in doikey][0]))
         else:
             tmplib = bib.Library()
             tmplib.add(ent)
