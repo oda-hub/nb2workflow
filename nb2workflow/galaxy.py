@@ -649,13 +649,13 @@ def _test_data_location(
             abspath = None
 
         if abspath is not None and os.path.isfile(abspath):
-            if base_url is None:
+            if base_url is None or os.path.getsize(abspath) < 1048576 :
                 value = os.path.basename(par_value) # type: ignore
                 os.makedirs(testdata, exist_ok=True)
                 shutil.copy(abspath, os.path.join(testdata, value))
             else:
                 # TODO: support the case of nb not in repo root
-                location = os.path.join(base_url, par_value) # type: ignore
+                location = os.path.join(base_url, os.path.normpath(par_value)) # type: ignore
         else:
             # it's a json value
             os.makedirs(testdata, exist_ok=True)
@@ -777,7 +777,10 @@ def to_galaxy(input_path,
             galaxy_pars.append(galaxy_par)
             when.append(galaxy_par.to_xml_tree())
             if galaxy_par.partype != 'data':
-                test_par_root.append(ET.Element('param', name=galaxy_par.name, value=str(galaxy_par.default_value)))
+                if galaxy_par.default_value is not None:
+                    test_par_root.append(ET.Element('param', name=galaxy_par.name, value=str(galaxy_par.default_value)))
+            elif galaxy_par.original_value is None:
+                pass  # for optional file input that's None by default, just don't set in test
             else:
                 repo_dir = input_path if os.path.isdir(input_path) else os.path.dirname(os.path.realpath(input_path))
                 value, location = _test_data_location(repo_dir, 
@@ -791,9 +794,7 @@ def to_galaxy(input_path,
                     test_par_root.append(ET.Element('param', name=galaxy_par.name, location=location))
                 else:
                     raise RuntimeError(f"Unable to build test data location for parameter '{galaxy_par.name}'")
-                # TODO: following discussion with Bjorn, probably good to adopt the logic: 
-                #       if test data is small <1MB we can always put it in the tool-data dir
-                #       as long as remote test data have some drawbacks (maybe not really?)
+
                 
         for outv in outputs.values():
             outp = GalaxyOutput.from_inspect(outv, ontology=ontology, dprod=nb_name)
