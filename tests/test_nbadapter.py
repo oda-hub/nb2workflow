@@ -2,6 +2,8 @@ import os
 import json
 import logging
 import pytest
+from nb2workflow.nbadapter import denumpyfy
+from nb2workflow.json import CustomJSONEncoder
 
 
 # this can be also set in pytest call
@@ -198,6 +200,20 @@ def test_denumpyfy():
 
     r = json.dumps(denumpyfy(data))
     print(r)
+
+
+def test_denumpyfy_mosaic_fits():
+    from oda_api.data_products import NumpyDataProduct, ImageDataProduct
+
+    mosaic_prod = NumpyDataProduct.from_fits_file(
+        os.path.join(os.path.dirname(__file__), 'test_data/clean_mosaic_sognificance.fits.gz'), name="Graphic image")
+
+    #mosaic_prod_dumped = json.dumps(denumpyfy(mosaic_prod), cls=CustomJSONEncoder)
+    just_encoded = mosaic_prod.encode()
+    mosaic_prod_dumped = json.dumps(mosaic_prod.encode())
+    assert json.loads(mosaic_prod_dumped) == just_encoded
+    prod_image_decoded = ImageDataProduct.decode(just_encoded)
+    prod_image_decoded = ImageDataProduct.decode(mosaic_prod_dumped)
 
 
 def test_multiline_parameters():
