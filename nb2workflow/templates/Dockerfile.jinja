@@ -18,7 +18,8 @@ RUN apt-get update && apt-get install -y git curl wget build-essential && \
 COPY --chown=$MAMBA_USER:$MAMBA_USER nb-repo/ /repo/
 USER $MAMBA_USER
 {% elif source_from == 'git' %}
-RUN curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | bash && \
+RUN apt-get update && \
+    curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | bash && \
     apt-get install -y git-lfs && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* && \
