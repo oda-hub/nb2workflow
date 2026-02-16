@@ -38,7 +38,7 @@ from flask_caching import Cache
 from flasgger import LazyString, Swagger, swag_from
 
 from nb2workflow.helpers import serialize_workflow_exception
-from nb2workflow.json import CustomJSONEncoder
+from nb2workflow.json import CustomJSONProvider
 
 import threading
 
@@ -96,7 +96,7 @@ def create_app():
     }
     swagger = Swagger(app, template=template)
     app.wsgi_app = ReverseProxied(app.wsgi_app)
-    app.json_encoder = CustomJSONEncoder
+    app.json = CustomJSONProvider(app)
     app.config["JSON_SORT_KEYS"] = False
     cache.init_app(app, config={'CACHE_TYPE': 'SimpleCache'})
 
