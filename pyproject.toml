@@ -20,6 +20,7 @@ classifiers = []
 
 dependencies = [
     "papermill",
+    "ipykernel",
     "nbconvert>7.0.0",
     "psutil",
     "diskcache",
