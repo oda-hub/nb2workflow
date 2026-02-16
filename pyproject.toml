@@ -87,7 +87,6 @@ dev = [
     "pytest",
     "flake8",
     "pytest-cov",
-    "tox"
 ]
 
 [project.urls]
