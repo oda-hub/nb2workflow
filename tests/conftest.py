@@ -51,11 +51,13 @@ def test_notebook_lfs_repo():
 
 @pytest.fixture
 def app(test_notebook):
+    reload(nb2workflow.service)
+    print("creating app")
     app = nb2workflow.service.app
     app.notebook_adapters = nb2workflow.nbadapter.find_notebooks(test_notebook)
     nb2workflow.service.setup_routes(app)
     nb2workflow.nbadapter.ontology._is_ontology_available = True
-    print("creating app")
+    print("app created")
     return app
     
 
