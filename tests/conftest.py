@@ -57,6 +57,7 @@ def app(test_notebook):
     nb2workflow.nbadapter.ontology._is_ontology_available = True
     print("creating app")
     return app
+    
 
 
 @pytest.fixture
@@ -197,3 +198,7 @@ def pytest_collection_modifyitems(config, items):
     for item in items:
         if "service" in item.keywords:
             item.add_marker(skip_service)
+
+@pytest.fixture
+def client(app):
+    return app.test_client()
