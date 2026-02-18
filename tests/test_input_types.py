@@ -10,15 +10,6 @@ logger = logging.getLogger(__name__)
 from urllib.parse import urlencode, urlparse, parse_qs
 
 
-@pytest.fixture
-def app():
-    testfiles_path = os.path.join(os.path.dirname(__file__), 'testfiles')
-    app = nb2workflow.service.app
-    app.notebook_adapters = nb2workflow.nbadapter.find_notebooks(testfiles_path)
-    nb2workflow.service.setup_routes(app)
-    nb2workflow.nbadapter.ontology._is_ontology_available = True
-    print("creating app")
-    return app
 
 def test_posix_download_file(client):
     r = client.get('/api/v1.0/get/testposixpath')

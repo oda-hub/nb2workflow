@@ -13,8 +13,8 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-def test_service(client):
-    r=client.get('/api/v1.0/options')
+def test_service(client_nb_repo):
+    r=client_nb_repo.get('/api/v1.0/options')
     
     service_name,service_signature=sorted(r.json.items())[0]
     logger.info(service_signature)
@@ -25,14 +25,14 @@ def test_service(client):
 
     logger.info('get: /api/v1.0/get/'+service_name)
 
-    r=client.get('/api/v1.0/get/'+service_name,query_string=dict(eminFAKE=20.))
+    r=client_nb_repo.get('/api/v1.0/get/'+service_name,query_string=dict(eminFAKE=20.))
     assert r.status_code == 400
     
     logger.info(r.json['issues'])
     assert len(r.json['issues'])==1
 
 
-    r=client.get('/api/v1.0/get/'+service_name,query_string=dict(emin=20.))
+    r=client_nb_repo.get('/api/v1.0/get/'+service_name,query_string=dict(emin=20.))
     assert r.status_code == 200
 
     logger.info(r.json)
@@ -40,18 +40,18 @@ def test_service(client):
     open("output.png","wb").write(base64.b64decode(r.json['output']['spectrum_png_content']))
 
 # trace
-    r=client.get('/api/v1.0/options')
+    r=client_nb_repo.get('/api/v1.0/options')
     
     service_name,service_signature=sorted(r.json.items())[0]
 
     logger.info('get: /api/v1.0/get/'+service_name)
 
-    r=client.get('/api/v1.0/get/'+service_name,query_string=dict(emin=20.))
+    r=client_nb_repo.get('/api/v1.0/get/'+service_name,query_string=dict(emin=20.))
     assert r.status_code == 200
 
     logger.info(r.json)
     
-    r=client.get('/trace/list')
+    r=client_nb_repo.get('/trace/list')
     assert r.status_code == 200
 
     sorted_json=sorted(r.json, key=lambda x:x['ctime'])
@@ -62,20 +62,20 @@ def test_service(client):
 
     logger.info("job %s", job)
 
-    r=client.get('/trace/'+job)
+    r=client_nb_repo.get('/trace/'+job)
 
     logger.info("r.json %s", r.json)
     print("r.json ", r.json)
 
 #    open("output.png","wb").write(base64.b64decode(r.json['output']['spectrum_png_content']))
     service_name = r.json[0].split("/")[-1].replace('_output.ipynb', '')
-    r = client.get(os.path.join('trace', job, service_name),
+    r = client_nb_repo.get(os.path.join('trace', job, service_name),
                    query_string=dict(include_glued_output=True))
 
     html_output = r.data.decode()
     assert "celltag_injected-gather-outputs" in html_output
 
-    r = client.get(os.path.join('trace', job, service_name),
+    r = client_nb_repo.get(os.path.join('trace', job, service_name),
                    query_string=dict(include_glued_output=False))
 
     html_output = r.data.decode()
@@ -83,16 +83,16 @@ def test_service(client):
     assert "<title>500 Internal Server Error</title>" not in html_output
 
 
-def test_service_repo(client):
+def test_service_repo(client_nb_repo):
     
-    r=client.get('/api/v1.0/options')
+    r=client_nb_repo.get('/api/v1.0/options')
     
     service_signature=r.json['workflow-notebook']
     logger.info(service_signature)
 
     assert len(service_signature['parameters']) == 6
 
-    r=client.get('/api/v1.0/get/workflow-notebook',query_string=dict(eminFAKE=20.))
+    r=client_nb_repo.get('/api/v1.0/get/workflow-notebook',query_string=dict(eminFAKE=20.))
     assert r.status_code == 400
     
     logger.info(r.json)
@@ -100,7 +100,7 @@ def test_service_repo(client):
     assert len(r.json['issues'])==1
 
 
-    r=client.get('/api/v1.0/get/workflow-notebook',query_string=dict(emin=20.))
+    r=client_nb_repo.get('/api/v1.0/get/workflow-notebook',query_string=dict(emin=20.))
     assert r.status_code == 200
 
     logger.info(r.json)
@@ -109,12 +109,12 @@ def test_service_repo(client):
 
 
 
-def test_service_async_repo(client):
+def test_service_async_repo(client_nb_repo):
     thread_id = threading.get_ident()
     process_id = os.getpid()
     logger.info(f'test_service_async_repo thread id: {thread_id} ; process id: {process_id}')
 
-    r = client.get('/api/v1.0/options')
+    r = client_nb_repo.get('/api/v1.0/options')
     
     service_signature=r.json['workflow-notebook']
     logger.info(service_signature)
@@ -123,7 +123,7 @@ def test_service_async_repo(client):
 
     callback_fn = 'callback.json'
     
-    r=client.get('/api/v1.0/get/workflow-notebook',
+    r=client_nb_repo.get('/api/v1.0/get/workflow-notebook',
                  query_string=dict(
                      emin=20., 
                      _async_request='yes', 
@@ -148,11 +148,11 @@ def test_service_async_repo(client):
         #     callback_json = json.load(open(callback_fn))
             # assert callback_json['action'] == 'done'
         
-        options = client.get('/api/v1.0/options')
+        options = client_nb_repo.get('/api/v1.0/options')
         logger.info('\033[31moptions returns %s %s\033[0m', options, options.json)
         assert options.status_code == 200
     
-        r = client.get('/api/v1.0/get/workflow-notebook',
+        r = client_nb_repo.get('/api/v1.0/get/workflow-notebook',
                     query_string=dict(
                         emin=20., 
                         _async_request='yes', 

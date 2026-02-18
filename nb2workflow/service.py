@@ -1,25 +1,14 @@
-from __future__ import print_function
+import typing
+
 import pickle
 import re
-
-from werkzeug.routing import RequestRedirect
-
-try:
-    from werkzeug.exceptions import MethodNotAllowed, NotFound
-except ImportError:
-    from werkzeug.routing import MethodNotAllowed, NotFound
-
-
-import queue
-from nb2workflow import ontology, publish, schedule
-from nb2workflow.nbadapter import NotebookAdapter, find_notebooks, PapermillWorkflowIncomplete
-
 import os
 import json
 import glob
 import time
 import logging
 import requests
+from requests.auth import HTTPBasicAuth
 import base64
 import hashlib
 import datetime
@@ -27,12 +16,20 @@ import tempfile
 import nbformat
 import yaml
 import traceback
+from dataclasses import dataclass, fields, field
+
+from werkzeug.routing import RequestRedirect
+from werkzeug.exceptions import MethodNotAllowed, NotFound
+
+import queue
+from nb2workflow import ontology, publish, schedule
+from nb2workflow.nbadapter import NotebookAdapter, find_notebooks, PapermillWorkflowIncomplete
 
 from io import BytesIO
 from bs4 import BeautifulSoup
 
 
-from flask import Flask, make_response, jsonify, request, url_for, send_file, Response
+from flask import Flask, Blueprint, make_response, jsonify, request, url_for, send_file, Response, current_app
 from flask_caching import Cache
 
 from flasgger import LazyString, Swagger, swag_from
@@ -70,6 +67,104 @@ class ReverseProxied(object):
 
 
 cache = Cache(config={'CACHE_TYPE': 'simple'})
+blprint = Blueprint('nb2w', __name__)
+
+
+@dataclass
+class WfStateGlobalVarStorage:
+    async_workflows: dict[str, dict | str] = field(default_factory=dict)
+    async_workflow_jobdirs: dict[str, str] = field(default_factory=dict)
+    service_semantic_signature: str = ''
+    notebook_adapters: dict[str, NotebookAdapter] = field(default_factory=dict)
+
+    def reset(self):
+        for fld in fields(self):
+            setattr(self, fld.name, fld.default)
+
+    def async_reset(self):
+        self.async_workflows = {}
+        self.async_workflow_jobdirs = {}
+
+
+wfstore = WfStateGlobalVarStorage()
+
+
+
+def setup_routes(app: Flask):
+    for target, nba in wfstore.notebook_adapters.items():
+        target_specs = {
+            "parameters": [
+                {
+                    "name": p_name,
+                    "in": "query",
+                    "schema": {
+                        "type": to_oapi_type(p_data['python_type']),
+                        "nullable": p_data.get('is_optional', False)
+                        # strictly speaking, there is no way to set query parameter to null
+                        # we define a convention in which '%00' string represents null
+                        },
+                    "required": False,
+                    "default": p_data['default_value'],
+                    "description": p_data['comment']+" "+p_data['owl_type'],
+                }
+                for p_name, p_data in nba.extract_parameters().items()
+            ],
+            "responses": {
+                "200": {
+                    "description": repr(nba.extract_output_declarations()),
+                }
+            }
+        }
+
+        endpoint = 'endpoint_'+target
+
+        def funcg(target):
+            def workflow_func():
+                return workflow(target)
+            return workflow_func
+
+        logger.debug("target: %s with endpoint %s", target, endpoint)
+
+        def response_filter(rv):
+            if isinstance(rv, tuple) and isinstance(rv[0], Response) and rv[1] != 200:
+                logger.info("NOT caching response %s", rv[1])
+                return False
+            elif isinstance(rv, Response) and rv.status != 200:
+                logger.info("NOT caching response %s", rv)
+                return False
+            else:
+                logger.info("should cache response %s", rv)                
+                try:
+                    pickle.dumps(rv)
+                except pickle.PicklingError as e:
+                    logger.info("the response can not be pickled and cached %s", e)
+                    return False
+
+                return True
+
+        cache_timeout = nba.get_system_parameter_value('cache_timeout', 0)
+        try:
+            app.route('/api/v1.0/get/'+target, methods=['GET'], endpoint=endpoint)(
+                swag_from(target_specs)(
+                    cache.cached(timeout=cache_timeout, response_filter=response_filter, query_string=True)(
+                        funcg(target)
+                    )))
+        except AssertionError as e:
+            logger.warning("unable to add route: %s, ignoring the endpoint", e)
+            continue
+
+        schedule_interval = nba.get_system_parameter_value(
+            'schedule_interval', 0)
+        if schedule_interval > 0:
+            logger.info("scheduling callable %s every %lg",
+                        str(funcg), float(schedule_interval))
+
+            def schedulable():
+                with app.test_request_context('/api/v1.0/get/'+target):
+                    from flask import request
+                    get_view_function('/api/v1.0/get/'+target)[0]()
+
+            schedule.schedule_callable(schedulable, schedule_interval)
 
 
 def create_app():
@@ -94,32 +189,20 @@ def create_app():
             "version": "0.0.1"
         }
     }
-    swagger = Swagger(app, template=template)
+    Swagger(app, template=template)
     app.wsgi_app = ReverseProxied(app.wsgi_app)
     app.json = CustomJSONProvider(app)
     app.config["JSON_SORT_KEYS"] = False
     cache.init_app(app, config={'CACHE_TYPE': 'SimpleCache'})
+    app.register_blueprint(blprint)
+    if wfstore.notebook_adapters:
+        setup_routes(app)
 
+    app.config['STARTED_AT'] = datetime.datetime.now()
 
-#    CORS(app)
     return app
 
 
-app = create_app()
-
-app.async_workflows = dict()
-app.async_workflow_jobdirs = dict()
-app.started_at = datetime.datetime.now()
-
-
-@app.after_request
-def after_request(response):
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    response.headers.add('Access-Control-Allow-Headers',
-                         'Content-Type,Authorization')
-    response.headers.add('Access-Control-Allow-Methods',
-                         'GET,PUT,POST,DELETE,OPTIONS')
-    return response
 
 class AsyncWorker(threading.Thread):
     def __init__(self, worker_id):
@@ -155,7 +238,7 @@ class AsyncWorkflow:
             self._run()
         except Exception as e:
             logger.error("run failed inexplicably: %s\n%s", repr(e), traceback.format_exc())
-            app.async_workflows[self.key] = dict(
+            wfstore.async_workflows[self.key] = dict(
                 output={}, 
                 exceptions=[serialize_workflow_exception(e)]
             )
@@ -176,16 +259,16 @@ class AsyncWorkflow:
             logger.info("workflow still blocked, waiting %i",
                         self.blocked_until - time.time())
             async_queue.put(self)
-            app.async_workflows[self.key] = 'submitted'
+            wfstore.async_workflows[self.key] = 'submitted'
             return
        
-        template_nba = app.notebook_adapters.get(self.target)
-        nba = NotebookAdapter(template_nba.notebook_fn, tempdir_cache=app.async_workflow_jobdirs,
+        template_nba = wfstore.notebook_adapters.get(self.target)
+        nba = NotebookAdapter(template_nba.notebook_fn, tempdir_cache=wfstore.async_workflow_jobdirs,
                               n_download_max_tries=template_nba.n_download_max_tries,
                               download_retry_sleep_s=template_nba.download_retry_sleep_s,
                               max_download_size=template_nba.max_download_size)
         
-        app.async_workflows[self.key] = 'started'
+        wfstore.async_workflows[self.key] = 'started'
         self.perform_callback(action='progress')
 
         try:
@@ -201,7 +284,7 @@ class AsyncWorkflow:
             self.blocked_until = time.time() + 10
 
             async_queue.put(self)
-            app.async_workflows[self.key] = 'submitted'            
+            wfstore.async_workflows[self.key] = 'submitted'            
 
             return
 
@@ -234,7 +317,7 @@ class AsyncWorkflow:
         logger.debug("output: %s", output)
 
         logger.info("updating key %s", self.key)
-        app.async_workflows[self.key] = dict(output=output, exceptions=list(
+        wfstore.async_workflows[self.key] = dict(output=output, exceptions=list(
             map(serialize_workflow_exception, exceptions)), jobdir=nba.tmpdir)
 
         self.perform_callback()
@@ -247,7 +330,7 @@ class AsyncWorkflow:
         logger.info('will perform callback: %s', self.callback)
 
 
-        result = app.async_workflows[self.key]
+        result = wfstore.async_workflows[self.key]
 
         callback_payload = dict(
             action=action
@@ -279,7 +362,7 @@ def workflow(target, background=False, async_request=False):
     if not background:
         logger.debug("raw parameters %s", request.args)
 
-    template_nba = app.notebook_adapters.get(target)
+    template_nba = wfstore.notebook_adapters.get(target)
     nba = NotebookAdapter(template_nba.notebook_fn,
                           n_download_max_tries=template_nba.n_download_max_tries,
                           download_retry_sleep_s=template_nba.download_retry_sleep_s,
@@ -288,7 +371,7 @@ def workflow(target, background=False, async_request=False):
     if nba is None:
         interpreted_parameters = None
         issues.append("target not known: %s; available targets: %s" %
-                      (target, app.notebook_adapters.keys()))
+                      (target, wfstore.notebook_adapters.keys()))
     else:
         if not background:
             interpreted_parameters = nba.interpret_parameters(request.args)
@@ -310,7 +393,7 @@ def workflow(target, background=False, async_request=False):
         key = hashlib.sha224(json.dumps(
             dict(target=target, params=interpreted_parameters)).encode('utf-8')).hexdigest()
 
-        value = app.async_workflows.get(key, None)
+        value = wfstore.async_workflows.get(key, None)
 
         print('cache key/value', key, value)
 
@@ -321,7 +404,7 @@ def workflow(target, background=False, async_request=False):
                                        context=context
                                        )
 
-            app.async_workflows[key] = 'submitted'
+            wfstore.async_workflows[key] = 'submitted'
             async_queue.put(async_task)
 
             return make_response(jsonify(workflow_status="submitted",
@@ -330,13 +413,13 @@ def workflow(target, background=False, async_request=False):
 
         elif value == 'submitted':
             return make_response(jsonify(workflow_status=value,
-                                         comment="task is "+value),
+                                         comment=f"task is {value}"),
                                  201)
 
         elif value == 'started':
             return make_response(jsonify(workflow_status=value,
-                                         comment="task is "+value,
-                                         jobdir=app.async_workflow_jobdirs.get(key)),
+                                         comment=f"task is {value}",
+                                         jobdir=wfstore.async_workflow_jobdirs.get(key)),
                                  201)
 
         else:
@@ -416,7 +499,7 @@ def get_view_function(url, method='GET'):
     it will be called with, or None if there is no view.
     """
 
-    adapter = app.url_map.bind('localhost')
+    adapter = current_app.url_map.bind('localhost')
 
     try:
         match = adapter.match(url, method=method)
@@ -429,92 +512,22 @@ def get_view_function(url, method='GET'):
 
     try:
         # return the view function and arguments
-        return app.view_functions[match[0]], match[1]
+        return current_app.view_functions[match[0]], match[1]
     except KeyError:
         # no view is associated with the endpoint
         return None
 
 
-def setup_routes(app):
-    for target, nba in app.notebook_adapters.items():
-        target_specs = {
-            "parameters": [
-                {
-                    "name": p_name,
-                    "in": "query",
-                    "schema": {
-                        "type": to_oapi_type(p_data['python_type']),
-                        "nullable": p_data.get('is_optional', False)
-                        # strictly speaking, there is no way to set query parameter to null
-                        # we define a convention in which '%00' string represents null
-                        },
-                    "required": False,
-                    "default": p_data['default_value'],
-                    "description": p_data['comment']+" "+p_data['owl_type'],
-                }
-                for p_name, p_data in nba.extract_parameters().items()
-            ],
-            "responses": {
-                "200": {
-                    "description": repr(nba.extract_output_declarations()),
-                }
-            }
-        }
+@blprint.after_request
+def after_request(response):
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers',
+                        'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods',
+                        'GET,PUT,POST,DELETE,OPTIONS')
+    return response
 
-        endpoint = 'endpoint_'+target
-
-        def funcg(target):
-            def workflow_func():
-                return workflow(target)
-            return workflow_func
-
-        logger.debug("target: %s with endpoint %s", target, endpoint)
-
-        def response_filter(rv):
-            if isinstance(rv, tuple) and isinstance(rv[0], Response) and rv[1] != 200:
-                logger.info("NOT caching response %s", rv[1])
-                return False
-            elif isinstance(rv, Response) and rv.status != 200:
-                logger.info("NOT caching response %s", rv)
-                return False
-            else:
-                logger.info("should cache response %s", rv)                
-                try:
-                    pickle.dumps(rv)
-                except pickle.PicklingError as e:
-                    logger.info("the response can not be pickled and cached %s", e)
-                    return False
-
-                return True
-
-        cache_timeout = nba.get_system_parameter_value('cache_timeout', 0)
-        try:
-            app.route('/api/v1.0/get/'+target, methods=['GET'], endpoint=endpoint)(
-                swag_from(target_specs)(
-                    cache.cached(timeout=cache_timeout, response_filter=response_filter, query_string=True)(
-                        funcg(target)
-                    )))
-        except AssertionError as e:
-            logger.warning("unable to add route: %s, ignoring the endpoint", e)
-            continue
-
-        schedule_interval = nba.get_system_parameter_value(
-            'schedule_interval', 0)
-        if schedule_interval > 0:
-            logger.info("scheduling callable %s every %lg",
-                        str(funcg), float(schedule_interval))
-
-            def schedulable():
-                with app.test_request_context('/api/v1.0/get/'+target):
-                    from flask import request
-                    get_view_function('/api/v1.0/get/'+target)[0]()
-
-            schedule.schedule_callable(schedulable, schedule_interval)
-
-# list input -> output function signatures and identities
-
-
-@app.route('/api/v1.0/options', methods=['GET'])
+@blprint.route('/api/v1.0/options', methods=['GET'])
 def workflow_options():
     return jsonify(dict([
         (
@@ -522,11 +535,11 @@ def workflow_options():
             dict(output=nba.extract_output_declarations(),
                     parameters=nba.extract_parameters()),
             )
-        for target, nba in app.notebook_adapters.items()
+        for target, nba in wfstore.notebook_adapters.items()
     ]))
 
 
-@app.route('/api/v1.0/get-<mode>/<target>/<filename>', methods=['GET'])
+@blprint.route('/api/v1.0/get-<mode>/<target>/<filename>', methods=['GET'])
 def workflow_filename(mode, target, filename):
 
     target_url = url_for('endpoint_'+target, _external=True, **request.args)
@@ -534,8 +547,8 @@ def workflow_filename(mode, target, filename):
     # report equivalency
 
     if "HTTP_AUTH" in os.environ:
-        username, password = os.environ.get("HTTP_AUTH").split(":")
-        auth = requests.auth.HTTPBasicAuth(username, password)
+        username, password = os.environ.get("HTTP_AUTH").split(":") # pyright: ignore[reportOptionalMemberAccess]
+        auth = HTTPBasicAuth(username, password)
     else:
         auth = None
 
@@ -577,12 +590,12 @@ def workflow_filename(mode, target, filename):
         ))
 
 
-@app.route('/api/v1.0/rdf', methods=['GET'])
+@blprint.route('/api/v1.0/rdf', methods=['GET'])
 def workflow_rdf():
-    return make_response(app.service_semantic_signature)
+    return make_response(wfstore.service_semantic_signature)
 
 
-@app.route('/health')
+@blprint.route('/health')
 def healthcheck():
     status, issues = current_health()
 
@@ -636,37 +649,37 @@ def current_health():
                                  for k, v in dict(psutil.disk_usage(".")._asdict()).items()])
 
     status['async'] = dict(qsize=async_queue.qsize(),
-                           async_workflows_n=len(app.async_workflows))
+                           async_workflows_n=len(wfstore.async_workflows))
 
     #status['processes'] = processes
 
     return status, issues
 
 
-@app.route('/test')
+@blprint.route('/test')
 def test():
     results = {}
     expecting = []
 
     #TODO: use generalized testing
-    for template_nba in app.notebook_adapters.values():
+    for template_nba in wfstore.notebook_adapters.values():
         if template_nba.name.startswith('test_'):
             key = template_nba.name
 
-            if key in app.async_workflows:
-                print("found", app.async_workflows[key])
+            if key in wfstore.async_workflows:
+                print("found", wfstore.async_workflows[key])
 
-                if isinstance(app.async_workflows[key], dict):
+                if isinstance(wfstore.async_workflows[key], dict):
                     print("found result seems a reasonable dict")
-                    workflow_status = app.async_workflows[key].get(
+                    workflow_status = wfstore.async_workflows[key].get(
                         'workflow_status', 'done')
                     print("workflow_status", workflow_status)
                 else:
-                    workflow_status = app.async_workflows[key]
+                    workflow_status = wfstore.async_workflows[key]
 
                 if workflow_status == 'done':
                     # and output notebook
-                    results[template_nba.name] = app.async_workflows[key]['exceptions']
+                    results[template_nba.name] = wfstore.async_workflows[key]['exceptions']
                     print("workflow_status is done, results exceptions:",
                           results[template_nba.name])
                 else:
@@ -678,7 +691,7 @@ def test():
 
                 async_queue.put(async_task)
 
-                app.async_workflows[key] = 'started'
+                wfstore.async_workflows[key] = 'started'
                 expecting.append(dict(key=key, workflow_status='submitted'))
 
     if expecting != []:
@@ -692,7 +705,7 @@ def test():
             return make_response(jsonify(results), 500)
 
 
-@app.route('/')
+@blprint.route('/')
 def root():
     issues = []
 
@@ -706,6 +719,129 @@ def root():
     else:
         return make_response(jsonify(issues=issues), 500)
 
+
+@blprint.route('/status')
+def status():
+    return jsonify(
+        version=os.environ.get('WORKFLOW_VERSION', 'unknown'),
+        started_at=current_app.config['STARTED_AT'].strftime("%s"),
+        started_since=(datetime.datetime.now()-current_app.config['STARTED_AT']).seconds,
+        background_jobs=len([w for w in wfstore.async_workflows if w]),
+        stored_jobs=len(wfstore.async_workflows),
+    )
+
+@blprint.route('/async/clear')
+def async_clear():
+    s = wfstore.async_workflows
+    wfstore.async_reset()
+    return jsonify(s)
+
+
+@blprint.route('/async/size')
+def async_size():
+    return jsonify({'async_size': len(wfstore.async_workflows)})
+
+
+@blprint.route('/async/list')
+def async_list():
+    return jsonify(wfstore.async_workflows)
+
+
+@blprint.route('/async/qsize')
+def async_qsize():
+    return jsonify(dict(async_qsize=async_queue.qsize()))
+
+
+def get_trace_list(since=None):
+    r = []
+    for d in glob.glob(os.path.join(tempfile.gettempdir(), "nb2w-*")):
+        if since is not None and time.time() - os.stat(d).st_mtime > since:
+            continue
+
+        try:
+            summary = yaml.load(
+                open(os.path.join(d, "summary.yaml")), Loader=yaml.Loader)
+        except Exception as e:
+            summary = "unable to load: "+repr(e)
+
+        r.append(
+            dict(
+                fn=d,
+                mtime=os.stat(d).st_mtime,
+                ctime=os.stat(d).st_ctime,
+                summary=summary,
+            )
+        )
+
+    return sorted(r, key=lambda x: ['ctime'])
+
+
+@blprint.route('/trace/size')
+def trace_size():
+    return jsonify({"trace_size": len(glob.glob(os.path.join(tempfile.gettempdir(), "nb2w-*")))})
+
+
+@blprint.route('/trace/list')
+def trace_list():
+    f = request.args.get('format', 'json')
+
+    if f == 'html':
+        return "not implemented"
+    else:
+        return jsonify(get_trace_list())
+
+
+@blprint.route('/trace/<string:job>')
+def trace_get(job):
+    r = []
+
+    r = []
+    for fn in glob.glob(os.path.join(tempfile.gettempdir(), job, "*_output.ipynb")):
+        r.append(fn)
+
+    return jsonify(r)
+
+
+@blprint.route('/trace/<string:job>/<string:func>')
+def trace_get_func(job, func):
+    if func == "custom.css":
+        return ""
+
+    include_glued_output = request.args.get('include_glued_output', True) == 'True'
+
+    from nbconvert.exporters import HTMLExporter
+    exporter = HTMLExporter()
+
+    fn = os.path.join(tempfile.gettempdir(), job, func+"_output.ipynb")
+
+    output, resources = exporter.from_filename(fn)
+
+    if not include_glued_output:
+        logger.info("include_glued_output arg passed")
+        soup = BeautifulSoup(output, 'html.parser')
+        div_glued_output = soup.find('div', {'class': 'celltag_injected-gather-outputs'})
+        if div_glued_output is not None:
+            div_glued_output.decompose()
+        output = str(soup)
+        logger.info("div element removed form html")
+
+    return output
+
+
+@blprint.route('/clear-cache')
+def clear_cache():
+    n_entries = None
+    try:
+        n_entries = len(cache.cache._cache)
+    except Exception as e:
+        pass
+
+    cache.clear()
+
+    if n_entries is not None:
+        return 'cleared %i entries' % n_entries
+    else:
+        return 'cleared some entries'
 
 def main():
     import argparse
@@ -747,11 +883,12 @@ def main():
         root.setLevel(logging.INFO)
         handler.setLevel(logging.INFO)
 
-    app.notebook_adapters = find_notebooks(args.notebook, pattern=args.pattern)
-    setup_routes(app)
-    app.service_semantic_signature = ontology.service_semantic_signature(
-        app.notebook_adapters)
-
+    wfstore.notebook_adapters = find_notebooks(args.notebook, pattern=args.pattern)
+    wfstore.service_semantic_signature = ontology.service_semantic_signature(
+        wfstore.notebook_adapters)
+    
+    app = create_app()
+    
     if args.publish:
         logger.info("publishing to %s", args.publish)
 
@@ -761,7 +898,7 @@ def main():
         else:
             publish_host, publish_port = args.host, args.port
 
-        for nba_name, nba in app.notebook_adapters.items():
+        for nba_name, nba in wfstore.notebook_adapters.items():
             publish.publish(args.publish, nba_name, publish_host, publish_port)
 
     thread_id = threading.get_ident()
@@ -778,134 +915,6 @@ def main():
     app.run(host=args.host, port=args.port)
 
 
-@app.route('/status')
-def status():
-    return jsonify(
-        version=os.environ.get('WORKFLOW_VERSION', 'unknown'),
-        started_at=app.started_at.strftime("%s"),
-        started_since=(datetime.datetime.now()-app.started_at).seconds,
-        background_jobs=len([w for w in app.async_workflows if w]),
-        stored_jobs=len(app.async_workflows),
-    )
-
-
-@app.route('/async/delete')
-def async_delete():
-    return jsonify(app.async_workflows)
-
-
-@app.route('/async/clear')
-def async_clear():
-    s = app.async_workflows
-    app.async_workflows = dict()
-    return jsonify(s)
-
-
-@app.route('/async/size')
-def async_size():
-    return jsonify({'async_size': len(app.async_workflows)})
-
-
-@app.route('/async/list')
-def async_list():
-    return jsonify(app.async_workflows)
-
-
-@app.route('/async/qsize')
-def async_qsize():
-    return jsonify(dict(async_qsize=async_queue.qsize()))
-
-
-def get_trace_list(since=None):
-    r = []
-    for d in glob.glob(os.path.join(tempfile.gettempdir(), "nb2w-*")):
-        if since is not None and time.time() - os.stat(d).st_mtime > since:
-            continue
-
-        try:
-            summary = yaml.load(
-                open(os.path.join(d, "summary.yaml")), Loader=yaml.Loader)
-        except Exception as e:
-            summary = "unable to load: "+repr(e)
-
-        r.append(
-            dict(
-                fn=d,
-                mtime=os.stat(d).st_mtime,
-                ctime=os.stat(d).st_ctime,
-                summary=summary,
-            )
-        )
-
-    return sorted(r, key=lambda x: ['ctime'])
-
-
-@app.route('/trace/size')
-def trace_size():
-    return jsonify({"trace_size": len(glob.glob(os.path.join(tempfile.gettempdir(), "nb2w-*")))})
-
-
-@app.route('/trace/list')
-def trace_list():
-    f = request.args.get('format', 'json')
-
-    if f == 'html':
-        return "not implemented"
-    else:
-        return jsonify(get_trace_list())
-
-
-@app.route('/trace/<string:job>')
-def trace_get(job):
-    r = []
-
-    r = []
-    for fn in glob.glob(os.path.join(tempfile.gettempdir(), job, "*_output.ipynb")):
-        r.append(fn)
-
-    return jsonify(r)
-
-
-@app.route('/trace/<string:job>/<string:func>')
-def trace_get_func(job, func):
-    if func == "custom.css":
-        return ""
-
-    include_glued_output = request.args.get('include_glued_output', True) == 'True'
-
-    from nbconvert.exporters import HTMLExporter
-    exporter = HTMLExporter()
-
-    fn = os.path.join(tempfile.gettempdir(), job, func+"_output.ipynb")
-
-    output, resources = exporter.from_filename(fn)
-
-    if not include_glued_output:
-        logger.info("include_glued_output arg passed")
-        soup = BeautifulSoup(output, 'html.parser')
-        div_glued_output = soup.find('div', {'class': 'celltag_injected-gather-outputs'})
-        if div_glued_output is not None:
-            div_glued_output.decompose()
-        output = str(soup)
-        logger.info("div element removed form html")
-
-    return output
-
-
-@app.route('/clear-cache')
-def clear_cache():
-    n_entries = None
-    try:
-        n_entries = len(cache.cache._cache)
-    except Exception as e:
-        pass
-
-    cache.clear()
-
-    if n_entries is not None:
-        return 'cleared %i entries' % n_entries
-    else:
-        return 'cleared some entries'
 
 
 if __name__ == '__main__':

@@ -7,14 +7,7 @@ import time
 
 logger = logging.getLogger(__name__)
 
-@pytest.fixture
-def app():
-    testfiles_path = os.path.join(os.path.dirname(__file__), 'testfiles')
-    app = nb2workflow.service.app
-    app.notebook_adapters = nb2workflow.nbadapter.find_notebooks(testfiles_path)
-    nb2workflow.service.setup_routes(app)
-    print("creating app")
-    return app
+
 
 @pytest.mark.parametrize('exc_type', ['runtime', 'kernel'])
 def test_exceptions_sync(client, exc_type):

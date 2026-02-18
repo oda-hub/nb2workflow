@@ -9,14 +9,6 @@ import json
 logger = logging.getLogger(__name__)
 status_callback_file = "status.json"
 
-@pytest.fixture
-def app():
-    testfiles_path = os.path.join(os.path.dirname(__file__), 'testfiles')
-    app = nb2workflow.service.app
-    app.notebook_adapters = nb2workflow.nbadapter.find_notebooks(testfiles_path)
-    nb2workflow.service.setup_routes(app)
-    print("creating app")
-    return app
 
 
 def test_progress_callback(client):

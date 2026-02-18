@@ -8,14 +8,6 @@ from io import StringIO
 import pytest
 import nb2workflow
 
-@pytest.fixture
-def app():
-    testfiles_path = os.path.join(os.path.dirname(__file__), 'testfiles')
-    app = nb2workflow.service.app
-    app.notebook_adapters = nb2workflow.nbadapter.find_notebooks(testfiles_path)
-    nb2workflow.service.setup_routes(app)
-    print("creating app")
-    return app
 
 def test_oda_astropy_table_encoding():
     data = np.zeros((10, 2))

@@ -9,18 +9,20 @@ import tempfile
 import requests
 
 import nb2workflow.service
+from nb2workflow import nbadapter
 from importlib import reload
 import rdflib as rdf
 
 from oda_api.ontology_helper import ODA, ODAS
 
 @pytest.fixture
-def test_notebook():
+def test_local_dir():
     return os.environ.get('TEST_NOTEBOOK',
-                          os.path.join(os.getcwd(), "tests/testrepo/workflow-notebook.ipynb"))
+                          os.path.join(os.getcwd(), "tests/testfiles/"))
+
 
 @pytest.fixture
-def test_notebook_old():
+def test_repo_notebook():
     return os.environ.get('TEST_NOTEBOOK',
                           os.path.join(os.getcwd(), "tests/testrepo/workflow-notebook.ipynb"))
 
@@ -50,27 +52,41 @@ def test_notebook_lfs_repo():
     return path
 
 @pytest.fixture
-def app(test_notebook):
-    reload(nb2workflow.service)
+def app(test_local_dir):
     print("creating app")
-    app = nb2workflow.service.app
-    app.notebook_adapters = nb2workflow.nbadapter.find_notebooks(test_notebook)
-    nb2workflow.service.setup_routes(app)
-    nb2workflow.nbadapter.ontology._is_ontology_available = True
+    nb2workflow.service.wfstore.notebook_adapters = nbadapter.find_notebooks(test_local_dir)
+    app = nb2workflow.service.create_app()
+    nbadapter.ontology._is_ontology_available = True
     print("app created")
     return app
     
+
+@pytest.fixture
+def app_nb_repo(test_notebook_repo):
+    print("creating app")
+    nb2workflow.service.wfstore.notebook_adapters = nbadapter.find_notebooks(test_notebook_repo)
+    app = nb2workflow.service.create_app()
+    nbadapter.ontology._is_ontology_available = True
+    print("app created")
+    return app
+
+
+@pytest.fixture
+def client_nb_repo(app_nb_repo):
+    return app_nb_repo.test_client()
 
 
 @pytest.fixture
 def app_low_download_limit():
     testfiles_path = os.path.join(os.path.dirname(__file__), 'testfiles')
-    app_low_download_limit = nb2workflow.service.app
-    app_low_download_limit.notebook_adapters = nb2workflow.nbadapter.find_notebooks(testfiles_path)
-    for nb, nba_obj in app_low_download_limit.notebook_adapters.items():
+    nb2workflow.service.wfstore.reset()
+    nb2workflow.service.wfstore.notebook_adapters = nbadapter.find_notebooks(testfiles_path)
+    for nb, nba_obj in nb2workflow.service.wfstore.notebook_adapters.items():
         nba_obj.max_download_size = 1
-    nb2workflow.service.setup_routes(app_low_download_limit)
-    nb2workflow.nbadapter.ontology._is_ontology_available = True
+
+    app_low_download_limit = nb2workflow.service.create_app()
+
+    nbadapter.ontology._is_ontology_available = True
     print("creating app with low limit on the download of files")
     return app_low_download_limit
 
@@ -78,7 +94,7 @@ def app_low_download_limit():
 # TODO improve this, as it requires changes also in the oda_api
 @pytest.fixture
 def app_not_available_ontology():
-    nb2workflow.nbadapter.ontology._is_ontology_available = False
+    nbadapter.ontology._is_ontology_available = False
     yield
 
 
