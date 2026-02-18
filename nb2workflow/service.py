@@ -77,6 +77,8 @@ class WfStateGlobalVarStorage:
     service_semantic_signature: str = ''
     notebook_adapters: dict[str, NotebookAdapter] = field(default_factory=dict)
 
+    _lock: threading.RLock = field(default_factory=threading.RLock)
+
     def reset(self):
         self.async_workflows = {}
         self.async_workflow_jobdirs = {}
@@ -84,8 +86,9 @@ class WfStateGlobalVarStorage:
         self.notebook_adapters = {}
 
     def async_reset(self):
-        self.async_workflows = {}
-        self.async_workflow_jobdirs = {}
+        with self._lock:
+            self.async_workflows = {}
+            self.async_workflow_jobdirs = {}
 
 
 wfstore = WfStateGlobalVarStorage()
@@ -197,8 +200,10 @@ def create_app():
     app.config["JSON_SORT_KEYS"] = False
     cache.init_app(app, config={'CACHE_TYPE': 'SimpleCache'})
     app.register_blueprint(blprint)
-    if wfstore.notebook_adapters:
-        setup_routes(app)
+
+    with wfstore._lock:
+        if wfstore.notebook_adapters:
+            setup_routes(app)
 
     app.config['STARTED_AT'] = datetime.datetime.now()
 
@@ -240,10 +245,11 @@ class AsyncWorkflow:
             self._run()
         except Exception as e:
             logger.error("run failed inexplicably: %s\n%s", repr(e), traceback.format_exc())
-            wfstore.async_workflows[self.key] = dict(
-                output={}, 
-                exceptions=[serialize_workflow_exception(e)]
-            )
+            with wfstore._lock:
+                wfstore.async_workflows[self.key] = dict(
+                    output={}, 
+                    exceptions=[serialize_workflow_exception(e)]
+                )
 
     def note(self, *args, **kwargs):
         if not hasattr(self, 'notes'):
@@ -261,16 +267,18 @@ class AsyncWorkflow:
             logger.info("workflow still blocked, waiting %i",
                         self.blocked_until - time.time())
             async_queue.put(self)
-            wfstore.async_workflows[self.key] = 'submitted'
+            with wfstore._lock:
+                wfstore.async_workflows[self.key] = 'submitted'
             return
-       
-        template_nba = wfstore.notebook_adapters.get(self.target)
-        nba = NotebookAdapter(template_nba.notebook_fn, tempdir_cache=wfstore.async_workflow_jobdirs,
-                              n_download_max_tries=template_nba.n_download_max_tries,
-                              download_retry_sleep_s=template_nba.download_retry_sleep_s,
-                              max_download_size=template_nba.max_download_size)
-        
-        wfstore.async_workflows[self.key] = 'started'
+
+        with wfstore._lock:
+            template_nba = wfstore.notebook_adapters.get(self.target)
+            nba = NotebookAdapter(template_nba.notebook_fn, tempdir_cache=wfstore.async_workflow_jobdirs,
+                                n_download_max_tries=template_nba.n_download_max_tries,
+                                download_retry_sleep_s=template_nba.download_retry_sleep_s,
+                                max_download_size=template_nba.max_download_size)
+            
+            wfstore.async_workflows[self.key] = 'started'
         self.perform_callback(action='progress')
 
         try:
@@ -286,8 +294,8 @@ class AsyncWorkflow:
             self.blocked_until = time.time() + 10
 
             async_queue.put(self)
-            wfstore.async_workflows[self.key] = 'submitted'            
-
+            with wfstore._lock:
+                wfstore.async_workflows[self.key] = 'submitted'
             return
 
         logger.info("exceptions: %s", repr(exceptions))
@@ -319,8 +327,9 @@ class AsyncWorkflow:
         logger.debug("output: %s", output)
 
         logger.info("updating key %s", self.key)
-        wfstore.async_workflows[self.key] = dict(output=output, exceptions=list(
-            map(serialize_workflow_exception, exceptions)), jobdir=nba.tmpdir)
+        with wfstore._lock:
+            wfstore.async_workflows[self.key] = dict(output=output, exceptions=list(
+                map(serialize_workflow_exception, exceptions)), jobdir=nba.tmpdir)
 
         self.perform_callback()
 
@@ -330,9 +339,6 @@ class AsyncWorkflow:
             return
 
         logger.info('will perform callback: %s', self.callback)
-
-
-        result = wfstore.async_workflows[self.key]
 
         callback_payload = dict(
             action=action
@@ -364,24 +370,26 @@ def workflow(target, background=False, async_request=False):
     if not background:
         logger.debug("raw parameters %s", request.args)
 
-    template_nba = wfstore.notebook_adapters.get(target)
-    nba = NotebookAdapter(template_nba.notebook_fn,
-                          n_download_max_tries=template_nba.n_download_max_tries,
-                          download_retry_sleep_s=template_nba.download_retry_sleep_s,
-                          max_download_size=template_nba.max_download_size)
+    with wfstore._lock:
+        template_nba = wfstore.notebook_adapters.get(target)
+    
+        nba = NotebookAdapter(template_nba.notebook_fn,
+                            n_download_max_tries=template_nba.n_download_max_tries,
+                            download_retry_sleep_s=template_nba.download_retry_sleep_s,
+                            max_download_size=template_nba.max_download_size)
 
-    if nba is None:
-        interpreted_parameters = None
-        issues.append("target not known: %s; available targets: %s" %
-                      (target, wfstore.notebook_adapters.keys()))
-    else:
-        if not background:
-            interpreted_parameters = nba.interpret_parameters(request.args)
-            issues += interpreted_parameters['issues']
+        if nba is None:
+            interpreted_parameters = None
+            issues.append("target not known: %s; available targets: %s" %
+                        (target, wfstore.notebook_adapters.keys()))
         else:
-            interpreted_parameters = dict(request_parameters=[])
+            if not background:
+                interpreted_parameters = nba.interpret_parameters(request.args)
+                issues += interpreted_parameters['issues']
+            else:
+                interpreted_parameters = dict(request_parameters=[])
 
-    logger.debug("interpreted parameters %s", interpreted_parameters)
+        logger.debug("interpreted parameters %s", interpreted_parameters)
 
     # async
     if async_request:
@@ -395,40 +403,41 @@ def workflow(target, background=False, async_request=False):
         key = hashlib.sha224(json.dumps(
             dict(target=target, params=interpreted_parameters)).encode('utf-8')).hexdigest()
 
-        value = wfstore.async_workflows.get(key, None)
+        with wfstore._lock:
+            value = wfstore.async_workflows.get(key, None)
 
-        print('cache key/value', key, value)
+            print('cache key/value', key, value)
 
-        if value is None:
-            async_task = AsyncWorkflow(key=key,
-                                       target=target,
-                                       params=interpreted_parameters,
-                                       context=context
-                                       )
+            if value is None:
+                async_task = AsyncWorkflow(key=key,
+                                        target=target,
+                                        params=interpreted_parameters,
+                                        context=context
+                                        )
+                
+                wfstore.async_workflows[key] = 'submitted'
+                async_queue.put(async_task)
 
-            wfstore.async_workflows[key] = 'submitted'
-            async_queue.put(async_task)
+                return make_response(jsonify(workflow_status="submitted",
+                                            comment="task created"),
+                                    201)
 
-            return make_response(jsonify(workflow_status="submitted",
-                                         comment="task created"),
-                                 201)
+            elif value == 'submitted':
+                return make_response(jsonify(workflow_status=value,
+                                            comment=f"task is {value}"),
+                                    201)
 
-        elif value == 'submitted':
-            return make_response(jsonify(workflow_status=value,
-                                         comment=f"task is {value}"),
-                                 201)
+            elif value == 'started':
+                return make_response(jsonify(workflow_status=value,
+                                            comment=f"task is {value}",
+                                            jobdir=wfstore.async_workflow_jobdirs.get(key)),
+                                    201)
 
-        elif value == 'started':
-            return make_response(jsonify(workflow_status=value,
-                                         comment=f"task is {value}",
-                                         jobdir=wfstore.async_workflow_jobdirs.get(key)),
-                                 201)
-
-        else:
-            return make_response(jsonify(workflow_status="done",
-                                         data=value,
-                                         comment=""),
-                                 200)
+            else:
+                return make_response(jsonify(workflow_status="done",
+                                            data=value,
+                                            comment=""),
+                                    200)
 
     if len(issues) > 0:
         return make_response(jsonify(issues=issues), 400)
@@ -531,14 +540,15 @@ def after_request(response):
 
 @blprint.route('/api/v1.0/options', methods=['GET'])
 def workflow_options():
-    return jsonify(dict([
-        (
-            target,
-            dict(output=nba.extract_output_declarations(),
-                    parameters=nba.extract_parameters()),
-            )
-        for target, nba in wfstore.notebook_adapters.items()
-    ]))
+    with wfstore._lock:
+        return jsonify(dict([
+            (
+                target,
+                dict(output=nba.extract_output_declarations(),
+                        parameters=nba.extract_parameters()),
+                )
+            for target, nba in wfstore.notebook_adapters.items()
+        ]))
 
 
 @blprint.route('/api/v1.0/get-<mode>/<target>/<filename>', methods=['GET'])
@@ -594,7 +604,8 @@ def workflow_filename(mode, target, filename):
 
 @blprint.route('/api/v1.0/rdf', methods=['GET'])
 def workflow_rdf():
-    return make_response(wfstore.service_semantic_signature)
+    with wfstore._lock:
+        return make_response(wfstore.service_semantic_signature)
 
 
 @blprint.route('/health')
@@ -650,8 +661,9 @@ def current_health():
     status['disk_usage'] = dict([(k+"_mb", v/1024/1024) if k != "percent" else (k, v)
                                  for k, v in dict(psutil.disk_usage(".")._asdict()).items()])
 
-    status['async'] = dict(qsize=async_queue.qsize(),
-                           async_workflows_n=len(wfstore.async_workflows))
+    with wfstore._lock:
+        status['async'] = dict(qsize=async_queue.qsize(),
+                               async_workflows_n=len(wfstore.async_workflows))
 
     #status['processes'] = processes
 
@@ -664,37 +676,38 @@ def test():
     expecting = []
 
     #TODO: use generalized testing
-    for template_nba in wfstore.notebook_adapters.values():
-        if template_nba.name.startswith('test_'):
-            key = template_nba.name
+    with wfstore._lock:
+        for template_nba in wfstore.notebook_adapters.values():
+            if template_nba.name.startswith('test_'):
+                key = template_nba.name
 
-            if key in wfstore.async_workflows:
-                print("found", wfstore.async_workflows[key])
+                if key in wfstore.async_workflows:
+                    print("found", wfstore.async_workflows[key])
 
-                if isinstance(wfstore.async_workflows[key], dict):
-                    print("found result seems a reasonable dict")
-                    workflow_status = wfstore.async_workflows[key].get(
-                        'workflow_status', 'done')
-                    print("workflow_status", workflow_status)
+                    if isinstance(wfstore.async_workflows[key], dict):
+                        print("found result seems a reasonable dict")
+                        workflow_status = wfstore.async_workflows[key].get(
+                            'workflow_status', 'done')
+                        print("workflow_status", workflow_status)
+                    else:
+                        workflow_status = wfstore.async_workflows[key]
+
+                    if workflow_status == 'done':
+                        # and output notebook
+                        results[template_nba.name] = wfstore.async_workflows[key]['exceptions']
+                        print("workflow_status is done, results exceptions:",
+                            results[template_nba.name])
+                    else:
+                        expecting.append(
+                            dict(key=key, workflow_status=workflow_status))
                 else:
-                    workflow_status = wfstore.async_workflows[key]
+                    async_task = AsyncWorkflow(key=key, target=template_nba.name, params=dict(
+                        request_parameters=dict(location=os.path.dirname(template_nba.notebook_fn))))
 
-                if workflow_status == 'done':
-                    # and output notebook
-                    results[template_nba.name] = wfstore.async_workflows[key]['exceptions']
-                    print("workflow_status is done, results exceptions:",
-                          results[template_nba.name])
-                else:
-                    expecting.append(
-                        dict(key=key, workflow_status=workflow_status))
-            else:
-                async_task = AsyncWorkflow(key=key, target=template_nba.name, params=dict(
-                    request_parameters=dict(location=os.path.dirname(template_nba.notebook_fn))))
+                    async_queue.put(async_task)
 
-                async_queue.put(async_task)
-
-                wfstore.async_workflows[key] = 'started'
-                expecting.append(dict(key=key, workflow_status='submitted'))
+                    wfstore.async_workflows[key] = 'started'
+                    expecting.append(dict(key=key, workflow_status='submitted'))
 
     if expecting != []:
         return make_response(jsonify(dict(expecting=expecting)), 201)
@@ -724,29 +737,33 @@ def root():
 
 @blprint.route('/status')
 def status():
-    return jsonify(
-        version=os.environ.get('WORKFLOW_VERSION', 'unknown'),
-        started_at=current_app.config['STARTED_AT'].strftime("%s"),
-        started_since=(datetime.datetime.now()-current_app.config['STARTED_AT']).seconds,
-        background_jobs=len([w for w in wfstore.async_workflows if w]),
-        stored_jobs=len(wfstore.async_workflows),
-    )
+    with wfstore._lock:
+        return jsonify(
+            version=os.environ.get('WORKFLOW_VERSION', 'unknown'),
+            started_at=current_app.config['STARTED_AT'].strftime("%s"),
+            started_since=(datetime.datetime.now()-current_app.config['STARTED_AT']).seconds,
+            background_jobs=len([w for w in wfstore.async_workflows if w]),
+            stored_jobs=len(wfstore.async_workflows),
+        )
 
 @blprint.route('/async/clear')
 def async_clear():
-    s = wfstore.async_workflows
-    wfstore.async_reset()
-    return jsonify(s)
+    with wfstore._lock:
+        s = wfstore.async_workflows
+        wfstore.async_reset()
+        return jsonify(s)
 
 
 @blprint.route('/async/size')
 def async_size():
-    return jsonify({'async_size': len(wfstore.async_workflows)})
+    with wfstore._lock:
+        return jsonify({'async_size': len(wfstore.async_workflows)})
 
 
 @blprint.route('/async/list')
 def async_list():
-    return jsonify(wfstore.async_workflows)
+    with wfstore._lock:
+        return jsonify(wfstore.async_workflows)
 
 
 @blprint.route('/async/qsize')
@@ -885,23 +902,24 @@ def main():
         root.setLevel(logging.INFO)
         handler.setLevel(logging.INFO)
 
-    wfstore.notebook_adapters = find_notebooks(args.notebook, pattern=args.pattern)
-    wfstore.service_semantic_signature = ontology.service_semantic_signature(
-        wfstore.notebook_adapters)
+    with wfstore._lock:
+        wfstore.notebook_adapters = find_notebooks(args.notebook, pattern=args.pattern)
+        wfstore.service_semantic_signature = ontology.service_semantic_signature(
+            wfstore.notebook_adapters)
     
-    app = create_app()
-    
-    if args.publish:
-        logger.info("publishing to %s", args.publish)
+        app = create_app()
+        
+        if args.publish:
+            logger.info("publishing to %s", args.publish)
 
-        if args.publish_as:
-            s = args.publish_as.split(":")
-            publish_host, publish_port = ":".join(s[:-1]), int(s[-1])
-        else:
-            publish_host, publish_port = args.host, args.port
+            if args.publish_as:
+                s = args.publish_as.split(":")
+                publish_host, publish_port = ":".join(s[:-1]), int(s[-1])
+            else:
+                publish_host, publish_port = args.host, args.port
 
-        for nba_name, nba in wfstore.notebook_adapters.items():
-            publish.publish(args.publish, nba_name, publish_host, publish_port)
+            for nba_name, nba in wfstore.notebook_adapters.items():
+                publish.publish(args.publish, nba_name, publish_host, publish_port)
 
     thread_id = threading.get_ident()
     process_id = os.getpid()
