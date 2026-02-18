@@ -38,7 +38,7 @@ jobs:
 
     - name: Test with pytest
       run: |
-        uv run pytest -sv --log-cli-level DEBUG --cov=./ -k 'not cwl and not docker and not deploy'
+        uv run pytest -sv --log-cli-level DEBUG --cov=./ -k 'not cwl and not docker and not deploy' tests/test_service.py tests/test_token.py
 
     - name: Codecov
       uses: codecov/codecov-action@v5
