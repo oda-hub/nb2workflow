@@ -78,8 +78,10 @@ class WfStateGlobalVarStorage:
     notebook_adapters: dict[str, NotebookAdapter] = field(default_factory=dict)
 
     def reset(self):
-        for fld in fields(self):
-            setattr(self, fld.name, fld.default)
+        self.async_workflows = {}
+        self.async_workflow_jobdirs = {}
+        self.service_semantic_signature = ''
+        self.notebook_adapters = {}
 
     def async_reset(self):
         self.async_workflows = {}
