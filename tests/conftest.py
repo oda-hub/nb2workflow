@@ -54,6 +54,7 @@ def test_notebook_lfs_repo():
 @pytest.fixture
 def app(test_local_dir):
     print("creating app")
+    nb2workflow.service.wfstore.reset()
     nb2workflow.service.wfstore.notebook_adapters = nbadapter.find_notebooks(test_local_dir)
     app = nb2workflow.service.create_app()
     nbadapter.ontology._is_ontology_available = True
@@ -64,6 +65,7 @@ def app(test_local_dir):
 @pytest.fixture
 def app_nb_repo(test_notebook_repo):
     print("creating app")
+    nb2workflow.service.wfstore.reset()
     nb2workflow.service.wfstore.notebook_adapters = nbadapter.find_notebooks(test_notebook_repo)
     app = nb2workflow.service.create_app()
     nbadapter.ontology._is_ontology_available = True
