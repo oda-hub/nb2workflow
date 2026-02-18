@@ -22,7 +22,7 @@ def test_local_dir():
 
 
 @pytest.fixture
-def test_repo_notebook():
+def test_inrepo_notebook():
     return os.environ.get('TEST_NOTEBOOK',
                           os.path.join(os.getcwd(), "tests/testrepo/workflow-notebook.ipynb"))
 

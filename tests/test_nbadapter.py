@@ -21,13 +21,13 @@ def _mimick_convert_minor_version(nb_fn, version):
     return fn
 
 @pytest.mark.parametrize("morph_notebook", ["mimick_convert_minor_version", "vanilla"])
-def test_nbadapter(test_notebook, morph_notebook, caplog):
+def test_nbadapter(test_inrepo_notebook, morph_notebook, caplog):
     from nb2workflow.nbadapter import NotebookAdapter
 
     if morph_notebook == "mimick_convert_minor_version":
-        fn = _mimick_convert_minor_version(test_notebook, 2)
+        fn = _mimick_convert_minor_version(test_inrepo_notebook, 2)
     elif morph_notebook == "vanilla":
-        fn = test_notebook
+        fn = test_inrepo_notebook
     else:
         raise NotImplementedError
 
@@ -146,12 +146,12 @@ def test_nbadapter_lfs_repo(test_notebook_lfs_repo):
             assert ex.message == "git-lfs is not initialized"
         break
 
-def test_nbreduce(test_notebook):
+def test_nbreduce(test_inrepo_notebook):
     from nb2workflow.nbadapter import NotebookAdapter, nbreduce, setup_logging
 
     setup_logging()
 
-    nba = NotebookAdapter(test_notebook)
+    nba = NotebookAdapter(test_inrepo_notebook)
 
     if os.path.exists(nba.output_notebook_fn):
         os.remove(nba.output_notebook_fn)
