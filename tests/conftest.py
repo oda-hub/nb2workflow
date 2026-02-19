@@ -51,7 +51,7 @@ def test_notebook_lfs_repo():
 
     return path
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def app(test_local_dir):
     print("creating app")
     nb2workflow.service.wfstore.notebook_adapters = nbadapter.find_notebooks(test_local_dir)
@@ -61,7 +61,7 @@ def app(test_local_dir):
     yield app
     nb2workflow.service.wfstore.reset()    
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def app_nb_repo(test_notebook_repo):
     print("creating app")
     nb2workflow.service.wfstore.notebook_adapters = nbadapter.find_notebooks(test_notebook_repo)
