@@ -15,18 +15,18 @@ import rdflib as rdf
 
 from oda_api.ontology_helper import ODA, ODAS
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def test_local_dir():
     return os.environ.get('TEST_NOTEBOOK',
                           os.path.join(os.getcwd(), "tests/testfiles/"))
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def test_inrepo_notebook():
     return os.environ.get('TEST_NOTEBOOK',
                           os.path.join(os.getcwd(), "tests/testrepo/workflow-notebook.ipynb"))
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def test_notebook_repo():
     path = os.environ.get('TEST_NOTEBOOK_REPO', None)
     
@@ -39,7 +39,7 @@ def test_notebook_repo():
     return path
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def test_notebook_lfs_repo():
     path = os.environ.get('TEST_NOTEBOOK_LFS_REPO', None)
 
@@ -71,6 +71,9 @@ def app_nb_repo(test_notebook_repo):
     yield app
     nb2workflow.service.wfstore.reset()
 
+@pytest.fixture
+def client(app):
+    return app.test_client()
 
 @pytest.fixture
 def client_nb_repo(app_nb_repo):
@@ -219,6 +222,3 @@ def pytest_collection_modifyitems(config, items):
         if "service" in item.keywords:
             item.add_marker(skip_service)
 
-@pytest.fixture
-def client(app):
-    return app.test_client()
