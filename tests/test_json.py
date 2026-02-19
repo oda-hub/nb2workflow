@@ -5,8 +5,6 @@ from nb2workflow.json import CustomJSONEncoder
 import numpy as np
 from astropy.table import Table
 from io import StringIO
-import pytest
-import nb2workflow
 
 
 def test_oda_astropy_table_encoding():

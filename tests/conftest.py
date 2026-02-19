@@ -10,10 +10,6 @@ import requests
 
 import nb2workflow.service
 from nb2workflow import nbadapter
-from importlib import reload
-import rdflib as rdf
-
-from oda_api.ontology_helper import ODA, ODAS
 
 @pytest.fixture(scope="module")
 def test_local_dir():

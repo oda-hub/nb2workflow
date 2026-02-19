@@ -1,5 +1,3 @@
-import pytest
-import nb2workflow
 import logging
 import threading
 import time

@@ -1,5 +1,3 @@
-import typing
-
 import pickle
 import re
 import os
@@ -16,7 +14,7 @@ import tempfile
 import nbformat
 import yaml
 import traceback
-from dataclasses import dataclass, fields, field
+from dataclasses import dataclass, field
 
 from werkzeug.routing import RequestRedirect
 from werkzeug.exceptions import MethodNotAllowed, NotFound
