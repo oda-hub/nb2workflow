@@ -1,3 +1,6 @@
+from __future__ import annotations
+# for py3.9
+
 import pickle
 import re
 import os
