@@ -61,18 +61,16 @@ def test_token_sync(client):
     token = 'abc123'
     query_string = dict(
         a=20,
-        _async_request='no',
-        _async_request_callback=callback_url,
-                   _token=token)
+        _token=token)
 
     r = client.get('/api/v1.0/get/token',
                    query_string=query_string)
 
     assert r.status_code == 200
-    assert 'data' in r.json
-    assert 'output' in r.json['data']
-    assert 'token' in r.json['data']['output']
-    assert r.json['data']['output']['token'] == token
+    # the structure of sync response is different (no 'data' key)
+    assert 'output' in r.json
+    assert 'token' in r.json['output']
+    assert r.json['output']['token'] == token
 
 
 def test_token_no_access(client):

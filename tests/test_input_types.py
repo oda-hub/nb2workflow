@@ -58,7 +58,7 @@ def test_file_reference(client, query_string_fits_file_path):
     callback_url = 'file://' + status_callback_file
     token = 'abc123'
     query_string = dict(
-        _async_request='no',
+        _async_request='yes',
         _async_request_callback=callback_url,
         _token=token)
 
@@ -118,7 +118,7 @@ def test_mmoda_file_url(client, query_string_fits_file_url):
     callback_url = 'file://' + status_callback_file
     token = 'abc123'
     query_string = dict(
-        _async_request='no',
+        _async_request='yes',
         _async_request_callback=callback_url,
         _token=token)
 
