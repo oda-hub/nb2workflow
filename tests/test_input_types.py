@@ -1,6 +1,4 @@
 import pytest
-import nb2workflow
-import os
 import logging
 import threading
 import time
@@ -10,25 +8,16 @@ logger = logging.getLogger(__name__)
 from urllib.parse import urlencode, urlparse, parse_qs
 
 
-@pytest.fixture
-def app():
-    testfiles_path = os.path.join(os.path.dirname(__file__), 'testfiles')
-    app = nb2workflow.service.app
-    app.notebook_adapters = nb2workflow.nbadapter.find_notebooks(testfiles_path)
-    nb2workflow.service.setup_routes(app)
-    nb2workflow.nbadapter.ontology._is_ontology_available = True
-    print("creating app")
-    return app
 
 def test_posix_download_file(client):
     r = client.get('/api/v1.0/get/testposixpath')
     assert r.json['output']['output_file_download'] == 'file not downloaded'
 
-def test_posix_download_file_no_ontology(client, app_not_available_ontology):
+def test_posix_download_file_no_ontology(client, not_available_ontology):
     r = client.get('/api/v1.0/get/testposixpath', query_string={'fits_file_path': 'https://fits.gsfc.nasa.gov/samples/testkeys.fits'})
     assert r.json['output']['output_file_download'] == 'file downloaded successfully'
 
-def test_posix_download_file_no_ontology_extra_annotations(client, app_not_available_ontology):
+def test_posix_download_file_no_ontology_extra_annotations(client, not_available_ontology):
     r = client.get('/api/v1.0/get/testposixpath_extra_annotated', query_string={'fits_file_path': 'https://fits.gsfc.nasa.gov/samples/testkeys.fits'})
     assert r.json['output']['output_file_download'] == 'file downloaded successfully'
 
@@ -67,7 +56,7 @@ def test_file_reference(client, query_string_fits_file_path):
     callback_url = 'file://' + status_callback_file
     token = 'abc123'
     query_string = dict(
-        _async_request='no',
+        _async_request='yes',
         _async_request_callback=callback_url,
         _token=token)
 
@@ -127,7 +116,7 @@ def test_mmoda_file_url(client, query_string_fits_file_url):
     callback_url = 'file://' + status_callback_file
     token = 'abc123'
     query_string = dict(
-        _async_request='no',
+        _async_request='yes',
         _async_request_callback=callback_url,
         _token=token)
 
@@ -186,7 +175,7 @@ def test_mmoda_file_url(client, query_string_fits_file_url):
         assert r.json['data']['output'] == 'incomplete'
         assert r.json['data']['exceptions'][0]['edump'] == f"ValueError('Parameter fits_file_url value \"{fits_file_url_value}\" can not be interpreted as FileURL.')"
 
-def test_posix_download_file_with_arg_low_download_limit(client, app_low_download_limit):
+def test_posix_download_file_with_arg_low_download_limit(client, low_download_limit):
     r = client.get('/api/v1.0/get/testposixpath', query_string={'fits_file_path': 'https://fits.gsfc.nasa.gov/samples/testkeys.fits'})
     assert r.json['output'] == {}
     assert r.json['exceptions'][0] == "Exception('The file appears to be too large to download, and the download limit is set to 1 bytes.')"
@@ -237,51 +226,43 @@ def test_posix_download_file_local_mmoda_url(client, public, host):
                                        f"{fits_file_url}. This might be related to an "
                                        "invalid url, please check the input provided')")
 
-def test_boolean_default(client):
-    r = client.get('/api/v1.0/get/testbool')
-    assert r.json['output']['output'] == 'boolean True'
-    
-def test_boolean_false(client):
-    r = client.get('/api/v1.0/get/testbool', query_string={'boolpar': 'false'})
-    assert r.json['output']['output'] == 'boolean False'
-    
+@pytest.mark.parametrize('boolpar,expected_output', [
+    (None, 'boolean True'),
+    ('false', 'boolean False'),
+    ('False', 'boolean False'),
+    ('', 'boolean False'),
+    ('true', 'boolean True'),
+])
+def test_boolean(client, boolpar, expected_output):
+    if boolpar is None:
+        r = client.get('/api/v1.0/get/testbool')
+    else:
+        r = client.get('/api/v1.0/get/testbool', query_string={'boolpar': boolpar})
+    assert r.json['output']['output'] == expected_output
 
-def test_boolean_False(client):
-    r = client.get('/api/v1.0/get/testbool', query_string={'boolpar': 'False'})
-    assert r.json['output']['output'] == 'boolean False'
-    
-def test_boolean_empty(client):
-    r = client.get('/api/v1.0/get/testbool', query_string={'boolpar': ''})
-    assert r.json['output']['output'] == 'boolean False'
-    
-def test_boolean_true(client):
-    r = client.get('/api/v1.0/get/testbool', query_string={'boolpar': 'true'})
-    assert r.json['output']['output'] == 'boolean True'
-    
+
 def test_boolean_wrong(client):
     r = client.get('/api/v1.0/get/testbool', query_string={'boolpar': 'spam'})
     assert r.json['issues'][0] == 'Parameter boolpar value "spam" can not be interpreted as boolean.'
     
-def test_list(client):
-    r = client.get('/api/v1.0/get/structured_input', query_string={'lst': '[1, 2, 3]'})
-    assert r.json['output']['lst'] == [1, 2, 3]
+@pytest.mark.parametrize('query_string,expected_output,check_key', [
+    ({'lst': '[1, 2, 3]'}, [1, 2, 3], 'lst'),
+    ({'dct': '{"foo": "bar"}'}, {"foo": "bar"}, 'dct'),
+    ({'dct': '{"foo": ["bar", "baz"], "spam": ["ham", "eggs"]}'}, {"foo": ["bar", "baz"], "spam": ["ham", "eggs"]}, 'dct'),
+])
+def test_structured_input(client, query_string, expected_output, check_key):
+    r = client.get('/api/v1.0/get/structured_input', query_string=query_string)
+    assert r.json['output'][check_key] == expected_output
 
-def test_list_wrong(client):
-    r = client.get('/api/v1.0/get/structured_input', query_string={'lst': 'baz'})
-    assert r.json['issues'][0] == 'Parameter lst value "baz" can not be interpreted as list.'
-    
-def test_dict(client):
-    r = client.get('/api/v1.0/get/structured_input', query_string={'dct': '{"foo": "bar"}'})
-    assert r.json['output']['dct'] == {"foo": "bar"}
 
-def test_dict_complex(client):
-    r = client.get('/api/v1.0/get/structured_input', 
-                   query_string={'dct': '{"foo": ["bar", "baz"], "spam": ["ham", "eggs"]}'})
-    assert r.json['output']['dct'] == {"foo": ["bar", "baz"], "spam": ["ham", "eggs"]}
-
-def test_dict_wrong(client):
-    r = client.get('/api/v1.0/get/structured_input', query_string={'dct': 'baz'})
-    assert r.json['issues'][0] == 'Parameter dct value "baz" can not be interpreted as dict.'
+@pytest.mark.parametrize('invalid_input,param_name', [
+    ({'lst': 'baz'}, 'lst'),
+    ({'dct': 'baz'}, 'dct'),
+])
+def test_structured_input_wrong(client, invalid_input, param_name):
+    r = client.get('/api/v1.0/get/structured_input', query_string=invalid_input)
+    expected_type = 'list' if param_name == 'lst' else 'dict'
+    assert r.json['issues'][0] == f'Parameter {param_name} value "baz" can not be interpreted as {expected_type}.'
 
 
 @pytest.mark.parametrize('inp,outp', [({'opt': None}, {'opt': None}),
@@ -315,4 +296,5 @@ def test_casting_invalid(client, query):
     r=client.get('/api/v1.0/get/multiline', 
                  query_string=query)
     assert len(r.json['data']['exceptions']) > 0
+
 
