@@ -1,0 +1,112 @@
+name: Version bump PR
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+    inputs:
+      bump-type:
+        description: 'Bump type'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+        - major
+        - minor
+        - patch
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  bump:
+    # Guard against infinite loop
+    if: "!contains(github.event.head_commit.message, 'chore: bump version ')"
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: '0.10.7'
+
+      - name: Get PR title
+        id: prtitle
+        run: |
+          PR_TITLE=$(gh api repos/${{ github.repository }}/commits/${{ github.sha }}/pulls \
+            --jq '.[0].title')
+          
+          if [[ -z "$PR_TITLE" ]]; then
+            PR_TITLE="${{ github.event.head_commit.message }}"
+          fi
+
+          echo "title=$PR_TITLE" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Determine bump type
+        id: bumptype
+        run: |
+          MSG="${{ steps.prtitle.outputs.title }}"
+          
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "type=${{ github.event.inputs.bump-type }}" >> $GITHUB_OUTPUT
+          elif echo "$MSG" | grep -qE "^chore:"; then
+            echo "type=none" >> $GITHUB_OUTPUT
+          elif echo "$MSG" | grep -qE "BREAKING|!:"; then
+            echo "type=major" >> $GITHUB_OUTPUT
+          elif echo "$MSG" | grep -qE "^feat:"; then
+            echo "type=minor" >> $GITHUB_OUTPUT
+          else
+            echo "type=patch" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Bump version
+        if: steps.bumptype.outputs.type != 'none'
+        id: bump
+        run: |
+          echo "previous-version=$(uv version --short)" >> $GITHUB_OUTPUT
+          uv version --bump ${{ steps.bumptype.outputs.type }} --frozen
+          echo "current-version=$(uv version --short)" >> $GITHUB_OUTPUT
+          
+      - name: Create branch and commit
+        if: steps.bumptype.outputs.type != 'none'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+
+          BRANCH=version-bump/${{ github.run_id }}
+          git checkout -b $BRANCH
+          git commit -am "chore: bump version ${{ steps.bump.outputs.previous-version }} --> ${{ steps.bump.outputs.current-version }}"
+          git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}
+          git push origin $BRANCH
+        
+
+      - name: Create PR
+        if: steps.bumptype.outputs.type != 'none'
+        id: pr
+        run: |
+          gh pr create \
+            --title "chore: bump version ${{ steps.bump.outputs.previous-version }} --> ${{ steps.bump.outputs.current-version }}" \
+            --body "Automated semantic version bump" \
+            --base master
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Approve PR
+        if: steps.bumptype.outputs.type != 'none'
+        run: gh pr review --approve
+        env:
+          GH_TOKEN: ${{ secrets.BOT_PAT }}
+
+      - name: Enable auto-merge
+        if: steps.bumptype.outputs.type != 'none'
+        run: gh pr merge --auto --squash
+        env:
+          GH_TOKEN: ${{ secrets.BOT_PAT }}
