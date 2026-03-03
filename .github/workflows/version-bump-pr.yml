@@ -46,7 +46,7 @@ jobs:
 
           echo "title=$PR_TITLE" >> $GITHUB_OUTPUT
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.BOT_PAT }}
 
       - name: Determine bump type
         id: bumptype
@@ -70,13 +70,13 @@ jobs:
         id: bump
         run: |
           echo "previous-version=$(uv version --short)" >> $GITHUB_OUTPUT
-          uv version --bump ${{ steps.bumptype.outputs.type }} --frozen
+          uv version --bump ${{ steps.bumptype.outputs.type }} --no-sync
           echo "current-version=$(uv version --short)" >> $GITHUB_OUTPUT
           
       - name: Create branch and commit
         if: steps.bumptype.outputs.type != 'none'
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.BOT_PAT }}
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@users.noreply.github.com"
@@ -97,16 +97,16 @@ jobs:
             --body "Automated semantic version bump" \
             --base master
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.BOT_PAT }}
 
       - name: Approve PR
         if: steps.bumptype.outputs.type != 'none'
         run: gh pr review --approve
         env:
-          GH_TOKEN: ${{ secrets.BOT_PAT }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Enable auto-merge
         if: steps.bumptype.outputs.type != 'none'
         run: gh pr merge --auto --squash
         env:
-          GH_TOKEN: ${{ secrets.BOT_PAT }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
