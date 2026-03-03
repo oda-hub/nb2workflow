@@ -109,4 +109,4 @@ jobs:
         if: steps.bumptype.outputs.type != 'none'
         run: gh pr merge --auto --squash
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.BOT_PAT }}
