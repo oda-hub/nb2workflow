@@ -165,13 +165,13 @@ def service_fixture(pytestconfig, test_notebook_repo):
             line = line.decode()
 
             print("following server:", line.rstrip())
-            m = re.search("Running on (.*?) \(Press CTRL\+C to quit\)", line)
+            m = re.search(r"Running on (.*?) \(Press CTRL\+C to quit\)", line)
             if m:
                 # alaternatively get from configenv
                 url_store[0] = m.group(1)[:-1]
                 print("found url:", url_store[0])
 
-            if re.search("\* Debugger PIN:.*?", line):
+            if re.search(r"\* Debugger PIN:.*?", line):
                 url_store[0] = url_store[0].replace("0.0.0.0", "127.0.0.1")
                 print("server ready, url", url_store[0])
 
