@@ -7,7 +7,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nb2workflow"
-version = "1.3.116"
+version = "1.3.117"
 description = "convert notebook to workflow"
 authors = [
     {name = "Volodymyr Savchenko", email = "contact@volodymyrsavchenko.com"}
