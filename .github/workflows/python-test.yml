@@ -28,7 +28,7 @@ jobs:
 
     - name: Install the project
       run: |
-        uv sync --locked
+        uv sync --locked --all-extras
         git clone https://github.com/volodymyrss/nbworkflow-test.git tests/testrepo
 
     - name: Lint with flake8
