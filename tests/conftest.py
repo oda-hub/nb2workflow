@@ -92,6 +92,7 @@ def low_download_limit(test_local_dir):
 def not_available_ontology():
     nbadapter.ontology._is_ontology_available = False
     yield
+    nbadapter.ontology._is_ontology_available = True
 
 
 
