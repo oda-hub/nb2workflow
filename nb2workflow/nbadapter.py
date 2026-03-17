@@ -9,14 +9,13 @@ import os
 import glob
 import shutil
 from tokenize import generate_tokens, COMMENT
-from typing import Any, Optional, TypeVar, ForwardRef 
+from typing import *  # type: ignore # noqa: F403
 # need wildcard import to resolve (semi-)arbitrary ForwardRef of annotations in nb
 import yaml 
 import re
 import time
 import tempfile
 import subprocess
-import yaml
 import argparse
 import json
 import base64
