@@ -64,15 +64,15 @@ except (ModuleNotFoundError, ImportError):
     oda_api_available = False
     class Ontology:
         def __init__(self, ontology_path):
-            self._is_ontology_available = False
+            pass    
 
 
 # TODO: will be configurable
 oda_ontology_path = "http://odahub.io/ontology/ontology.ttl"
 class ModOntology(Ontology):
     def __init__(self, ontology_path):
-        self._is_ontology_available = True
         super().__init__(ontology_path)
+        self._is_ontology_available = oda_api_available # TODO: will be properly implemented in the ontology helper, this is just a quick solution to be able to test the workflow without ontology available
         self.lock = Lock()
 
     def get_datatype_restriction(self, param_uri):
