@@ -1,7 +1,3 @@
-from typing import Any
-from flask.json.provider import DefaultJSONProvider
-import json
-
 from json import JSONEncoder
 
 try:
@@ -27,8 +23,3 @@ class CustomJSONEncoder(JSONEncoder):
             except (TypeError, RuntimeError): 
                 pass
         return super().default(obj)
-    
-class CustomJSONProvider(DefaultJSONProvider):
-    def dumps(self, obj: Any, **kwargs: Any) -> str:
-        kwargs['cls'] = CustomJSONEncoder
-        return json.dumps(obj, **kwargs)

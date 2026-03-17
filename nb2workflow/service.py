@@ -8,6 +8,7 @@ import json
 import glob
 import time
 import logging
+from typing import Any
 import requests
 from requests.auth import HTTPBasicAuth
 import base64
@@ -32,11 +33,12 @@ from bs4 import BeautifulSoup
 
 from flask import Flask, Blueprint, make_response, jsonify, request, url_for, send_file, Response, current_app
 from flask_caching import Cache
+from flask.json.provider import DefaultJSONProvider
 
 from flasgger import LazyString, Swagger, swag_from
 
 from nb2workflow.helpers import serialize_workflow_exception
-from nb2workflow.json import CustomJSONProvider
+from nb2workflow.json import CustomJSONEncoder
 
 import threading
 
@@ -48,6 +50,11 @@ logger = logging.getLogger('nb2workflow.service')
 
 async_queue = queue.Queue()
 
+
+class CustomJSONProvider(DefaultJSONProvider):
+    def dumps(self, obj: Any, **kwargs: Any) -> str:
+        kwargs['cls'] = CustomJSONEncoder
+        return json.dumps(obj, **kwargs)
 
 class ReverseProxied(object):
     def __init__(self, app):

@@ -8,7 +8,6 @@ import subprocess
 import tempfile
 import requests
 
-import nb2workflow.service
 from nb2workflow import nbadapter
 
 @pytest.fixture(scope="module")
@@ -49,6 +48,7 @@ def test_notebook_lfs_repo():
 
 @pytest.fixture(scope="module")
 def app(test_local_dir):
+    import nb2workflow.service
     print("creating app")
     nb2workflow.service.wfstore.notebook_adapters = nbadapter.find_notebooks(test_local_dir)
     app = nb2workflow.service.create_app()
@@ -59,6 +59,7 @@ def app(test_local_dir):
 
 @pytest.fixture(scope="module")
 def app_nb_repo(test_notebook_repo):
+    import nb2workflow.service
     print("creating app")
     nb2workflow.service.wfstore.notebook_adapters = nbadapter.find_notebooks(test_notebook_repo)
     app = nb2workflow.service.create_app()
@@ -78,6 +79,7 @@ def client_nb_repo(app_nb_repo):
 
 @pytest.fixture
 def low_download_limit(test_local_dir):
+    import nb2workflow.service
     for nb, nba_obj in nb2workflow.service.wfstore.notebook_adapters.items():
         nba_obj.max_download_size = 1
     nbadapter.ontology._is_ontology_available = True
@@ -90,6 +92,7 @@ def low_download_limit(test_local_dir):
 def not_available_ontology():
     nbadapter.ontology._is_ontology_available = False
     yield
+    nbadapter.ontology._is_ontology_available = True
 
 
 
@@ -163,13 +166,13 @@ def service_fixture(pytestconfig, test_notebook_repo):
             line = line.decode()
 
             print("following server:", line.rstrip())
-            m = re.search("Running on (.*?) \(Press CTRL\+C to quit\)", line)
+            m = re.search(r"Running on (.*?) \(Press CTRL\+C to quit\)", line)
             if m:
                 # alaternatively get from configenv
                 url_store[0] = m.group(1)[:-1]
                 print("found url:", url_store[0])
 
-            if re.search("\* Debugger PIN:.*?", line):
+            if re.search(r"\* Debugger PIN:.*?", line):
                 url_store[0] = url_store[0].replace("0.0.0.0", "127.0.0.1")
                 print("server ready, url", url_store[0])
 

@@ -1,13 +1,14 @@
 import json
-import os
-from oda_api.data_products import ODAAstropyTable
+
 from nb2workflow.json import CustomJSONEncoder
 import numpy as np
-from astropy.table import Table
 from io import StringIO
 
 
 def test_oda_astropy_table_encoding():
+    from oda_api.data_products import ODAAstropyTable
+    from astropy.table import Table
+    
     data = np.zeros((10, 2))
     data[:,0] = range(len(data))
     data[:,1] = range(len(data), 0, -1)
