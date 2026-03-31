@@ -14,7 +14,7 @@ authors = [
 ]
 license = {text = "GPLv3"}
 readme = "README.md"
-requires-python = ">=3.9,<3.14"
+requires-python = ">=3.9"
 keywords = ["jupyter", "docker"]
 classifiers = []
 
