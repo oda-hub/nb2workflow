@@ -1,14 +1,5 @@
-from __future__ import print_function
-import os
 import logging
-import os
 import pytest
-import base64
-from importlib import reload
-
-from nb2workflow import service
-import nb2workflow.nbadapter
-from flask import url_for
 
 FORMAT = '%(asctime)-15s %(message)s'
 logging.basicConfig(format=FORMAT)

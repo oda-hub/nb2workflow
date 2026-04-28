@@ -9,14 +9,13 @@ import os
 import glob
 import shutil
 from tokenize import generate_tokens, COMMENT
-from typing import * # type: ignore 
+from typing import *  # type: ignore # noqa: F403
 # need wildcard import to resolve (semi-)arbitrary ForwardRef of annotations in nb
 import yaml 
 import re
 import time
 import tempfile
 import subprocess
-import yaml
 import argparse
 import json
 import base64
@@ -38,8 +37,6 @@ from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 
 from . import logstash
 
-from oda_api.ontology_helper import Ontology, xsd_type_to_python_type
-
 from nb2workflow.sentry import sentry
 from nb2workflow.health import current_health
 from nb2workflow.logging_setup import setup_logging
@@ -47,7 +44,6 @@ from nb2workflow.json import CustomJSONEncoder
 from nb2workflow.helpers import is_mmoda_url, serialize_workflow_exception
 from nb2workflow.semantics import understand_comment_references
 
-from nb2workflow.semantics import understand_comment_references
 from git import Repo, InvalidGitRepositoryError, GitCommandError
 
 import logging
@@ -55,20 +51,29 @@ from threading import Lock
 
 from nbclient.exceptions import DeadKernelError
 
-
 logger=logging.getLogger(__name__)
-
 logstasher = logstash.LogStasher()
+
+try:
+    from oda_api.ontology_helper import Ontology, xsd_type_to_python_type
+    from oda_api import context_file
+    
+    oda_api_available = True
+except (ModuleNotFoundError, ImportError):
+    logger.warning("oda_api is not available, ontology-based features will be disabled")
+    oda_api_available = False
+    class Ontology:
+        def __init__(self, ontology_path):
+            self._is_ontology_available = False
+
 
 # TODO: will be configurable
 oda_ontology_path = "http://odahub.io/ontology/ontology.ttl"
-#oda_ontology_path = "/home/dsavchenko/Projects/MMODA/ontology/ontology.ttl"
-
 class ModOntology(Ontology):
     def __init__(self, ontology_path):
+        self._is_ontology_available = True
         super().__init__(ontology_path)
         self.lock = Lock()
-        self._is_ontology_available = True
 
     def get_datatype_restriction(self, param_uri):
         self.lock.acquire()
@@ -105,7 +110,9 @@ class ModOntology(Ontology):
     
 
 ontology = ModOntology(oda_ontology_path)
-oda_prefix = str([x[1] for x in ontology.g.namespaces() if x[0] == 'oda'][0])
+oda_prefix = (
+    str([x[1] for x in ontology.g.namespaces() if x[0] == 'oda'][0]) 
+    if ontology.is_ontology_available else "http://odahub.io/ontology#" )
 
 def run(notebook_fn, params: dict):
     nba = NotebookAdapter(notebook_fn)
@@ -163,16 +170,16 @@ def odahub_type_for_python_type(python_type: type):
 
     xml_scheme_url = "http://www.w3.org/2001/XMLSchema#"
 
-    if python_type == int:
+    if python_type is int:
         out_type = 'Integer'
         url_prefix = oda_prefix
-    elif python_type == str:
+    elif python_type is str:
         out_type = 'String'
         url_prefix = oda_prefix
-    elif python_type == bool:
+    elif python_type is bool:
         out_type = 'Boolean'
         url_prefix = oda_prefix
-    elif python_type == float:
+    elif python_type is float:
         out_type = 'Float'
         url_prefix = oda_prefix
     else:
@@ -188,16 +195,16 @@ def owl_type_for_python_type(python_type: type):
 
     xml_scheme_url = "http://www.w3.org/2001/XMLSchema#"
 
-    if python_type == int:
+    if python_type is int:
         out_type = 'integer'
         url_prefix = xml_scheme_url
-    elif python_type == str:
+    elif python_type is str:
         out_type = 'string'
         url_prefix = xml_scheme_url
-    elif python_type == bool:
+    elif python_type is bool:
         out_type = 'boolean'
         url_prefix = xml_scheme_url
-    elif python_type == float:
+    elif python_type is float:
         out_type = 'float'
         url_prefix = xml_scheme_url
     else:
@@ -229,18 +236,21 @@ def reconcile_python_type(value: Any,
     is_optional_owl = False
     is_file_reference = False
     if owl_type is not None:
-        if extra_ttl is None: 
-            extra_ttl = ''
-        ontology.parse_extra_triples(extra_ttl, parse_oda_annotations=False)
-        xsd_dt = ontology.get_datatype_restriction(owl_type)
-        if xsd_dt:
-            owl_dt = xsd_type_to_python_type(xsd_dt)
-        is_optional_owl = ontology.is_optional(owl_type)
-        # refer tpo the comment in the cast_parameter function
-        is_file_reference = 'http://odahub.io/ontology#FileReference' in ontology.get_parameter_hierarchy(owl_type)
-        if is_file_reference and value == '':
-            raise TypeCheckError(f"Empty string value is not permitted for parameter {name} of type FileReference. "
-                                  "Please use None and annotate parameter as optional instead.")
+        if ontology.is_ontology_available:
+            if extra_ttl is None: 
+                extra_ttl = ''
+            ontology.parse_extra_triples(extra_ttl, parse_oda_annotations=False)
+            xsd_dt = ontology.get_datatype_restriction(owl_type)
+            if xsd_dt:
+                owl_dt = xsd_type_to_python_type(xsd_dt) # type: ignore
+            is_optional_owl = ontology.is_optional(owl_type)
+            # refer tpo the comment in the cast_parameter function
+            is_file_reference = 'http://odahub.io/ontology#FileReference' in ontology.get_parameter_hierarchy(owl_type)
+            if is_file_reference and value == '':
+                raise TypeCheckError(f"Empty string value is not permitted for parameter {name} of type FileReference. "
+                                    "Please use None and annotate parameter as optional instead.")
+        else:
+            logger.warning(f"Ontology is not available, skipping owl type {owl_type} reconciliation for parameter {name}")
 
 
     is_optional_hint = False
@@ -427,7 +437,7 @@ class NotebookAdapter:
         return rdflib.URIRef(f"{oda_prefix}{self.unique_name}")      
     
     @staticmethod
-    def _pop_comment_by_line(comment_tokens, l):
+    def _pop_comment_by_line(comment_tokens, l):  # noqa: E741
         for i, x in enumerate(comment_tokens):
             if x.start[0]==l:
                 res = comment_tokens.pop(i)
@@ -755,20 +765,21 @@ class NotebookAdapter:
         save context to file .oda_api_context in the notebook dir where it can be accessed by ODA API
         :param workdir: directory to save notebook in
         """
-        from oda_api import context_file
+        if oda_api_available:
+            if str(self.token_access).endswith('InOdaContext'):
+                if 'token' not in context:
+                    raise RuntimeError('token is not provided')
+            elif 'token' in context:
+                # don't pass token since it was not reqested
+                context = context.copy()
+                del context['token']
 
-        if str(self.token_access).endswith('InOdaContext'):
-            if 'token' not in context:
-                raise RuntimeError('token is not provided')
-        elif 'token' in context:
-            # don't pass token since it was not reqested
-            context = context.copy()
-            del context['token']
-
-        context_file_path = os.path.join(workdir, context_file)
-        with open(context_file_path, 'wt') as output:
-            json.dump(context, output)
-        logger.info("context file created: %s", context_file_path)
+            context_file_path = os.path.join(workdir, context_file) # type: ignore
+            with open(context_file_path, 'wt') as output:
+                json.dump(context, output)
+            logger.info("context file created: %s", context_file_path)
+        else:
+            logger.warning("oda-api is not available, skipping context file creation")
 
     def extract_pm_output(self):
         nb = sb.read_notebook(self.output_notebook_fn)
@@ -1045,7 +1056,7 @@ if isinstance({output},str) and os.path.exists({output}):
 def notebook_short_name(ipynb_fn):
     return os.path.basename(ipynb_fn).replace(".ipynb","")
 
-def find_notebooks(source, tests=False, pattern = r'.*') -> Dict[str, NotebookAdapter]:
+def find_notebooks(source, tests=False, pattern = r'.*') -> dict[str, NotebookAdapter]:
 
     def base_filter(fn): 
         good = "output" not in fn and "preproc" not in fn
