@@ -1285,10 +1285,6 @@ def nbrun(nb_source, inp, inplace=False, optional_dispather=True, machine_readab
     nbfn = "{}_output.ipynb".format(nba.name)
     open(nbfn, "wb").write(nbdata)
 
-    #TODO: store if not too big?   
-    #r['output_notebook'] = nbfn
-    #r['output_notebook_content'] = base64.b64encode(nbdata).decode()
-        
     htmlfn = "{}_output.html".format(nba.name)
     nba.export_html(htmlfn)
     

@@ -2,10 +2,37 @@ import os
 import threading
 import base64
 import time
+import tempfile
 
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+def test_trace_get_func_includes_raw_notebook(client):
+    import nbformat
+
+    with tempfile.TemporaryDirectory(dir=tempfile.gettempdir()) as jobdir:
+        notebook_path = os.path.join(jobdir, "workflow_output.ipynb")
+        notebook = nbformat.v4.new_notebook(cells=[
+            nbformat.v4.new_code_cell("print('workflow output')")
+        ])
+        nbformat.write(notebook, notebook_path)
+        job = os.path.basename(jobdir)
+
+        response = client.get(f"/trace/{job}/workflow")
+        assert response.mimetype == "text/html"
+
+        response = client.get(
+            f"/trace/{job}/workflow",
+            query_string=dict(include_raw_notebook=True),
+        )
+
+        assert response.is_json
+        assert "workflow output" in response.json["html"]
+        with open(notebook_path, "rb") as notebook_file:
+            assert base64.b64decode(response.json["output_notebook_content"]) == notebook_file.read()
+
 
 def test_service(client_nb_repo):
     r=client_nb_repo.get('/api/v1.0/options')
