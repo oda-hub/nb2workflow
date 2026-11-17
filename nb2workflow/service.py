@@ -835,6 +835,7 @@ def trace_get_func(job, func):
         return ""
 
     include_glued_output = request.args.get('include_glued_output', True) == 'True'
+    include_raw_notebook = request.args.get('include_raw_notebook', False) == 'True'
 
     from nbconvert.exporters import HTMLExporter
     exporter = HTMLExporter()
@@ -851,6 +852,13 @@ def trace_get_func(job, func):
             div_glued_output.decompose()
         output = str(soup)
         logger.info("div element removed form html")
+
+    if include_raw_notebook:
+        with open(fn, "rb") as notebook_file:
+            return jsonify(
+                html=output,
+                output_notebook_content=base64.b64encode(notebook_file.read()).decode(),
+            )
 
     return output
 

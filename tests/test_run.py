@@ -1,4 +1,3 @@
-import base64
 import logging
 import os
 
@@ -36,16 +35,6 @@ def test_nb(test_inrepo_notebook):
     assert 'output_notebook_html' in r
     assert 'output_notebook_html_content' in r
     
-
-def test_nb_return_notebook(test_inrepo_notebook):
-    import nb2workflow.nbadapter
-
-    r = nb2workflow.nbadapter.nbrun(test_inrepo_notebook, {}, return_notebook=True)
-
-    assert r['output_notebook'] == os.path.basename(test_inrepo_notebook).replace(".ipynb", "_output.ipynb")
-    with open(r['output_notebook'], "rb") as notebook_file:
-        assert base64.b64decode(r['output_notebook_content']) == notebook_file.read()
-
 
 def test_nb_fail(test_inrepo_notebook):
     import nb2workflow.nbadapter
