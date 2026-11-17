@@ -1377,7 +1377,6 @@ def main():
     parser.add_argument('--inplace', action="store_true")
     parser.add_argument('--mmoda-validation', action="store_true")        
     parser.add_argument('--machine-readable', action="store_true")        
-    parser.add_argument('--return-notebook', action="store_true")
     
     parser.add_argument('inputs', nargs=argparse.REMAINDER)
 
@@ -1385,23 +1384,13 @@ def main():
 
     inputs={}
     for i in args.inputs:
-        if i == '--return-notebook':
-            args.return_notebook = True
-            continue
         if not i.startswith("--inp-"): continue
         k,v = i.replace('--inp-','').split("=")
         inputs[k] = v
         
     setup_logging(args.debug)
 
-    nbrun(
-        args.notebook,
-        inputs,
-        inplace=args.inplace,
-        optional_dispather=not args.mmoda_validation,
-        machine_readable=args.machine_readable,
-        return_notebook=args.return_notebook,
-    )
+    nbrun(args.notebook, inputs, inplace=args.inplace, optional_dispather=not args.mmoda_validation, machine_readable=args.machine_readable)
 
 
 if __name__ == "__main__":
