@@ -1234,7 +1234,14 @@ def validate_oda_dispatcher(nba: NotebookAdapter, optional=True, machine_readabl
         
     
 
-def nbrun(nb_source, inp, inplace=False, optional_dispather=True, machine_readable=False):
+def nbrun(
+    nb_source,
+    inp,
+    inplace=False,
+    optional_dispather=True,
+    machine_readable=False,
+    return_notebook=False,
+):
 
     nbas = find_notebooks(nb_source)
 
@@ -1285,9 +1292,9 @@ def nbrun(nb_source, inp, inplace=False, optional_dispather=True, machine_readab
     nbfn = "{}_output.ipynb".format(nba.name)
     open(nbfn, "wb").write(nbdata)
 
-    #TODO: store if not too big?   
-    #r['output_notebook'] = nbfn
-    #r['output_notebook_content'] = base64.b64encode(nbdata).decode()
+    if return_notebook:
+        r['output_notebook'] = nbfn
+        r['output_notebook_content'] = base64.b64encode(nbdata).decode()
         
     htmlfn = "{}_output.html".format(nba.name)
     nba.export_html(htmlfn)
@@ -1370,6 +1377,7 @@ def main():
     parser.add_argument('--inplace', action="store_true")
     parser.add_argument('--mmoda-validation', action="store_true")        
     parser.add_argument('--machine-readable', action="store_true")        
+    parser.add_argument('--return-notebook', action="store_true")
     
     parser.add_argument('inputs', nargs=argparse.REMAINDER)
 
@@ -1377,13 +1385,23 @@ def main():
 
     inputs={}
     for i in args.inputs:
+        if i == '--return-notebook':
+            args.return_notebook = True
+            continue
         if not i.startswith("--inp-"): continue
         k,v = i.replace('--inp-','').split("=")
         inputs[k] = v
         
     setup_logging(args.debug)
 
-    nbrun(args.notebook, inputs, inplace=args.inplace, optional_dispather=not args.mmoda_validation, machine_readable=args.machine_readable)
+    nbrun(
+        args.notebook,
+        inputs,
+        inplace=args.inplace,
+        optional_dispather=not args.mmoda_validation,
+        machine_readable=args.machine_readable,
+        return_notebook=args.return_notebook,
+    )
 
 
 if __name__ == "__main__":
