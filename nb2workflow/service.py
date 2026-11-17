@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 
 from werkzeug.routing import RequestRedirect
 from werkzeug.exceptions import MethodNotAllowed, NotFound
+from werkzeug.utils import safe_join
 
 import queue
 from nb2workflow import ontology, publish, schedule
@@ -841,8 +842,14 @@ def trace_get_func(job, func):
     exporter = HTMLExporter()
 
     trace_root = os.path.realpath(tempfile.gettempdir())
-    jobdir = os.path.realpath(os.path.join(trace_root, job))
-    fn = os.path.realpath(os.path.join(jobdir, func+"_output.ipynb"))
+    job_path = safe_join(trace_root, job)
+    if job_path is None:
+        raise NotFound()
+    jobdir = os.path.realpath(job_path)
+    notebook_path = safe_join(jobdir, func+"_output.ipynb")
+    if notebook_path is None:
+        raise NotFound()
+    fn = os.path.realpath(notebook_path)
     if os.path.commonpath((trace_root, jobdir)) != trace_root or \
             os.path.commonpath((jobdir, fn)) != jobdir:
         raise NotFound()
