@@ -840,7 +840,12 @@ def trace_get_func(job, func):
     from nbconvert.exporters import HTMLExporter
     exporter = HTMLExporter()
 
-    fn = os.path.join(tempfile.gettempdir(), job, func+"_output.ipynb")
+    trace_root = os.path.realpath(tempfile.gettempdir())
+    jobdir = os.path.realpath(os.path.join(trace_root, job))
+    fn = os.path.realpath(os.path.join(jobdir, func+"_output.ipynb"))
+    if os.path.commonpath((trace_root, jobdir)) != trace_root or \
+            os.path.commonpath((jobdir, fn)) != jobdir:
+        raise NotFound()
 
     output, resources = exporter.from_filename(fn)
 
