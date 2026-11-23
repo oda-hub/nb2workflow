@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 
 from werkzeug.routing import RequestRedirect
 from werkzeug.exceptions import MethodNotAllowed, NotFound
+from werkzeug.utils import safe_join
 
 import queue
 from nb2workflow import ontology, publish, schedule
@@ -835,11 +836,23 @@ def trace_get_func(job, func):
         return ""
 
     include_glued_output = request.args.get('include_glued_output', True) == 'True'
+    include_raw_notebook = request.args.get('include_raw_notebook', False) == 'True'
 
     from nbconvert.exporters import HTMLExporter
     exporter = HTMLExporter()
 
-    fn = os.path.join(tempfile.gettempdir(), job, func+"_output.ipynb")
+    trace_root = os.path.realpath(tempfile.gettempdir())
+    job_path = safe_join(trace_root, job)
+    if job_path is None:
+        raise NotFound()
+    jobdir = os.path.realpath(job_path)
+    notebook_path = safe_join(jobdir, func+"_output.ipynb")
+    if notebook_path is None:
+        raise NotFound()
+    fn = os.path.realpath(notebook_path)
+    if os.path.commonpath((trace_root, jobdir)) != trace_root or \
+            os.path.commonpath((jobdir, fn)) != jobdir:
+        raise NotFound()
 
     output, resources = exporter.from_filename(fn)
 
@@ -851,6 +864,13 @@ def trace_get_func(job, func):
             div_glued_output.decompose()
         output = str(soup)
         logger.info("div element removed form html")
+
+    if include_raw_notebook:
+        with open(fn, "rb") as notebook_file:
+            return jsonify(
+                html=output,
+                output_notebook_content=base64.b64encode(notebook_file.read()).decode(),
+            )
 
     return output
 
