@@ -188,7 +188,7 @@ class NBRepo:
                                 break
 
         if nb2wversion.startswith('git+'):
-            nb2w_version_spec = f"git+https://github.com/oda-hub/nb2workflow@{nb2wversion[4:]}#egg=nb2workflow[service]"
+            nb2w_version_spec = f"nb2workflow[service] @ git+https://github.com/oda-hub/nb2workflow@{nb2wversion[4:]}"
         else:
             nb2w_version_spec = f"nb2workflow[service]=={nb2wversion}"
         
