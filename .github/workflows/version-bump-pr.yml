@@ -38,21 +38,21 @@ jobs:
         id: prtitle
         run: |
           PR_TITLE=$(gh api repos/${{ github.repository }}/commits/${{ github.sha }}/pulls \
-            --jq '.[0].title')
+            --jq '.[0].title // ""')
           
           if [[ -z "$PR_TITLE" ]]; then
-            PR_TITLE="${{ github.event.head_commit.message }}"
+            PR_TITLE="$HEAD_COMMIT_MESSAGE"
           fi
 
-          echo "title=$PR_TITLE" >> $GITHUB_OUTPUT
+          PR_TITLE=${PR_TITLE%%$'\n'*}
+          printf 'title=%s\n' "$PR_TITLE" >> "$GITHUB_OUTPUT"
         env:
           GH_TOKEN: ${{ secrets.BOT_PAT }}
+          HEAD_COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
 
       - name: Determine bump type
         id: bumptype
         run: |
-          MSG="${{ steps.prtitle.outputs.title }}"
-          
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "type=${{ github.event.inputs.bump-type }}" >> $GITHUB_OUTPUT
           elif echo "$MSG" | grep -qE "^chore:"; then
@@ -64,6 +64,8 @@ jobs:
           else
             echo "type=patch" >> $GITHUB_OUTPUT
           fi
+        env:
+          MSG: ${{ steps.prtitle.outputs.title }}
 
       - name: Bump version
         if: steps.bumptype.outputs.type != 'none'
